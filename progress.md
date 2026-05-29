@@ -454,3 +454,22 @@
 ### 下一单元：Provider 管理 service（后端，首次 cryptox）
 - 本轮**后台启动 Provider spec 调查 workflow**（同 project 范式）：并行全源阅读 cc-pane provider 模型/repo/service/commands + 启动 env 注入（provider→CLI env，交叉对 XK-Pane cliadapters 既有 Provider 类型）+ 前端 provider 消费面 → 综合 Go 移植规格（GORM 模型含 cryptox 加密 apiKey / service CRUD / 启动 env 映射 / MVP 范围）。
 - D8 铁律已定：apiKey 落库**走 cryptox 加密**（非 keyring）。下一轮读 spec → 实现（首次落地 cryptox BeforeSave/AfterFind 钩子模式）。
+
+## 会话 20 — Phase 3 后端 provider service（首次 cryptox）（2026-05-30，autonomous /loop）
+
+### spec 调查结论（wf_a31b9406-129）→ 决策（详见 findings J9）
+- cc-pane providers 是**明文 providers.json 文件**（无表无加密）。XK-Pane 按 D8 落 SQLite + cryptox 加密 apiKey。**spec 抛出的多个决策门均有原则性默认**（与本仓约定 + D8 对齐）→ 不阻塞 loop，**决策 + 文档 + 可否决**：脱敏 DTO（明文 key 绝不跨 IPC）/ Update patch 保留 key 且不动 default / 服务端 UUID id / SetDefault 未知 id 报错。
+- **service 层加解密**（非 GORM 钩子）：读返回脱敏 DTO 无需解密、写 patch 保留；`Provider.APIKey` 恒密文（json:"-"）。
+
+### 做了什么
+- `storage.Provider` 模型（providers 表，Clearable:false，apiKey json:"-"）+ AllModels。
+- `internal/services/provider`：List/Get/Add/Update/Remove/SetDefault（脱敏 DTO + Input；cryptox 加密；default 不变式走事务）。`GetEnvVars`/`ToCliProvider`（暴露明文 env）**延后启动接线单元**（绝不进 bindings）。
+- **15 守门测试**：default 不变式（首个强制/加默认清其它/删默认提升最早/SetDefault）+ **cryptox 加密落库 round-trip**（raw SELECT 非明文、DecryptString 还原）+ 脱敏 + patch 保留 key + 不动 default + 各 not-found。
+
+### 踩坑（实测捕获）
+- `TestRemovePromotesOldestRemaining` **dev 过 / prod 挂**——`Order("created_at")` 在同 tick 多次 Add 时间戳撞 → 非确定。改 **`Order("rowid")`（插入序）** = cc-pane providers[0]，3×dev+3×prod 稳定。再次印证 created_at 排序教训。
+
+### 验证 / commit / 下一步
+- `go build`/`go vet`/`go test`（dev+prod，-count=3）+ 全量全绿；`wails3 generate bindings`=**9 Services/42 Methods**；`pnpm typecheck` exit=0。commit `c86bc60`。
+- 后台启动**安全+保真对抗审查** workflow `wf_4dfb9634-31c`（2 lens：fidelity/deviations + security/cryptox/GORM——重点「明文 key 是否可能泄漏到前端」），refute-by-default。**下一轮**：读审查结论，有真 bug 先修。
+- 之后候选：前端 ProviderService.ts + provider 设置子页（按脱敏 DTO 契约设计）；或**启动接线单元**（GetEnvVars + resolveLaunch 设 Provider + buildEnv 合 provider env，让「选定 Provider 启动」头条能力真正打通）。

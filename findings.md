@@ -189,3 +189,18 @@ React 19.2 / @mui/material 9 / @mui/icons-material 9 / @mui/x-charts 9 / emotion
 - **⚠️ Workspace 是「文件存储」不是 SQLite 表（决策待定，见下）**：cc-pane 的 workspace **没有 `workspaces` 表**——它是文件实体 `<data_dir>/workspaces/<name>/workspace.json`（目录名=身份，rename=`fs::rename`），由 `WorkspaceService` 纯文件 I/O 管理（list 遍历目录 / create mkdir+写 json / 读改写 json + notify 文件监视发 `WORKSPACES_CHANGED` + 迁移快照）。data.db 只在 launch_history / terminal_sessions 上存 `workspace_name`/`workspace_path`/`workspace_snapshot_id` 的**反规范化快照串**，从不存 workspace 定义本身。另有 `WorkspaceSnapshot`（布局/面板快照，`workspace_snapshot_id` 指它，≠ workspace 定义）。
 - **🚧 待定决策 D9（Workspace 持久化模型，决策门）**：忠实移植 = 文件存储（workspace.json + 文件监视），但**违背 XK-Pane「跨会话状态只能走 SQLite」铁律**；XK-Pane 原生 = 加 `Workspace`+`WorkspaceProject` GORM 表。本次是**全新重构**（不迁移 cc-pane 旧数据），倾向 SQLite 原生，但这是**显著架构选择 + 触及铁律**，**到 workspace 单元时停在决策门询问用户**，不静默定。**当前不阻塞**：近期 Phase 3 单元（前端扁平 project service/Context/侧边栏树、launch_history、会话恢复）都不依赖它。
 - **MVP 侧边栏路径选择**：先做**扁平 project 侧边栏**（顶层项目列表，复用本单元后端，替换临时「打开文件夹」工具条）——比 cc-pane 的 workspace 分组树简单且更快可用；workspace 分组作为后续增强（届时触 D9 决策门）。
+
+### J9. Provider 后端模型 + 移植决策（已验证 / workflow `wf_a31b9406-129`，2026-05-30）
+
+> 完整三份调查 + 综合规格见 task 输出 `...\tasks\wy9bqvhx8.output`。Phase 3 provider 后端单元据此落地（commit `c86bc60`）。
+
+- **cc-pane 现状**：providers 存**明文 `providers.json` 文件**（无 SQLite 表、无加密、无 keyring；keyring 仅用于 SSH 凭据）。字段：id（前端供，不校验唯一）、name、providerType（snake_case：anthropic/bedrock/vertex/proxy/config_profile/open_ai/gemini/kimi/glm/cursor/opencode；**无 model 字段**）、apiKey?、baseUrl?、region?、projectId?、awsProfile?、configDir?、isDefault。default 不变式（恰一个默认）。前端把**明文整条**回前端。`to_env_vars()` 按 type 映射启动 env（ANTHROPIC_API_KEY/BASE_URL 等）。
+- **XK-Pane 移植决策（5 项偏离，均安全/一致性加固，与 D8 对齐；已实现并 15 测锁；用户可否决）**：
+  1. **持久化**：SQLite `providers` 表 + **cryptox 加密 apiKey**（D8 铁律，非明文文件）。**service 层加解密**（非 GORM 钩子）——读返回脱敏 DTO 无需解密、写为 patch 保留；storage 不引 cryptox。`Provider.APIKey` 字段**恒为密文**（json:"-"），消费方读出须 DecryptString。
+  2. **脱敏 DTO**：List/Get 返回 `ProviderDTO` 不含明文 key（仅 `hasApiKey`）——**明文绝不跨 IPC**（cc-pane 每次 list 都回明文，泄漏面大）。
+  3. **Update = patch**：apiKey 空则保留原密钥；且 **Update 不动 is_default**（默认只由 Add/SetDefault/Remove 管）——避免编辑误清默认。无需 GetSecret（编辑表单不回填 key，提示「留空保持不变」）。
+  4. **id 服务端生成 UUID**（同 project；避 cc-pane 前端供 id 不去重的撞 id）。Add 返回创建出的 DTO。
+  5. **SetDefault 未知 id 报错**（偏 cc-pane 静默留零默认；与本仓 not-found 约定一致）。
+- **default 提升用 `ORDER BY rowid`（插入序）**：等价 cc-pane providers[0]；**不可用 created_at**——同 tick 多次 Add 时间戳撞、字典序非确定（**实测**：created_at 版在 prod test 偶发倒挂，rowid 版 3×dev+3×prod 稳定）。同教训见 storage UTC 修复。
+- **延后到「启动接线」单元（非本单元）**：`GetEnvVars`（to_env_vars 中央映射，11 type→env）+ `ToCliProvider` 桥接——**它们暴露明文 env，绝不能进 Wails bindings**，做成非绑定 helper 由 terminal 启动路径直接调。届时还需：`terminal.resolveLaunch` 设 `cctx.Provider` + `buildEnv` 合 provider env（cc-pane 中央 Tier-A 当前 XK-Pane 完全缺失，claude/codex/gemini 等拿不到 ANTHROPIC_*/CODEX_* 等）。Tier-B（glm/cursor/kimi 自注入）已在 cliadapters 移植就位。
+- **codex 易错点**：OpenAI(codex)→`CODEX_API_KEY`+`OPENAI_BASE_URL`（**非** OPENAI_API_KEY）；OpenCode→`OPENAI_API_KEY`+`OPENAI_BASE_URL`。移植 GetEnvVars 时注意。
