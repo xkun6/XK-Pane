@@ -426,3 +426,21 @@
 - **现状**：项目面板→点击→终端起 的完整可视链路已就位，是**强视觉 checkpoint 时机**（兼顾欠用户的 Phase 2 视觉验证）。
 - **但不停 loop**：用户既定 stop 粒度 = 「连续跑到底」（仅 ①决策门 ②连续失败 ③全阶段完成 才停）；且用户在会话12 checkpoint 后**已重发 /loop 续跑、其后 5 轮未干预**——demonstrated「持续推进」偏好。视觉 checkpoint 非三类停止条件之一。故**继续**，仅在消息+此处醒目标注：随时可 `wails3 dev` 验证「点项目→终端起/回显/分屏/关标签回收」，发现问题反馈即下一轮修。
 - **下一单元（候选，次轮定）**：倾向**转后端可测单元**以平衡「未运行验证的前端」堆积——`launch_history` 记录（点启动→写一条启动历史，后端 service + 守门测试）或 Provider 管理 service（后端 CRUD + cryptox 加密 api_key）。或 3b（选 CLI 工具启动，前端为主）。下一轮按新鲜判断选。
+
+## 会话 18 — Phase 3 后端 launch_history service（2026-05-30，autonomous /loop）
+
+### 选取理由
+- 头条能力（选 CLI 启动）**依赖尚未视觉验证的终端渲染**，在其上叠 3b 风险大 → 本轮选**不依赖终端渲染、可测**的后端单元。`launch_history` 复用既有模型（Phase 1）+ 补足刚建的启动流的写路径，优于需新模型+调查的 Provider。
+
+### 做了什么（`internal/services/launchhistory/`）
+- `launchhistory.go`：`Service{holder}` + `Record(spec)→row` + `List(limit)` 倒序。cc-pane LaunchHistoryService 的 MVP 子集——会话恢复方法（update_session_started/touch/last_prompt/find_by_pty）属 Phase 4，不含。
+- **要点**：路径铁律 D7（ProjectPath=cwd，WorkspacePath 可选）；`LaunchedAt = time.Now().UTC()`——**手填排序字段，主动套用审查刚教训的 UTC 排序教训**（否则跨时区字典序倒挂）；`last_prompt` cryptox 仍延后（MVP 启动无 prompt）；CliTool 缺省 none / RuntimeKind 缺省 local。
+- `launchhistory_test.go`：**7 守门测试**（创建/默认值/launched_at 存 UTC/workspace 可选/launched_at DESC 排序/limit/空→非 nil []）。接进 app.go（纯 CRUD）。
+
+### 验证 / commit
+- `go build`/`go vet`/`go test`（dev+prod）+ 全量全绿；`wails3 generate bindings`=**8 Services/36 Methods**（+Record/List，+RecordSpec 模型）；`pnpm typecheck` exit=0。纯 CRUD + 复用已验证 storage 范式 + 主动套 UTC 教训，无 workflow。commit `8869111`。
+
+### 下一单元
+- **先薄前端接线**：`LaunchHistoryService.ts`（包 Record/List）+ 在 `launchProject` 里 record-on-launch（让 launch_history 写路径真正被调用；record 调用独立于终端渲染，低风险）。
+- **之后转 Provider 管理 service**（后端，**首次用 cryptox** 加密 api_key，头条「选定 Provider」路径）——较大，需先跑 Provider spec 调查 workflow（同 project 范式：cc-pane provider 模型/加密/启动 env 注入）。
+- 前端视觉验证债仍挂（用户「连续跑到底」、未干预）——继续推进可测后端，用户回来随时验。
