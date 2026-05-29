@@ -444,3 +444,13 @@
 - **先薄前端接线**：`LaunchHistoryService.ts`（包 Record/List）+ 在 `launchProject` 里 record-on-launch（让 launch_history 写路径真正被调用；record 调用独立于终端渲染，低风险）。
 - **之后转 Provider 管理 service**（后端，**首次用 cryptox** 加密 api_key，头条「选定 Provider」路径）——较大，需先跑 Provider spec 调查 workflow（同 project 范式：cc-pane provider 模型/加密/启动 env 注入）。
 - 前端视觉验证债仍挂（用户「连续跑到底」、未干预）——继续推进可测后端，用户回来随时验。
+
+## 会话 19 — launch_history 前端接线 + 启动 Provider spec 调查（2026-05-30，autonomous /loop）
+
+### 做了什么
+- **launch_history 写路径接线（薄）**：`services/launchhistory/LaunchHistoryService.ts`（包 Record/List，纯 RecordSpec/LaunchRecord 接口）+ `useTerminalPage.launchProject` 内 record-on-launch（**fire-and-forget**：`.catch(()=>{})`，记录失败绝不阻断终端启动）。barrel 追加。让 launch_history 后端真正被调用；「最近启动」UI 消费方留后。
+- 验证：`pnpm typecheck` + `pnpm test` 37/37 全绿。薄透传，无 workflow。commit `6c187e9`。
+
+### 下一单元：Provider 管理 service（后端，首次 cryptox）
+- 本轮**后台启动 Provider spec 调查 workflow**（同 project 范式）：并行全源阅读 cc-pane provider 模型/repo/service/commands + 启动 env 注入（provider→CLI env，交叉对 XK-Pane cliadapters 既有 Provider 类型）+ 前端 provider 消费面 → 综合 Go 移植规格（GORM 模型含 cryptox 加密 apiKey / service CRUD / 启动 env 映射 / MVP 范围）。
+- D8 铁律已定：apiKey 落库**走 cryptox 加密**（非 keyring）。下一轮读 spec → 实现（首次落地 cryptox BeforeSave/AfterFind 钩子模式）。
