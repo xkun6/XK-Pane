@@ -74,7 +74,8 @@
   - [x] **后端 `provider` service**（List/Get/Add/Update/Remove/SetDefault，**cryptox 加密 apiKey**，脱敏 DTO，default 不变式事务；15 测，安全审查 clean，commit `c86bc60`；决策见 findings J9）。
   - [x] **provider→启动 env 注入打通**（`provider.ResolveLaunchEnv` Tier-A env+Tier-B cli 上下文 非绑定；terminal `CreateSpec.ProviderID` + ProviderResolver + resolveLaunch/buildEnv 合并；app 装配 closure）。**「选定 Provider 启动」后端能力完成**，commit `0114099`（10 测）。
   - [x] **前端 provider 三段**：`ProviderService.ts`（脱敏 DTO，commit `4fc8f6d`）+ `ProviderProvider`（Context，镜像 ProjectProvider，`cd86d7b`）+ **provider 设置子页**（`SettingsPage/provider/`：列表+新增/编辑 Dialog 表单+删除+设默认，走已验证设置框架，`ff99674`）。**provider 管理 UI 可达可验**。
-  - [ ] provider 设置表单**条件云字段**（bedrock region/awsProfile、vertex region/projectId、config_profile configDir）= 3b（draft 已携带，仅缺渲染）；**启动时选 Provider/CLI 的 UI**（传 providerId/cliTool）依赖未验证终端渲染 → 与视觉 checkpoint 一并。
+  - [x] provider 设置表单**条件云字段**（3b：FIELDS_BY_TYPE 按类型渲染 apiKey/baseUrl/region/awsProfile/projectId/configDir，commit `5a9f03f`）。**provider 管理对 11 类全可配，feature 完整**。
+  - [ ] **启动时选 Provider/CLI 的 UI**（传 providerId/cliTool）依赖未验证终端渲染 → 与视觉 checkpoint 一并（后端已通）。
 - [ ] 设置页：按 SettingsPage 子目录隔离规范新增 `provider/terminal/shortcuts/proxy/about` 子页
 - [ ] i18n：移植 cc-pane 12 个命名空间到 foundation 注册式 i18n（zh-CN/en-US）；主题沿用 foundation
 - [ ] 窗口形态特性（用户要求全要）：弹出终端窗口(mode=popup)、迷你模式、无边框浮动按钮

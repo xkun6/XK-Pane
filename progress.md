@@ -536,3 +536,14 @@
 
 ### 下一单元（候选）
 - 3b provider 条件云字段（小，补表单渲染）；或会话恢复后端（terminal_sessions Save/List service，可测）；或 i18n 命名空间梳理。启动选 Provider/CLI UI 仍待视觉 checkpoint。
+
+## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
+
+### 做了什么
+- `ProviderSettings.tsx`：加 `FIELDS_BY_TYPE` 按 provider 类型条件渲染表单字段（与 provider.EnvVars 的 to_env_vars 对齐）——key 类 apiKey(+baseUrl)、cursor 仅 apiKey、bedrock region/awsProfile、vertex region/projectId、config_profile configDir。把固定的 apiKey/baseUrl 块换成按类型 map 渲染。+ 4 个字段标签（region/awsProfile/projectId/configDir，zh/en）。
+- **provider 管理对 11 类全可配 → feature 完整**。typecheck + 37 测 + build 全绿。commit `5a9f03f`。
+
+### 进度盘点 + 下一步方向
+- **Phase 3 后端 + provider 管理 UI 全部完成**：project/launch_history/provider service（含 cryptox + 安全审查 clean）+ provider→启动 env 注入（头条后端通）+ project 侧边栏 + provider 设置子页（11 类全可配）。
+- Phase 3 余项多为**视觉 checkpoint 门控**（启动选 Provider/CLI UI、会话恢复 restore UI、窗口形态）或前端 i18n 梳理。
+- **下一方向倾向 Phase 4 可测后端**（皆 goal 成功判据、不依赖终端渲染）：**Git 集成**（go-git status/branch/log/diff，对临时 repo 可测，D4）/ Local History（file_versions 快照）/ Todo·Spec CRUD。或会话恢复后端（terminal_sessions Save/List）。**已累计大量未真机验证前端（终端栈 + 项目面板）**——视觉验证债持续；继续走可测后端以控风险，启动相关 UI 留 checkpoint。
