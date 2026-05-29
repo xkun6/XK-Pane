@@ -48,6 +48,19 @@
 - `go test ./internal/appinfo/...`（dev + production）ok
 - `wails3 generate bindings` exit=0（前缀=xkpane）；`pnpm typecheck` exit=0
 
+## 会话 1 — Phase 1 开工（2026-05-29）
+
+### ptyx（R1 最大风险）✅ 已实跑验证
+- 加依赖 `github.com/aymanbagabas/go-pty v0.2.3`（+creack/pty、u-root 间接）。`go doc` 确认 API 与尽调一致：`Pty`=io.ReadWriteCloser+`CommandContext/Resize(w,h)/Fd`；`Cmd` 暴露 `SysProcAttr/Process`。
+- 新建 `internal/utils/ptyx/`：ptyx.go(门面 Spec/PTY/Spawn/Read/Write/Resize/PID/Wait/Kill/Close) + ptyx_windows.go(JobObject 绑定) + ptyx_unix.go(不叠 Setpgid) + ptyx_test.go。
+- Windows 决策：只用 `CREATE_SUSPENDED`（**不加** CREATE_NEW_PROCESS_GROUP——交互式 PTY 的 Ctrl+C 走字节流 0x03，进程组标志会干扰 TUI 信号语义）；绑 Job 后 ResumeThread。
+- **验证（Win11 实跑）**：`TestSpawnEchoProducesOutput` PASS（ConPTY 起 cmd.exe + Job 绑定 + 从原始字节流读到 marker）、`TestResizeNoError` PASS；`go build` exit=0；`GOOS=linux go build` exit=0（Unix 路径编过）。
+- 结论：findings R1（ConPTY 在 Wails/Go 下可用性）**实测消除**。
+
+### 下一步（Phase 1 续）
+- events 类型化事件 → GORM 核心模型 + AutoMigrate 测试 → cliadapters(8+27 测试) → subprocess 白名单。
+
 ### 遇到的错误
 - Bash 工具默认走 /usr/bin/bash 致 `$null` 重定向报错；改用 PowerShell 工具解决。
 - Edit 报「File has not been read yet」：首批改名漏读文件；补 Read 后重做成功。
+- Write 工具调用偶发 malformed（一次）；重发成功。

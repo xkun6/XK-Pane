@@ -43,14 +43,14 @@
 - **verify** ✅：`go build`(dev+prod)/`go vet`(dev+prod)/`go test`(dev+prod) 全 exit=0；wails3 bindings 前缀=xkpane；pnpm typecheck 通过
 - **注**：保留主题 `foundation.*` 命名空间（设计系统 API，非模块名）；`-framework Foundation`（iOS Apple 框架）不动；`build/linux/nfpm` 的 `foundation.exe` 待 Phase 6 由 build-assets 重生成
 
-### Phase 1 — 后端地基（PTY / 子进程 / CLI 适配器 / 数据模型 / 事件）⬜ pending
+### Phase 1 — 后端地基（PTY / 子进程 / CLI 适配器 / 数据模型 / 事件）🔵 in_progress
 **目标**：铺好移植所需的后端底座，无 UI 也能单测。
-- [ ] `internal/utils/ptyx`：跨平台 PTY（spawn/resize/kill/读写流），Windows ConPTY + Unix PTY，叠加 JobObject 进程组（D3）
-- [ ] `internal/services/cliadapters`：8 个 CLI 适配器（claude/codex/gemini/kimi/glm/opencode/cursor/reclaude）的 build_command 逻辑 + 路径字段铁律（D7）+ 守门测试
-- [ ] `internal/services/subprocess`：扩展白名单（git/各 CLI）
-- [ ] `internal/storage/models_*.go`：移植核心 GORM 模型并追加 AllModels（projects/launch_history/terminal_sessions/todos/specs/providers/task_bindings/workspace 等，对标 V1–V16）
-- [ ] `internal/events`：注册终端输出/退出/进度/历史更新等类型化事件
-- **verify**：`go test ./internal/...` 通过；ptyx 能起一个 shell 并读到输出；适配器守门测试覆盖 path 语义
+- [x] `internal/utils/ptyx`：跨平台 PTY 门面（go-pty v0.2.3）。Windows ConPTY + JobObject(CREATE_SUSPENDED→assign→ResumeThread)；Unix 不叠 Setpgid（go-pty 强制 Setsid）kill 用 `Kill(-pid,SIGKILL)`。✅ **R1 spike 在 Win11 实跑通过**（`TestSpawnEchoProducesOutput`/`TestResizeNoError` PASS；Unix 交叉编译 exit=0）
+- [ ] `internal/services/cliadapters`：8 个 CLI 适配器（claude/codex/gemini/kimi/glm/opencode/cursor/reclaude）的 build_command 逻辑 + 路径字段铁律（D7）+ 守门测试（27 个，findings J4）。注意 GLM 可执行名是 `crush`
+- [ ] `internal/storage/models_*.go`：移植核心 GORM 模型并追加 AllModels（findings J3 已有完整 struct 草案；data.db 表 + 敏感字段 cryptox 加密 hooks）
+- [ ] `internal/events`：注册终端输出/退出/状态等类型化事件（`terminal:output`/`:status`/`:exit`）
+- [ ] `internal/services/subprocess`：扩展白名单（git 各子命令，供 go-git fallback）
+- **verify**：`go test ./internal/...` 通过；✅ ptyx 已起 shell 读到输出；适配器守门测试覆盖 path 语义；AutoMigrate 建表测试
 
 ### Phase 2 — 终端核心闭环（首个可运行里程碑）⬜ pending
 **目标**：能在某项目目录下用内置终端跑起一个 CLI 并交互——MVP runnable。
@@ -103,7 +103,7 @@
 | 阶段 | 状态 | 备注 |
 |------|------|------|
 | Phase 0 | ✅ complete | 改名 + Dev/Release 隔离，全验证通过 |
-| Phase 1 | ⬜ pending | 后端地基 |
+| Phase 1 | 🔵 in_progress | ptyx ✅（R1 已实跑验证）；cliadapters/models/events/whitelist 待做 |
 | Phase 2 | ⬜ pending | 终端闭环（MVP runnable） |
 | Phase 3 | ⬜ pending | 管理面 + 设置 |
 | Phase 4 | ⬜ pending | 常用增强 |
