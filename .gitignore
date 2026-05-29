@@ -9,6 +9,8 @@ build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 /.claude/index.json
 /.claude/settings.json
 /.claude/settings.local.json
+/.claude/scheduled_tasks.lock
+/.claude/scheduled_tasks.json
 /.idea/
 .ace-tool/
 
