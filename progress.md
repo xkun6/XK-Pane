@@ -399,3 +399,15 @@
 ### 验证 / commit / 下一步
 - `pnpm typecheck` exit=0；`pnpm test` 37/37 无回归。纯薄包装透传层（同 TerminalService），typecheck+test 即足，无 workflow。commit `2571ee0`。
 - **下一单元** = `ProjectContext`（Provider+state，弃 Zustand；list/add/remove/rename/alias 动作 + 启动时拉取 + 乐观更新或拉取刷新），第二段。之后第三段 = 侧边栏扁平项目树（替换 TerminalPage 临时「打开文件夹」工具条）+ 选 CLI 启动。
+
+## 会话 16 — Phase 3 ProjectProvider（project 三段之第二段：Context）（2026-05-30，autonomous /loop）
+
+### 做了什么
+- `frontend/src/project/{ProjectProvider.tsx,types.ts,index.ts}`：`<ProjectProvider>` + `useProjects()`，范式同 PreferencesProvider（useState + aliveRef + mount 异步拉取，首屏空列表不阻塞）。动作集移植 cc-pane useProjectsStore：`refresh/addProject/removeProject/renameProject/setProjectAlias`（addProject 返回新建记录供调用方选中/启动）。
+- **MVP 取舍（简洁优先，已在 types.ts 注明）**：① **mutation 后 reload 刷新**（与后端 created_at DESC 排序 + alias trim 归一保持一致，不乐观拼接以免与后端语义分裂）；② **错误向上抛**（add 重复路径→"Project already exists" 等由 View 用 NativeDialogs 提示，Provider 不吞）；③ **省略 selectedId**（cc-pane store 有，但属投机全局态——侧边栏高亮/启动用本地态或终端活动 tab 派生即可，待消费方需要再加）。
+- 接进 App 链：I18n>Theme>Pref>Terminal>**Project**>Router（全局，侧边栏消费）。
+
+### 验证 / commit / 下一步
+- `pnpm typecheck` exit=0；`pnpm test` 37/37。Provider 逻辑薄（service 调用 + refetch），范式同已审 PreferencesProvider，无 workflow。commit `c81a58f`。
+- **下一单元（project 第三段，较重）** = 侧边栏扁平项目树 **View**：列项目 + 「添加项目」（NativeDialogs.openDirectory→addProject）+ 每项启动（点项目→选 CLI→TerminalProvider.newTab(projectPath)）+ 删除/改名/别名。**布局决策（次轮定）**：foundation 的 AppLayout 是「图标栏 Sidebar + RouterOutlet」无次级面板槽——拟把项目面板做进 **TerminalPage 左列**（替换临时「打开文件夹」工具条，不动 AppLayout，最小侵入），右列仍 PaneTree。
+- **该单元落地后 = 强视觉 checkpoint 时机**：项目列表→点击→选 CLI→终端起，一条完整可视链路（兼顾欠用户的 Phase 2 视觉验证）。届时拟暂停 loop 请用户验。
