@@ -1,4 +1,4 @@
-// Package httpx 是 Foundation 的 HTTP 客户端工具包。
+// Package httpx 是 XK-Pane 的 HTTP 客户端工具包。
 //
 // 设计目标：
 //   - 单例 *http.Client，复用连接池；业务代码不要再造 client
@@ -35,7 +35,7 @@ const MaxResponseBytes int64 = 8 << 20 // 8MB
 
 // userAgent 在 SetUserAgent 之前是空字符串；我们在 Init 阶段或第一次使用时设置。
 var (
-	userAgent   = "Foundation/1.0"
+	userAgent   = "XK-Pane/1.0"
 	uaMu        sync.RWMutex
 	clientOnce  sync.Once
 	sharedClient *http.Client

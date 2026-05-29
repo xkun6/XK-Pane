@@ -8,10 +8,10 @@ export const enUS: Locale = {
   nativeName: 'English',
   messages: {
     app: {
-      title: 'Foundation',
+      title: 'XK-Pane',
     },
     sidebar: {
-      brand: 'F',
+      brand: 'X',
       navAriaLabel: 'Primary navigation',
     },
     titleBar: {

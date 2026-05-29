@@ -11,7 +11,7 @@ package appsettings
 import (
 	"context"
 
-	"foundation/internal/storage"
+	"xkpane/internal/storage"
 
 	"gorm.io/gorm"
 )

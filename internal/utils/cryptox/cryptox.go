@@ -27,6 +27,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+
+	"xkpane/internal/appinfo"
 )
 
 // version1 标志当前编码格式；将来换密钥派生 / 算法时递增。
@@ -37,9 +39,8 @@ const (
 	nonceSize = 12 // GCM 推荐
 )
 
-// AppDirName 应与 internal/storage.AppDirName 保持一致；这里独立常量
-// 避免 cryptox → storage 的反向依赖。改业务名时同步两处。
-const AppDirName = "Foundation"
+// AppDirName 来自 appinfo（零依赖叶子包，无环），与 storage / logx 同源。
+const AppDirName = appinfo.AppDirName
 
 // MasterKeyFileName 主密钥文件；与数据库默认目录平级。
 const MasterKeyFileName = ".master.key"

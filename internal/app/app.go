@@ -8,15 +8,15 @@ import (
 	"log/slog"
 	"time"
 
-	"foundation/internal/events"
-	"foundation/internal/services/appsettings"
-	"foundation/internal/services/greet"
-	"foundation/internal/services/preferences"
-	"foundation/internal/services/storagesvc"
-	"foundation/internal/services/subprocess"
-	"foundation/internal/storage"
-	"foundation/internal/utils/httpx"
-	"foundation/internal/utils/logx"
+	"xkpane/internal/events"
+	"xkpane/internal/services/appsettings"
+	"xkpane/internal/services/greet"
+	"xkpane/internal/services/preferences"
+	"xkpane/internal/services/storagesvc"
+	"xkpane/internal/services/subprocess"
+	"xkpane/internal/storage"
+	"xkpane/internal/utils/httpx"
+	"xkpane/internal/utils/logx"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -32,7 +32,7 @@ func Run(assets embed.FS) error {
 		// 日志初始化失败不应阻断启动；降级到默认 stderr logger（logx.For 内部已兜底）
 		fmt.Println("warn: logx init failed:", err)
 	}
-	httpx.SetUserAgent("Foundation/1.0 (+wails-v3)")
+	httpx.SetUserAgent("XK-Pane/1.0 (+wails-v3)")
 
 	events.Register()
 
@@ -61,8 +61,8 @@ func Run(assets embed.FS) error {
 	subSvc := subprocess.New(nil) // app 暂为 nil
 
 	app := application.New(application.Options{
-		Name:        "Foundation",
-		Description: "Wails v3 + React 19 + MUI scaffold",
+		Name:        "XK-Pane",
+		Description: "Claude Code 多实例分屏管理桌面应用",
 		Services: []application.Service{
 			application.NewService(greet.New()),
 			application.NewService(preferences.New(holder)),

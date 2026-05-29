@@ -9,7 +9,7 @@ import (
 	"errors"
 	"strings"
 
-	"foundation/internal/storage"
+	"xkpane/internal/storage"
 
 	"gorm.io/gorm"
 )

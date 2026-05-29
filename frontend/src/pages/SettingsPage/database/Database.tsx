@@ -420,9 +420,9 @@ const formatBytes = (n: number): string => {
   return `${(n / GB).toFixed(2)} GB`;
 };
 
-// 从当前路径派生默认保存文件名。后端默认是 foundation.db；保留同名可避免改名。
+// 从当前路径派生默认保存文件名。后端默认是 xkpane.db；保留同名可避免改名。
 const defaultFileName = (currentPath?: string): string => {
-  if (!currentPath) return 'foundation.db';
+  if (!currentPath) return 'xkpane.db';
   const seg = currentPath.split(/[\\/]/).pop();
-  return seg && seg.length > 0 ? seg : 'foundation.db';
+  return seg && seg.length > 0 ? seg : 'xkpane.db';
 };

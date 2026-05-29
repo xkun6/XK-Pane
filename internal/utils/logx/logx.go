@@ -1,4 +1,4 @@
-// Package logx 是 Foundation 的统一日志门面。
+// Package logx 是 XK-Pane 的统一日志门面。
 //
 // 设计：基于标准库 log/slog（结构化日志），同时输出到：
 //   - 控制台（dev 期）—— 文本格式，带颜色友好的级别
@@ -23,6 +23,8 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+
+	"xkpane/internal/appinfo"
 )
 
 // Config 控制日志输出。在 internal/app.Run 早期调一次 Init，业务代码后续用 For()。
@@ -49,7 +51,7 @@ const (
 	defaultBackups      = 3
 )
 
-const AppDirName = "Foundation" // 与 storage / cryptox 保持一致
+const AppDirName = appinfo.AppDirName // 来自 appinfo，与 storage / cryptox 同源
 
 var (
 	initOnce  sync.Once

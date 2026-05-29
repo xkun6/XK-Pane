@@ -15,10 +15,10 @@ export const zhCN: Locale = {
   nativeName: '简体中文',
   messages: {
     app: {
-      title: 'Foundation',
+      title: 'XK-Pane',
     },
     sidebar: {
-      brand: 'F',
+      brand: 'X',
       navAriaLabel: '主导航',
     },
     titleBar: {

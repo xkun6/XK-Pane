@@ -5,10 +5,10 @@
 	"info": {
 		"0000": {
 			"ProductVersion": "0.1.0",
-			"CompanyName": "My Company",
-			"FileDescription": "A foundation application",
-			"LegalCopyright": "© 2026, My Company",
-			"ProductName": "My Product",
+			"CompanyName": "XK-Pane",
+			"FileDescription": "Claude Code 多实例分屏管理桌面应用",
+			"LegalCopyright": "© 2026 XK-Pane",
+			"ProductName": "XK-Pane",
 			"Comments": "This is a comment"
 		}
 	}

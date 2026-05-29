@@ -2,7 +2,7 @@
 //
 // 后端字段：themeChoice / customTheme(JSON 字符串) / localeChoice。
 // customTheme 在前端 stringify / parse；其余按字符串透传。
-import { Service as Binding } from '@bindings/foundation/internal/services/appsettings';
+import { Service as Binding } from '@bindings/xkpane/internal/services/appsettings';
 
 export interface AppSettingsSnapshot {
   themeChoice: string;

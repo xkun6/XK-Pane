@@ -1,4 +1,4 @@
-module foundation
+module xkpane
 
 go 1.25.0
 

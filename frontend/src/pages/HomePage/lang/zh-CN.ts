@@ -4,8 +4,8 @@ import type { Messages } from '@/i18n';
 // 由 src/pages/HomePage/lang/index.ts 通过 localeRegistry.extend('zh-CN', ...) 注入。
 export const homePageZhCN: Messages = {
   home: {
-    eyebrow: 'Foundation 脚手架',
-    hero: '欢迎使用 Foundation',
+    eyebrow: 'XK-Pane',
+    hero: '欢迎使用 XK-Pane',
     subtitle: '一个干净的 Wails 3 + React 19 + MUI 基座。把这个页面替换为你的第一个功能，或者从修改 {{file}} 开始。',
     backendCard: {
       title: '后端往返调用',

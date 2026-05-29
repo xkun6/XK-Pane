@@ -20,8 +20,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"foundation/internal/utils/logx"
-	"foundation/internal/utils/procx"
+	"xkpane/internal/utils/logx"
+	"xkpane/internal/utils/procx"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )

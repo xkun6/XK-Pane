@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"foundation/internal/storage"
+	"xkpane/internal/storage"
 )
 
 // Service 暴露给前端：路径管理 + 统计。
@@ -240,7 +240,7 @@ func preflightWritable(path string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	test := filepath.Join(dir, ".foundation-write-test")
+	test := filepath.Join(dir, ".xkpane-write-test")
 	f, err := os.Create(test)
 	if err != nil {
 		return err

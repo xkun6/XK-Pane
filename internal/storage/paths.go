@@ -11,14 +11,16 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"xkpane/internal/appinfo"
 )
 
-// AppDirName 是写到用户数据目录下的子文件夹名称。
-// 改成业务名时，连同 Wails 的 Name 一起改。
-const AppDirName = "Foundation"
+// AppDirName 是写到用户数据目录下的子文件夹名称（来自 appinfo，含 dev/release 隔离）。
+// 改业务名只需改 internal/appinfo.BaseName。
+const AppDirName = appinfo.AppDirName
 
 // DBFileName 是 SQLite 主文件名（WAL/SHM 由 SQLite 自动管理为 .db-wal / .db-shm）。
-const DBFileName = "foundation.db"
+const DBFileName = "xkpane.db"
 
 // ConfigFileName 路径配置（独立于数据库本身，因此不能存到 db 里——鸡生蛋）。
 const ConfigFileName = "storage.json"
@@ -27,9 +29,9 @@ const ConfigFileName = "storage.json"
 var ErrNoUserDir = errors.New("storage: cannot resolve user data directory")
 
 // userDataDir 返回平台规范的用户数据根目录：
-//   - Windows: %AppData%\Foundation
-//   - macOS:   ~/Library/Application Support/Foundation
-//   - Linux:   $XDG_DATA_HOME/Foundation 或 ~/.local/share/Foundation
+//   - Windows: %AppData%\XK-Pane
+//   - macOS:   ~/Library/Application Support/XK-Pane
+//   - Linux:   $XDG_DATA_HOME/XK-Pane 或 ~/.local/share/XK-Pane
 //
 // 不创建目录，只算路径——是否落地交给调用方。
 func userDataDir() (string, error) {
