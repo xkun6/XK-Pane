@@ -537,6 +537,23 @@
 ### 下一单元（候选）
 - 3b provider 条件云字段（小，补表单渲染）；或会话恢复后端（terminal_sessions Save/List service，可测）；或 i18n 命名空间梳理。启动选 Provider/CLI UI 仍待视觉 checkpoint。
 
+## 会话 27 — Phase 4 起步：gitx 只读包（Git unit 1）（2026-05-30，autonomous /loop）
+
+### 决策窗口 + spec 结论
+- 上轮 Git spec workflow `wf_93487368-df5`（只读）留了用户转向窗口；用户未干预。spec **确认 D4**（无决策门）：cc-pane git 是 **100% CLI**、范围仅 12 命令（branch/dirty-bit/clone/worktree/pull·push·stash），**无** diff/log/commit/stage（终端手动做）。go-git/v5 v5.19.1 **已随 Wails indirect 引入**——加它只是 indirect→direct 零新依赖。→ 实现 gitx 只读核心。
+
+### 做了什么（`internal/utils/gitx`）
+- `gitx.go`：Open/IsRepo + CurrentBranch（detached→"HEAD"，空仓→""，对齐 cc-pane Option）/ IsDirty / Branches / Log。go-git 原生 branch/log；**IsDirty 走 CLI `status --porcelain`**（忠实 cc-pane + 避开 go-git Worktree.Status() 大仓性能热点 #181/#844，使 CLI 回退 load-bearing 非死码）。
+- `cli.go`：`runGit` 经 procx + **只读子命令 allowlist**（status/rev-parse/branch/log/for-each-ref）+ GIT_TERMINAL_PROMPT=0；非零退出→stderr 错误，spawn 失败→透传。
+- `gitx_test.go`：**4 测**对真临时 repo（夹具用真 git CLI 经 procx 建，独立于被测 go-git；skip-if-no-git）——branch/branches/log/detached、dirty bit（clean/改/提交/未跟踪 走 CLI 路）、空仓、非仓（go-git 无需 git 二进制）。
+- go.mod：go-git/v5 indirect→direct（go mod tidy，go.sum 不变）。
+
+### 验证 / commit
+- go build/vet/test（dev+prod）+ 全量全绿。无 bindings（内部 util，git service+面板留后续 unit）、无前端、无 workflow（spec 已调查 + go-git/CLI 直白且真 repo 测充分）。commit `bf279a6`。
+
+### 下一单元（候选）
+- Git 后续 unit（git 面板：结构化 status+stage/commit/diff / network / worktree·stash）——面板部分依赖视觉验证；或 **Local History 后端**（file_versions 快照，独立 history.db，可测）；或会话恢复后端。Git network/worktree 后端可测不依赖渲染。**视觉验证债持续**：终端栈 + 项目面板从未真机跑，建议用户 `wails3 dev` 验。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
