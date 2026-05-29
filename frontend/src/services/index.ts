@@ -1,4 +1,9 @@
 export { GreetService } from './greet/GreetService';
+export {
+  LaunchHistoryService,
+  type RecordSpec,
+  type LaunchRecord,
+} from './launchhistory/LaunchHistoryService';
 export { ProjectService, type Project } from './project/ProjectService';
 export { PreferencesService } from './preferences/PreferencesService';
 export {
