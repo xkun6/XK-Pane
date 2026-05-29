@@ -485,3 +485,17 @@
 
 ### 下一单元：终端启动接线（打通「选定 Provider 启动」）
 - 改 `terminal.CreateSpec` 加 `providerId`；给 terminal 服务注入「provider env 解析器」（holder 或 resolver 函数）；`resolveLaunch` 据 providerId 设 `cctx.Provider`（ToCliProvider 字段拷贝——在 terminal 包做，避 provider→cliadapters 耦合）；`buildEnv` 合并 `provider.EnvVars`（中央 Tier-A 在 adapter EnvInject 之前，Tier-B 覆盖）。+ 守门测试（给定 providerId，PTY env 含对应 provider 变量）。需读 terminal.go（会话2 代码）后改。**纯后端可测**，仍不依赖终端渲染。
+
+## 会话 22 — Phase 3 终端启动接线：打通「选定 Provider 启动」（2026-05-30，autonomous /loop）
+
+### 做了什么（provider → PTY 启动 env 端到端后端打通，头条能力）
+- `provider`：`ResolveLaunchEnv(ctx,db,id)→(Tier-A env, *cliadapters.Provider, err)`——一次加载+解密，产出中央 env + Tier-B adapter Provider 上下文（含明文 key）。非绑定；provider→cliadapters 单向无环。envvars.go 重构出 loadDecrypted/envVarsFor。决定把 ToCliProvider 放 provider 包（返回 *cliadapters.Provider，单次加载，避双解密；耦合无环，优于会话21 设想的「terminal 侧拷贝」）。
+- `terminal`：`CreateSpec.ProviderID`；注入式 `ProviderResolver`（SetProviderResolver，nil 安全）；`resolveLaunch` 解析 provider → Tier-A providerEnv + Tier-B `cctx.Provider`；`buildEnv` 在 adapter EnvInject **之前**合并 providerEnv（cc-pane 顺序，adapter 覆盖冲突键）。裸 shell+provider 仍得 Tier-A env；resolver 报错→启动报错。**明文 key 不入日志（只记 command/cwd）、不入错误串**。
+- `app.go`：SetProviderResolver closure → provider.ResolveLaunchEnv（holder 取活跃 DB）。前端 `TerminalService` CreateSpec.providerId 接通（缺省 ''）。
+
+### 验证 / commit
+- go build/vet/test（dev+prod）+ 全量全绿；bindings **9 Services/43 Methods**；typecheck + 前端 37 测全绿。+4 terminal 测（fake resolver Tier-A 透传+合并/resolver 报错）+2 provider 测（ResolveLaunchEnv）；既有 buildEnv/resolveLaunch 测随签名更新。commit `0114099`。
+
+### 下一步
+- 后台起**聚焦安全审查**（单 agent，查新接线明文泄漏路径 + Tier-A/B 合并顺序保真），下一轮读结论，有真问题先修。
+- 之后候选：会话恢复（terminal_sessions）/ i18n 命名空间 / 设置页其它子页（皆后端或可测）；前端 ProviderService.ts + 启动选 Provider/CLI 的 UI 依赖未验证终端渲染，宜与视觉 checkpoint 一并。

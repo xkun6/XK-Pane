@@ -67,8 +67,13 @@
   - [x] **后端扁平 `project` service**（`internal/services/project`：List/Add/Get/Remove/UpdateName/UpdateAlias + 非导出 existsByPath + validatePath 结构化码）。忠实移植 cc-pane ProjectService/Repository（spec workflow `wf_79a917da-67a`），19 守门测试锁全部保真铁律（path 原样存/逐字节去重/非 upsert/created_at DESC/alias trim→NULL/name basename·"unnamed"/UpdateName 未 trim·非对称/affected-rows→"Project does not exist"）。接进 app.go（纯 CRUD 无 AttachApp），bindings=7 Services/34 Methods（existsByPath 非导出未绑）。✅ go build/vet/test(dev+prod)+全量+typecheck+前端 37 测全绿，commit `c8df705`。对抗保真审查 workflow `wf_7bc251b0-c1f` 进行中。
   - [ ] 前端 `ProjectService.ts` + `ProjectContext`（Context，弃 Zustand）+ 侧边栏扁平项目树（替换 TerminalPage 临时「打开文件夹」工具条）+ 右键/工具条启动（选 CLI 工具 → newTab(projectPath)）。
   - [ ] 🚧 **Workspace 子系统（含 D9 决策门：文件存储 vs SQLite 原生）** —— 到此单元**停下询问用户**（findings J8）。含 workspace 分组、Provider 绑定。
-- [ ] 启动历史（launch_history）+ 会话恢复（terminal_sessions，跨重启）
-- [ ] Provider 管理（多 API Provider，敏感字段 cryptox 加密）
+- 启动历史 + 会话恢复：
+  - [x] **后端 `launch_history` service**（Record/List 倒序，LaunchedAt UTC；7 测，commit `8869111`）+ 前端薄接线（`LaunchHistoryService.ts` + launchProject record-on-launch fire-and-forget，commit `6c187e9`）。
+  - [ ] 「最近启动」UI 消费方 + 会话恢复（terminal_sessions，跨重启）。
+- Provider 管理（多 API Provider，敏感字段 cryptox 加密）：
+  - [x] **后端 `provider` service**（List/Get/Add/Update/Remove/SetDefault，**cryptox 加密 apiKey**，脱敏 DTO，default 不变式事务；15 测，安全审查 clean，commit `c86bc60`；决策见 findings J9）。
+  - [x] **provider→启动 env 注入打通**（`provider.ResolveLaunchEnv` Tier-A env+Tier-B cli 上下文 非绑定；terminal `CreateSpec.ProviderID` + ProviderResolver + resolveLaunch/buildEnv 合并；app 装配 closure）。**「选定 Provider 启动」后端能力完成**，commit `0114099`（10 测）。
+  - [ ] 前端 ProviderService.ts（按脱敏 DTO 契约）+ provider 设置子页 + 启动时选 Provider UI（传 providerId）。
 - [ ] 设置页：按 SettingsPage 子目录隔离规范新增 `provider/terminal/shortcuts/proxy/about` 子页
 - [ ] i18n：移植 cc-pane 12 个命名空间到 foundation 注册式 i18n（zh-CN/en-US）；主题沿用 foundation
 - [ ] 窗口形态特性（用户要求全要）：弹出终端窗口(mode=popup)、迷你模式、无边框浮动按钮
