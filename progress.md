@@ -310,3 +310,20 @@
 ### commit / 下一步
 - commit `daf413f`（PaneTree）。
 - **下一单元（接近 Phase 2 闭环）**：① `TerminalProvider` 生命周期 **reconcile effect**——扫 rootPane：对 `projectPath!=='' && sessionId===null` 且未在创建中的 Tab 调 `TerminalService.create`→`setTabSession` 回填（creatingRef 防重复）；对树中已消失的 live session `kill`（knownSessions diff）。空 projectPath 跳过（初始空 Tab 不误启）。② 接进 App：终端页 + 路由（routes.tsx）+ `<TerminalProvider>` 进 Provider 链。③ 启动入口（侧边栏项目树最小版 + 右键启动 / 或临时 toolbar 用后端默认 cwd）。完成后 **dev 跑通 → 请用户做首个视觉 checkpoint**（loop 无法自验视觉）。
+
+## 会话 11 — Phase 2 生命周期 reconcile effect（2026-05-30，autonomous /loop）
+
+### 做了什么
+- `sessionReconcile.ts`（纯，可测）：`collectTabsWithPane`（扁平 (paneId,tab)）/ `tabsNeedingSession`（projectPath≠'' && session===null && 不在创建中）/ `treeSessionIds` / `orphanedSessionIds`（集合 diff）。+ `sessionReconcile.test.ts` 5 测。
+- `TerminalContext.tsx` 加 reconcile effect（deps=[rootPane]）：① 为缺会话的 Tab `TerminalService.create`→resolve 时**用 rootPaneRef 二次校验 tab 仍在且仍缺 session**（在→`setTabSession` 回填；不在→`kill` 防「创建途中关闭」泄漏）；② 孤儿清理 `kill(knownRef − currentTreeSessions)`，`knownRef=currentTreeSessions`。`creatingRef` 防重复创建；空 projectPath 跳过（初始空 Tab 不误启）。
+
+### 验证（§4 前端门）
+- `pnpm typecheck` exit=0；`pnpm test` **37/37**（+sessionReconcile 5）；`pnpm build` exit=0。
+
+### race/leak 审查（workflow wf_651d3b47-e99，单 agent）✅ 0 真实 bug
+- 逐一精确事件序裁定 6 项全 benign：① StrictMode 双挂载——creatingRef 跨「无 cleanup 的 reconcile effect」存活 → 阻断双创建；aliveRef 同步翻回 true 后 promise 才 resolve → 正常回填（**浪费但自愈，非破坏**）。② 孤儿 diff **不会**误杀刚回填的 session（sid 只在「出现在树后」才进 knownRef）。③ 真卸载/创建途中关闭 → else 分支 kill，不泄漏。④ 无紧循环（回填后 sessionId≠null → tabsNeedingSession 排除，到达不动点）。⑤ resolve 读 rootPaneRef（deps-less effect 保鲜）非过期闭包。
+- **1 个前瞻性 caveat（已就地标 TODO 注释）**：resolve 用**捕获的 t.paneId** 回填，当前安全仅因 reducer 未实现 moveTab（Tab 不跨 pane 迁移）；**移植 moveTab 时**须改为按 tabId 查当前 pane 再回填，否则落旧 paneId 会 no-op 泄漏 session。
+
+### commit / 下一步
+- commit `06a3720`（reconcile effect + 评审 TODO 注释）。
+- **下一单元（到达 Phase 2 闭环）**：接进 App —— ① `<TerminalProvider>` 进 App.tsx Provider 链；② 新建终端页（`pages/<TerminalPage>/`，渲染 `PaneTree` 消费 rootPane）+ routes.tsx 注册（slot primary，图标 MUI Rounded）；③ MVP 启动入口：页内「打开文件夹」动作走 `NativeDialogs.openDirectory()`→`newTab(activePane, {projectPath:dir, cliTool:'none'})`→reconcile 起裸 shell。完成后 **dev 跑通 → 请用户做首个视觉 checkpoint**（验证：打开文件夹→见 shell 输出→输入回显→分屏拖拽→关标签回收 PTY）。侧边栏项目树/右键启动/CLI 工具选择留 Phase 3。
