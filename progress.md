@@ -411,3 +411,18 @@
 - `pnpm typecheck` exit=0；`pnpm test` 37/37。Provider 逻辑薄（service 调用 + refetch），范式同已审 PreferencesProvider，无 workflow。commit `c81a58f`。
 - **下一单元（project 第三段，较重）** = 侧边栏扁平项目树 **View**：列项目 + 「添加项目」（NativeDialogs.openDirectory→addProject）+ 每项启动（点项目→选 CLI→TerminalProvider.newTab(projectPath)）+ 删除/改名/别名。**布局决策（次轮定）**：foundation 的 AppLayout 是「图标栏 Sidebar + RouterOutlet」无次级面板槽——拟把项目面板做进 **TerminalPage 左列**（替换临时「打开文件夹」工具条，不动 AppLayout，最小侵入），右列仍 PaneTree。
 - **该单元落地后 = 强视觉 checkpoint 时机**：项目列表→点击→选 CLI→终端起，一条完整可视链路（兼顾欠用户的 Phase 2 视觉验证）。届时拟暂停 loop 请用户验。
+
+## 会话 17 — Phase 3 ProjectPanel + 终端页整合（project 三段之第三段 3a）（2026-05-30，autonomous /loop）
+
+### 做了什么（完整可视链路落地）
+- `components/ProjectPanel/`（自包含 View/VM/Style/lang）：列项目（useProjects）+ 头部「添加」（NativeDialogs.openDirectory→addProject）+ 点行 `onLaunchProject` + 移除（NativeDialogs.confirm，文案说明「仅从列表移除不删盘」）。显示名 = alias||name；后端错误经 NativeDialogs.error 提示（VM 从 View 取串，遵 MVVM）。自带 `projectPanel.*` locale + register。
+- `TerminalPage`：临时「打开文件夹」工具条**替换**为左列 ProjectPanel（root 改 row 布局）；`useTerminalPage` 改 `launchProject(project)`→newTab({projectPath, title})，**MVP 裸 shell（cliTool 'none'）**，选 CLI 留 3b。
+- **清理（§3 我的改动产生的孤儿）**：删 `terminalPage.*` lang 三件 + 其 register（grep 确认仅工具条/App/index 引用），App.tsx 改注册 `registerProjectPanelLocales`。
+
+### 验证 / commit
+- `pnpm typecheck` + `pnpm test` 37/37 + `pnpm build`（ProjectPanel 入 TerminalPage 懒块 353KB）全绿。纯展示+透传+已审 Provider，无 workflow。commit `fd653fa`。
+
+### 决策：continue（不停 loop）+ 醒目标注 checkpoint 机会
+- **现状**：项目面板→点击→终端起 的完整可视链路已就位，是**强视觉 checkpoint 时机**（兼顾欠用户的 Phase 2 视觉验证）。
+- **但不停 loop**：用户既定 stop 粒度 = 「连续跑到底」（仅 ①决策门 ②连续失败 ③全阶段完成 才停）；且用户在会话12 checkpoint 后**已重发 /loop 续跑、其后 5 轮未干预**——demonstrated「持续推进」偏好。视觉 checkpoint 非三类停止条件之一。故**继续**，仅在消息+此处醒目标注：随时可 `wails3 dev` 验证「点项目→终端起/回显/分屏/关标签回收」，发现问题反馈即下一轮修。
+- **下一单元（候选，次轮定）**：倾向**转后端可测单元**以平衡「未运行验证的前端」堆积——`launch_history` 记录（点启动→写一条启动历史，后端 service + 守门测试）或 Provider 管理 service（后端 CRUD + cryptox 加密 api_key）。或 3b（选 CLI 工具启动，前端为主）。下一轮按新鲜判断选。
