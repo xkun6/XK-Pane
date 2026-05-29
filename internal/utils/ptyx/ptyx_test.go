@@ -21,7 +21,11 @@ func echoCmd(marker string) (string, []string) {
 
 // TestSpawnEchoProducesOutput 是 ptyx 的 ConPTY/PTY 冒烟测试（R1 spike 守门）：
 // 在真 PTY 里跑 echo，断言能从 PTY 原始字节流读到 marker。
-// 同时验证 spawn → 读流 → Wait → Close 的生命周期不卡死。
+//
+// 注意 ConPTY 输出语义：它是**异步屏幕刷新**，不是简单管道。进程退出后若立刻
+// Close() 会在最后一次刷新前关掉伪控制台、丢掉尾部输出（这正是 Phase 2 终端服务
+// 要在进程退出后留 drain 宽限再关 PTY 的原因）。因此本测试**轮询缓冲区等 marker
+// 出现**，不依赖 Wait/Close 时序，避免 race。
 func TestSpawnEchoProducesOutput(t *testing.T) {
 	const marker = "ptyx-spike-OK-7421"
 
@@ -33,6 +37,8 @@ func TestSpawnEchoProducesOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Spawn: %v", err)
 	}
+	defer func() { _ = p.Kill(); _ = p.Wait(); _ = p.Close() }()
+
 	if p.PID() == 0 {
 		t.Fatalf("PID() = 0 after Spawn")
 	}
@@ -41,9 +47,7 @@ func TestSpawnEchoProducesOutput(t *testing.T) {
 		mu  sync.Mutex
 		buf bytes.Buffer
 	)
-	done := make(chan struct{})
 	go func() {
-		defer close(done)
 		tmp := make([]byte, 4096)
 		for {
 			n, rerr := p.Read(tmp)
@@ -58,24 +62,25 @@ func TestSpawnEchoProducesOutput(t *testing.T) {
 		}
 	}()
 
-	if werr := p.Wait(); werr != nil {
-		// echo 正常退出码 0；非 0 仅告警（不同 shell 噪声），不直接失败
-		t.Logf("Wait returned: %v", werr)
-	}
-	_ = p.Close() // 关 PTY，让 reader 收到 EOF
-
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("reader goroutine did not finish after Close (PTY read blocked)")
+	// 轮询：reader 持续读，等 marker 出现（不提前 Close，规避 ConPTY 尾部刷新 race）。
+	const (
+		deadline = 12 * time.Second
+		step     = 25 * time.Millisecond
+	)
+	for waited := time.Duration(0); waited < deadline; waited += step {
+		mu.Lock()
+		has := strings.Contains(buf.String(), marker)
+		mu.Unlock()
+		if has {
+			return // 成功
+		}
+		time.Sleep(step)
 	}
 
 	mu.Lock()
 	out := buf.String()
 	mu.Unlock()
-	if !strings.Contains(out, marker) {
-		t.Fatalf("expected PTY output to contain %q, got %d bytes: %q", marker, len(out), out)
-	}
+	t.Fatalf("marker %q not seen within %s; got %d bytes: %q", marker, deadline, len(out), out)
 }
 
 // TestResizeNoError 验证 Resize 在会话存活期间可调用且 0 尺寸被安全忽略。

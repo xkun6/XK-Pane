@@ -57,8 +57,20 @@
 - **验证（Win11 实跑）**：`TestSpawnEchoProducesOutput` PASS（ConPTY 起 cmd.exe + Job 绑定 + 从原始字节流读到 marker）、`TestResizeNoError` PASS；`go build` exit=0；`GOOS=linux go build` exit=0（Unix 路径编过）。
 - 结论：findings R1（ConPTY 在 Wails/Go 下可用性）**实测消除**。
 
+### events + GORM 核心模型（2026-05-29）✅
+- `internal/events/events.go`：加 `terminal:output`/`:status`/`:exit` 三事件 + payload struct，`Register()` 注册。bindings 重生成 → 4 Events / 27 Models，OK。
+- `internal/storage/models_ccpane.go`：7 张 data.db 核心表 GORM 模型 + `init()` 追加 AllModels + 显式 `TableName()`。
+  - **踩坑**：GORM 默认把 `LaunchHistory` 复数化成 `launch_histories`，与描述符 `launch_history` 不符致建表测试失败 → 给全 7 个加 `TableName()` 显式表名修复。
+  - 时间戳用 Go `time.Time`（greenfield，不导入 cc-pane 旧库）；敏感字段标 TODO 待写入方落地加 cryptox。
+- 测试 `models_ccpane_test.go`：AutoMigrate 建表 + 注册校验，通过。
+- **ptyx 测试 flaky 修复**：上次侥幸通过的 echo 测试这次因 ConPTY 异步刷新 race 失败（Wait 后立刻 Close 丢尾部输出）。改为**轮询缓冲区等 marker**，`-count=3` 稳定通过。教训记入 Phase 2 待办（终端服务进程退出后须留 drain 宽限）。
+
 ### 下一步（Phase 1 续）
-- events 类型化事件 → GORM 核心模型 + AutoMigrate 测试 → cliadapters(8+27 测试) → subprocess 白名单。
+- cliadapters（8 适配器 + 27 守门测试，findings J4；GLM=crush）→ subprocess git 白名单。可考虑 workflow 并行 8 个适配器。
+
+### 测试结果（Phase 1 累计）
+- `go test ./internal/...`（dev + production）全 ok：appinfo / storage / ptyx（×3 稳定）。
+- `go vet`（dev+prod）exit=0；`wails3 generate bindings` exit=0（5 Services/27 Models/4 Events）；`pnpm typecheck` exit=0。
 
 ### 遇到的错误
 - Bash 工具默认走 /usr/bin/bash 致 `$null` 重定向报错；改用 PowerShell 工具解决。
