@@ -4,6 +4,7 @@ import { settingsPageEnUS } from './en-US';
 import { registerPersonalizationLocales } from '../personalization';
 import { registerLanguageLocales } from '../language';
 import { registerDatabaseLocales } from '../database';
+import { registerProviderSettingsLocales } from '../provider';
 
 let registered = false;
 
@@ -17,5 +18,6 @@ export const registerSettingsPageLocales = (): void => {
   registerPersonalizationLocales();
   registerLanguageLocales();
   registerDatabaseLocales();
+  registerProviderSettingsLocales();
   registered = true;
 };

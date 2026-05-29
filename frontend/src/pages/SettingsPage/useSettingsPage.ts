@@ -35,6 +35,11 @@ export const useSettingsPage = (): UseSettingsPageResult => {
         descriptionKey: 'settings.list.language.description',
       },
       {
+        id: 'provider',
+        labelKey: 'settings.list.provider.label',
+        descriptionKey: 'settings.list.provider.description',
+      },
+      {
         id: 'database',
         labelKey: 'settings.list.database.label',
         descriptionKey: 'settings.list.database.description',

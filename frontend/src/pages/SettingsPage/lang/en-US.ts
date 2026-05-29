@@ -15,6 +15,10 @@ export const settingsPageEnUS: Messages = {
         label: 'Language',
         description: 'Switch the UI language',
       },
+      provider: {
+        label: 'Providers',
+        description: 'Manage API credentials and endpoints for launching CLIs',
+      },
       database: {
         label: 'Data storage',
         description: 'Database location and disk usage',

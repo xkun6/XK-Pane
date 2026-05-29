@@ -18,6 +18,10 @@ export const settingsPageZhCN: Messages = {
         label: '语言',
         description: '切换界面语言',
       },
+      provider: {
+        label: '接入 Provider',
+        description: '管理 CLI 启动用的 API 凭据与端点',
+      },
       database: {
         label: '数据存储',
         description: '数据库位置与占用空间',
