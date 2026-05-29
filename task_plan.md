@@ -43,15 +43,15 @@
 - **verify** ✅：`go build`(dev+prod)/`go vet`(dev+prod)/`go test`(dev+prod) 全 exit=0；wails3 bindings 前缀=xkpane；pnpm typecheck 通过
 - **注**：保留主题 `foundation.*` 命名空间（设计系统 API，非模块名）；`-framework Foundation`（iOS Apple 框架）不动；`build/linux/nfpm` 的 `foundation.exe` 待 Phase 6 由 build-assets 重生成
 
-### Phase 1 — 后端地基（PTY / 子进程 / CLI 适配器 / 数据模型 / 事件）🔵 in_progress
+### Phase 1 — 后端地基（PTY / 子进程 / CLI 适配器 / 数据模型 / 事件）✅ complete
 **目标**：铺好移植所需的后端底座，无 UI 也能单测。
 - [x] `internal/utils/ptyx`：跨平台 PTY 门面（go-pty v0.2.3）。Windows ConPTY + JobObject(CREATE_SUSPENDED→assign→ResumeThread)；Unix 不叠 Setpgid（go-pty 强制 Setsid）kill 用 `Kill(-pid,SIGKILL)`。✅ **R1 spike 在 Win11 实跑通过**（`TestSpawnEchoProducesOutput`/`TestResizeNoError` PASS；Unix 交叉编译 exit=0）
 - [x] `internal/events`：注册终端类型化事件 `terminal:output`/`:status`/`:exit`（+payload struct）。bindings 重生成确认 4 Events
 - [x] `internal/storage/models_ccpane.go`：移植 7 张 data.db 核心表 GORM 模型（Project/LaunchHistory/Todo/TodoSubtask/Spec/TerminalSession/TaskBinding），`init()` 追加 AllModels，显式 `TableName()`。✅ AutoMigrate 守门测试通过。时间戳用 time.Time（greenfield）；敏感字段 last_prompt/ssh_config 标 TODO 待 Phase 3 写入方落地加 cryptox 钩子
 - [x] `internal/services/cliadapters`：8 个 CLI 适配器 build_command + 路径字段铁律（D7）+ Registry/Detect + 可执行解析（Windows npm shim）。✅ 18 守门测试（双模式 ok），GLM 可执行=`crush`、reclaude versionArgs=`version`。**延后**（标 TODO(phase5)，依赖未落地属投机）：claude/reclaude `generate_mcp_config`（需 orchestrator port/token）、codex `~/.codex/config.toml` 解析（disable_unlisted_mcp 默认关）、项目 hooks 机制（需 cc-panes-cli-hook 二进制 + 已延后的 IM 桥接，对应 5 个 hooks 守门测试一并延后）
-- [ ] `internal/services/subprocess`：扩展白名单（git 各子命令，供 go-git fallback）
+- [~] ~~`internal/services/subprocess`：扩展白名单（git 各子命令）~~ **改判延后到 Phase 4**（用户确认）。理由：git CLI fallback 的消费方是后端 Git 服务（Phase 4），需**同步取输出**，后端 Go 直接用 procx 即可（procx 是后端原语，铁律只约束前端）；而 `subprocess.Service` 是**前端异步白名单**（按 ID 发事件），层次不匹配。Git 服务尚未建立时确定子命令/参数模式属投机。前端白名单保持空，待前端用例再加
 - ⚠️ Phase 2 待办（ptyx 测试暴露）：ConPTY 输出是异步屏幕刷新，终端服务在子进程退出后须留 drain 宽限再 Close PTY，否则丢尾部输出
-- **verify**：`go test ./internal/...` 通过；✅ ptyx 已起 shell 读到输出；适配器守门测试覆盖 path 语义；AutoMigrate 建表测试
+- **verify** ✅：`go test ./internal/...`(dev+prod) 全 ok；ptyx 已起 shell 读到输出；cliadapters 18 守门覆盖 path 铁律 + 经 workflow 保真度审查；AutoMigrate 建表测试通过；`go vet`/`wails3 generate bindings`/`pnpm typecheck` 全绿
 
 ### Phase 2 — 终端核心闭环（首个可运行里程碑）⬜ pending
 **目标**：能在某项目目录下用内置终端跑起一个 CLI 并交互——MVP runnable。
@@ -74,6 +74,7 @@
 ### Phase 4 — 常用增强（Git / Local History / 多运行时 / 启动配置 / Todo·Spec）⬜ pending
 **目标**：覆盖 cc-pane 高频增强功能。
 - [ ] Git 集成（go-git + 必要时 git CLI）：status/branch/pull/push/fetch/stash + Worktree
+  - **git CLI fallback 层次**（Phase 1 改判落点）：后端 Git 服务**直接用 procx** 同步执行 + 服务内部 git 子命令 allowlist + 同步捕获 stdout/stderr，**不经**前端 `subprocess.Service` 白名单（后者是前端异步事件机制）
 - [ ] Local History：file_versions 表 + 快照/Diff/标签/分支感知（独立 history.db）
 - [ ] 运行时：Local/WSL/SSH（ssh_machine + wsl_discovery）
 - [ ] 启动配置 launch_profile + 启动配置文件管理
@@ -104,8 +105,8 @@
 | 阶段 | 状态 | 备注 |
 |------|------|------|
 | Phase 0 | ✅ complete | 改名 + Dev/Release 隔离，全验证通过 |
-| Phase 1 | 🔵 in_progress | ptyx ✅ / events ✅ / models ✅ / cliadapters ✅（18 守门 ok，部分 MCP/hooks 延后 Phase 5）；剩 subprocess git 白名单 |
-| Phase 2 | ⬜ pending | 终端闭环（MVP runnable） |
+| Phase 1 | ✅ complete | ptyx ✅ / events ✅ / models ✅ / cliadapters ✅（18 守门 ok，MCP/hooks 延后 Phase 5）；subprocess git 白名单改判延后 Phase 4（层次修正） |
+| Phase 2 | 🔵 next | 终端闭环（MVP runnable）—— 下一个里程碑 |
 | Phase 3 | ⬜ pending | 管理面 + 设置 |
 | Phase 4 | ⬜ pending | 常用增强 |
 | Phase 5 | ⬜ pending | Bedrock/MCPE/notify/memory |

@@ -88,8 +88,20 @@
   - kimi `Some("")` vs `APIKey==""`：全适配器一致的 `""==None` 约定，非 drift。
 - 修正后 `go test`（dev+prod）/`go vet` 全 exit=0。
 
-### 下一步（Phase 1 续）
-- 最后一项：`internal/services/subprocess` git 子命令白名单扩展（go-git CLI fallback 用）。
+### Phase 1 收口决策：subprocess git 白名单 → 改判延后 Phase 4（用户确认）✅
+- 动手前发现**层次错配**：`subprocess.Service` 是**前端异步白名单**（按 ID 发事件给前端订阅，铁律只约束「前端」调子进程）；而 D4 的 git CLI fallback **消费方是后端 Git 服务**（Phase 4），需**同步捕获 git 输出**——后端 Go 直接用 procx 即可（procx 是后端原语）。把 git 子命令塞进前端白名单是错的层，且 Git 服务未建时确定子命令/参数属投机（违 CLAUDE.md 简洁铁律）。
+- 用 AskUserQuestion 提了三选项（延后 Phase 4 / 现建后端 gitx / 字面扩前端白名单），**用户选「延后到 Phase 4」**。
+- 落点：Phase 4 的后端 Git 服务用 procx 直连 + 服务内部 git 子命令 allowlist + 同步取输出，不经前端 subprocess。前端白名单保持空（待前端用例）。已在 task_plan Phase 1（标 [~] 延后）/ Phase 4（加层次说明）/ 状态表更新。
+
+### Phase 1 完成 ✅（2026-05-29）
+- 四个实质单元全部落地并验证：**ptyx**（R1 ConPTY spike 实跑）/ **events**（终端事件）/ **models_ccpane**（7 表 GORM）/ **cliadapters**（8 适配器 + 18 守门 + 保真度审查）。
+- subprocess git 白名单改判延后 Phase 4（层次修正，非遗漏）。
+- 全验证：`go build`/`go test`/`go vet`（dev + production）+ `wails3 generate bindings` + `pnpm typecheck` 全 exit=0。
+- 提交：`1ee9771`(cliadapters) / `21b2c64`(events+models) / `9df58c1`(ptyx) / `b7281a3`(Phase 0 改名) / `97751b6`(init)，均在 `rebuild/cc-pane` 分支。
+
+### 下一步：Phase 2 — 终端核心闭环（首个可运行里程碑）
+- 后端 `terminal_service`：PTY 会话注册表 + I/O 隧道（Emit `terminal:output`）+ resize/kill + launch_cwd 上报。**硬性**：进程退出后留 drain 宽限再 Close PTY（ptyx 测试暴露的 ConPTY 异步刷新教训）。
+- 前端：`TerminalView`(xterm.js) + 自实现 SplitView + TabBar(@dnd-kit) + `TerminalContext`（替代 usePanesStore）+ 侧边栏项目树最小版 + 右键启动。
 
 ### 测试结果（Phase 1 累计）
 - `go test ./internal/...`（dev + production）全 ok：appinfo / storage / ptyx（×3 稳定）/ cliadapters（18 守门，双模式）。
