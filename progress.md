@@ -275,3 +275,21 @@
 ### commit / 下一步
 - commit `559fe13`（SplitView）。
 - **下一单元**：递归 `PaneTree` 渲染器 + 把 Phase 2 拼起来——消费 `TerminalContext.rootPane` 递归渲染（split→SplitView 包 PaneTree，panel→挂活动 Tab 的 TerminalView）+ 生命周期 effect（newTab→create→setTabSession / onExit）接进 TerminalProvider。TabBar(@dnd-kit) 可与此同做或紧随。然后 侧边栏项目树最小版 + 右键启动 → 接进 App（路由/页面）→ **Phase 2 闭环可演示**（首个可运行里程碑）。
+
+## 会话 9 — Phase 2 MVP TabBar（2026-05-30，autonomous /loop）
+
+### 选取单元（§2）+ 关键裁决
+- cc-pane `TabBar.tsx` 528 行（密度档/pin/重命名/右键菜单/状态点/@dnd-kit）。**关键realization**：@dnd-kit 拖拽重排**强耦合**父级 `DndContext` + `reducer.reorderTabs`（两者皆未落地）——独立 TabBar 无法自给。故本单元 = **MVP TabBar（选择/关闭/新建 + 活动态）**；拖拽重排单列一单元（reducer.reorderTabs + DndContext）。同时延后 pin/重命名/右键菜单/状态点/密度档（增强，非 MVP verify 所需）。
+
+### 做了什么（`frontend/src/components/TabBar/`）
+- `TabBar.tsx`（View）：横向可滚动标签条 + 固定「+」；标签 = 标题 + 关闭 X（hover/active 显），`role=tab/tablist/button`；图标用 `@mui/icons-material` `AddRounded`/`CloseRounded`（铁律），取色 `foundation.*`。
+- `useTabBar.ts`（VM）：仅管活动标签 `scrollIntoView`（多标签溢出时滚入可见）+ tabNode 注册；选择/关闭/新建纯透传。
+- `TabBar.styles.ts`：用 `SystemStyleObject<Theme>` 显式接口（非 Record）——`sx={[styles.tab, active?styles.tabActive:styles.tabInactive]}` 数组形式要求元素为确定 SystemStyleObject，规避 noUncheckedIndexedAccess 的 `|undefined` 与 SxProps 联合含数组的双重坑。
+- i18n：公用 locale 加 `terminal.tab.{new,close}`（zh-CN/en-US 对齐）——terminal 属核心跨切 UI，类比 titleBar/sidebar 放公用 locale（aria-label 走 t()，铁律）。
+
+### 验证（§4 前端门）
+- `pnpm typecheck` exit=0（修了 2 次 sx 类型坑）；`pnpm test` 32/32 无回归；`pnpm build` exit=0。纯展示组件 + 透传逻辑，typecheck+build 即足，无 workflow。
+
+### commit / 下一步
+- commit `fa312f0`（TabBar + locale）。
+- **下一单元**：递归 `PaneTree` 渲染器 + 生命周期整合——消费 `TerminalContext.rootPane` 递归渲染（split→`SplitView` 包 PaneTree 子节点 + `resizePanels`+`normalizeSizesToHundred`；panel→`TabBar` + 活动 Tab 的 `TerminalView`）+ 把生命周期 effect（newTab→`TerminalService.create`→`setTabSession` 回填；onExit→清理）接进 `TerminalProvider`。随后 接进 App（终端页/路由）+ 侧边栏项目树最小版 + 右键启动 → **Phase 2 闭环可演示**。届时 dev 跑通后可请用户做首个视觉 checkpoint。
