@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -47,6 +48,12 @@ func Open(path string) (*DB, error) {
 		Logger: logger.Default.LogMode(logger.Warn),
 		// 禁用默认事务提交：单写场景用不到外层事务包裹
 		SkipDefaultTransaction: true,
+		// 时间戳一律以 UTC 写入。glebarez 把 time.Time 按其自身时区序列化为
+		// TEXT；GORM 默认 NowFunc 用本地时区，跨 DST/换时区的两行会带不同偏移，
+		// 而 SQLite 对 created_at 做字典序 TEXT 排序 → 绝对更新的行可能排到更旧
+		// 的行之后（破坏「最新在前」）。统一 UTC 让字典序==绝对时序，且与
+		// cc-pane（chrono::Utc::now）一致。读路径仍能解析旧的带偏移文本。
+		NowFunc: func() time.Time { return time.Now().UTC() },
 	})
 	if err != nil {
 		return nil, fmt.Errorf("storage: open db: %w", err)
