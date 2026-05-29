@@ -522,3 +522,17 @@
 
 ### 下一单元：provider 设置子页（走已验证设置框架）
 - `SettingsPage/provider/`（按子目录隔离规范：View/VM/Style/lang/index + register + useSettingsPage items 加项 + SettingsPage.tsx 分发）。列表（useProviders）+ 新增/编辑表单（name/type 下拉/apiKey/baseUrl + 按 type 显条件字段 region/projectId/awsProfile/configDir）+ 删除（确认）+ 设默认。编辑时 apiKey 占位「留空保持不变」（脱敏契约）。**不依赖终端渲染**——让 provider CRUD 在 UI 可达可验。可能拆「列表+CRUD 动作」与「表单」两单元。
+
+## 会话 25 — Phase 3 provider 设置子页（provider 管理 UI 可达可验）（2026-05-30，autonomous /loop）
+
+### 做了什么
+- `SettingsPage/provider/`（按子目录隔离规范，组件名 `ProviderSettings` 避与 Provider 类型混淆）：列表（useProviders；name + 类型 chip + 默认 chip + 设密钥提示 + 编辑/删除/设默认行内动作）+ 新增/编辑 **MUI Dialog 表单**（name / type 下拉 11 类 / apiKey password「编辑留空保留」/ baseUrl / 仅新增显 isDefault 开关——因后端 Update 不动 default，编辑用行内「设默认」动作，**与后端语义一致**）+ 删除（NativeDialogs 原生确认）。全字符串走 t()，图标 *Rounded。
+- 接线：useSettingsPage items 加 provider 项（在 database 前）+ SettingsPage.tsx 分发 + SettingsPage/lang/index 注册 registerProviderSettingsLocales + settings.list.provider 条目（zh/en）。lang 命名空间 `settings.provider.*`。
+- **范围**：MVP 表单 = 通用字段（name/type/apiKey/baseUrl/isDefault）；条件云字段（region/projectId/awsProfile/configDir）= 3b（draft 已携带，仅缺渲染）。
+
+### 验证 / commit
+- typecheck + 37 测 + build 全绿（provider 子页入 SettingsPage 懒块）。标准 MUI 表单走已验证设置框架 + 无复杂逻辑，无 workflow。commit `ff99674`。
+- **里程碑**：provider 管理成为**首个完整、用户可达可验的 Phase-3 管理 UI**（设置→接入 Provider→增删改/设默认），且全在已验证的设置框架上（不依赖未验证终端渲染）。「选定 Provider 启动」后端已通，仅差启动时选 Provider 的 UI（依赖终端渲染 → 视觉 checkpoint 一并）。
+
+### 下一单元（候选）
+- 3b provider 条件云字段（小，补表单渲染）；或会话恢复后端（terminal_sessions Save/List service，可测）；或 i18n 命名空间梳理。启动选 Provider/CLI UI 仍待视觉 checkpoint。
