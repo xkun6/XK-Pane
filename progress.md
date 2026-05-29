@@ -499,3 +499,16 @@
 ### 下一步
 - 后台起**聚焦安全审查**（单 agent，查新接线明文泄漏路径 + Tier-A/B 合并顺序保真），下一轮读结论，有真问题先修。
 - 之后候选：会话恢复（terminal_sessions）/ i18n 命名空间 / 设置页其它子页（皆后端或可测）；前端 ProviderService.ts + 启动选 Provider/CLI 的 UI 依赖未验证终端渲染，宜与视觉 checkpoint 一并。
+
+## 会话 23 — provider 接线安全审查 clean + 前端 ProviderService.ts（2026-05-30，autonomous /loop）
+
+### 安全审查（聚焦 agent）：CLEAN
+- 5 点全 OK，0 真实问题。明文 key 仅在非绑定后端启动路径（resolver→buildEnv→PTY），绑定面只回脱敏 DTO；日志只记 command/cwd（不记 env）；错误串不含 key；Tier-A/B 合并顺序与 cc-pane 一致；provider→cliadapters 无环。**1 良性非 finding**：`CC_PANES_PTY_SESSION_ID` 在 providerEnv 合并之前设（cc-pane 在之后），但 provider 键集与 CC_PANES_*/TERM 不相交 → 不可能被覆盖，按简洁不改。
+
+### 做了什么：前端 ProviderService.ts（薄）
+- `services/provider/ProviderService.ts`：包 list/get/add/update/remove/setDefault。脱敏 `Provider`（hasApiKey 无明文）+ `ProviderInput`（明文 apiKey，编辑留空保留）接口。明文不回前端（守 J9 契约）。barrel 追加。typecheck + 37 测全绿。commit `4fc8f6d`。
+
+### 下一单元（候选，次轮定）
+- **provider 设置子页**（按 SettingsPage 子目录隔离规范，复用**已验证的**设置框架——不依赖未验证的终端渲染；让 provider CRUD 在 UI 可达且用户可验）：list/add/edit/remove/setDefault 表单。需 ProviderContext 或子页本地态。
+- 或 **会话恢复后端**（terminal_sessions Save/List service，可测）。
+- **注**：已积累 3 个「后端就绪、前端消费方待建」的服务（launch_history/provider/[会话恢复]）+ Phase2 前端从未真机跑。视觉验证债大。settings 子页走已验证框架是低风险的「让后端可达」推进；启动选 Provider/CLI 的 UI（依赖终端渲染）仍宜与视觉 checkpoint 一并。
