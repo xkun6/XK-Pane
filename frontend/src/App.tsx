@@ -2,7 +2,7 @@ import { AppLayout } from '@/components/AppLayout';
 import { I18nProvider, registerFoundationLocales } from '@/i18n';
 import { registerHomePageLocales } from '@/pages/HomePage/lang';
 import { registerSettingsPageLocales } from '@/pages/SettingsPage/lang';
-import { registerTerminalPageLocales } from '@/pages/TerminalPage/lang';
+import { registerProjectPanelLocales } from '@/components/ProjectPanel';
 import { PreferencesProvider } from '@/preferences';
 import { ProjectProvider } from '@/project';
 import { RouterProvider } from '@/router';
@@ -21,7 +21,7 @@ registerFoundationThemes();
 registerFoundationLocales();
 registerHomePageLocales();
 registerSettingsPageLocales();
-registerTerminalPageLocales();
+registerProjectPanelLocales();
 
 // Provider 嵌套顺序（自外向内）：
 //  ① I18nProvider —— 文案是任何子组件都可能用到的最基础上下文

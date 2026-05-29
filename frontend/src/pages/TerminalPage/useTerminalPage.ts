@@ -1,22 +1,24 @@
-// TerminalPage 的 ViewModel：MVP 启动入口——选文件夹后在活动面板新建一个裸 shell 终端 Tab。
-// 经 services 层（NativeDialogs）与 useTerminal（Context）；不直接 import bindings。
-// dialogTitle 由 View 传入（VM 不持有翻译串，遵循 MVVM 铁律）。
-import { NativeDialogs } from '@/services';
+// TerminalPage 的 ViewModel：把「点击项目」桥接到终端——在活动面板新建一个终端 Tab。
+// 经 useTerminal（Context）；不直接 import bindings。projectPath = PTY cwd（铁律 D7），
+// reconcile effect 据此起会话。MVP 用裸 shell（cliTool 'none'）；选 CLI 工具留 3b。
 import { useTerminal } from '@/terminal';
+import type { Project } from '@/services';
 
 export interface TerminalPageModel {
-  openFolder: (dialogTitle: string) => Promise<void>;
+  launchProject: (project: Project) => void;
 }
 
 export function useTerminalPage(): TerminalPageModel {
   const { activePaneId, newTab } = useTerminal();
 
-  const openFolder = async (dialogTitle: string): Promise<void> => {
-    const dir = await NativeDialogs.openDirectory({ title: dialogTitle });
-    if (!dir) return;
-    // 裸 shell（cliTool 'none'）：projectPath = PTY cwd（铁律 D7）。reconcile effect 据此起会话。
-    newTab(activePaneId, { projectId: dir, projectPath: dir, cliTool: 'none' });
+  const launchProject = (project: Project): void => {
+    newTab(activePaneId, {
+      projectId: project.id,
+      projectPath: project.path,
+      cliTool: 'none',
+      title: project.alias ?? project.name,
+    });
   };
 
-  return { openFolder };
+  return { launchProject };
 }
