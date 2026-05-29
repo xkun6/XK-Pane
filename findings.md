@@ -161,3 +161,11 @@ React 19.2 / @mui/material 9 / @mui/icons-material 9 / @mui/x-charts 9 / emotion
 
 ### J5. 改名清单（已得精确 file:line，待执行前 Grep 复核）
 19 处改点已定位（go.mod:1 / main.go:7 / app.go:11-19,64 / window_*.go Title / paths.go:18 / cryptox.go:42 / logx.go:52 / 5 个前端 service 的 @bindings / Taskfile.yml:4 / build/config.yml:8-12 / index.html:7 / package.json:2）。有序执行：改 go.mod→改全部 Go import→改 3 处 AppDirName→`go mod tidy`→改前端 @bindings→`wails3 generate bindings`→`task dev` 验证。agent 对部分 service 文件 import 标了「需实际检查」，**执行前用 Grep 全量复核 `foundation` 与 `@bindings/foundation` 出现处**。
+
+### J6. Phase 2 后端 terminal_service 落地记（保真度 + 两处待清理）
+- **保真度（对照 `cc-panes-core/src/services/terminal_service.rs` + `terminal_service/shell.rs`）**：
+  - `defaultShell` 忠实移植 `resolve_default_shell`（Win `pwsh>powershell>%ComSpec%` / Unix `$SHELL` else `/bin/sh`）。`detect_shells`/`resolve_shell`（按 shell_id 选 git-bash/wsl/zsh/fish 等）属用户可配项 → **Phase 3 设置页**再补。
+  - `buildEnv` 对齐 cc-pane 1147-1204 env 注入：TERM/COLORTERM(or_insert)、CC_PANES_PTY_SESSION_ID(强制) 一致；snapshot_id/launch_id/runtime_kind/orchestrator(CC_PANES_API_*)/wsl_distro/launch_profile_skills 均 Phase 3/4/5 特性，MVP 延后并标 TODO。
+- **微差异（良性，有意保留）**：cc-pane 对裸 shell 也注入 `CC_PANES_CLI_TOOL=none`（`cli_tool.as_id()`），本实现对 "none"/"" 跳过。无害——该 env 仅供 cli-hook 上报 launch_cwd（Phase 5），裸 shell 无 hook 消费方。
+- **⚠️ 待 Phase 6 统一清理**：`AttachApp(app *application.App)` 会被 `wails3 generate bindings` 暴露给前端（terminal 与 **既有 subprocess 服务**皆如此，subprocess 连 `EventNamePrefix` 也漏）。属 foundation 脚手架既定模式，无害（前端无法构造 `*application.App`）。Phase 6 可调研 Wails v3「Internal/隐藏方法」机制对两个服务一并隐藏 app-wiring 方法。
+- **环境坑**：`go mod tidy` 经 goproxy.cn 拉取 go-pty 的深层 test 依赖（u-root/gobusybox）偶发 504；**与改动无关**，build/test 不受影响。后果仅 uuid 在 go.mod 仍标 `// indirect`（陈旧无害，下次联网 tidy 自动转直接依赖）。

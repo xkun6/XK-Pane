@@ -10,10 +10,12 @@ import (
 
 	"xkpane/internal/events"
 	"xkpane/internal/services/appsettings"
+	"xkpane/internal/services/cliadapters"
 	"xkpane/internal/services/greet"
 	"xkpane/internal/services/preferences"
 	"xkpane/internal/services/storagesvc"
 	"xkpane/internal/services/subprocess"
+	"xkpane/internal/services/terminal"
 	"xkpane/internal/storage"
 	"xkpane/internal/utils/httpx"
 	"xkpane/internal/utils/logx"
@@ -55,10 +57,11 @@ func Run(assets embed.FS) error {
 	holder := storage.NewHolder(db)
 	logx.For("app").Info("storage opened", "path", dbPath)
 
-	// subprocess service 需要 *application.App 才能向前端 Emit 事件。
+	// subprocess / terminal service 需要 *application.App 才能向前端 Emit 事件。
 	// 但 application.New 又需要 services 列表 —— 用预创建 + Bind 模式：
 	//   先 new 一个空 service 占位，然后在 app.New 之后回填 app 引用。
-	subSvc := subprocess.New(nil) // app 暂为 nil
+	subSvc := subprocess.New(nil)             // app 暂为 nil
+	termSvc := terminal.New(cliadapters.Default()) // PTY 会话注册表，app 经 AttachApp 回填
 
 	app := application.New(application.Options{
 		Name:        "XK-Pane",
@@ -69,6 +72,7 @@ func Run(assets embed.FS) error {
 			application.NewService(appsettings.New(holder)),
 			application.NewService(storagesvc.New(holder, cfgMgr)),
 			application.NewService(subSvc),
+			application.NewService(termSvc),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -78,6 +82,7 @@ func Run(assets embed.FS) error {
 		},
 	})
 	subSvc.AttachApp(app)
+	termSvc.AttachApp(app)
 
 	app.Window.NewWithOptions(windowOptions())
 

@@ -111,3 +111,34 @@
 - Bash 工具默认走 /usr/bin/bash 致 `$null` 重定向报错；改用 PowerShell 工具解决。
 - Edit 报「File has not been read yet」：首批改名漏读文件；补 Read 后重做成功。
 - Write 工具调用偶发 malformed（一次）；重发成功。
+
+## 会话 2 — Phase 2 后端 terminal_service（2026-05-29，autonomous /loop）
+
+### 入场盘点
+- 上一轮在工作树里留了**未提交、未验证**的 `internal/services/terminal/terminal.go`（536 行，写得很完整但编不过），progress.md 未记录。本轮职责＝把这半成品收口（补缺 + 验证 + 提交 + 记录）。
+- `go build` 暴露 4 个错：`logx.Logger` 未定义、`AttachApp` 把 `app.Event.Emit`(变参+bool 返回) 直接喂给 `func(name,payload any)` 字段签名不符、`newSessionID`/`defaultShell` 未定义（平台/工具辅助未落地）。
+
+### 做了什么（一个单元：后端 terminal_service + 单测 + 接线 + bindings）
+- **补缺 2 个错**：① `logger *logx.Logger` → `*slog.Logger`（`logx.For` 实返 `*slog.Logger`）；② `AttachApp` 包一层闭包把 Wails `Emit(name, data ...any) bool` 收敛成内部 `emit(name, payload any)`。
+- **补 3 个辅助文件**（对照 cc-pane 源忠实移植）：
+  - `id.go`：`newSessionID()` = `uuid.NewString()`（对齐 cc-pane `Uuid::new_v4()`；uuid 已在依赖图中）。
+  - `shell_windows.go` / `shell_unix.go`（build tag 分平台，符铁律「平台分支走 build-tag 文件」）：`defaultShell()` 忠实移植 `terminal_service/shell.rs::resolve_default_shell`——Win `pwsh>powershell>%ComSpec%`，Unix `$SHELL` else `/bin/sh`（用 LookPath 既探测又解析绝对路径，对 ConPTY 更确定）。
+- **单测 `terminal_test.go`（12 个）**：`utf8SafeProcess` 三分支（全有效/不完整尾部跨 read 拼回/中段非法 lossy）+ `isIncompleteTrailing` 边界 + `exitCodeOf`（nil/通用/真 `*exec.ExitError`=3）+ `buildEnv`（TERM/COLORTERM/session-id 注入、inject 覆盖、remove）+ `resolveLaunch`（裸 shell ""/none、未知工具报错、空 projectPath 报错）+ **集成 round-trip**：起真 pwsh(ConPTY)→写 `echo MARKER`→轮询 `terminal:output` 见 marker→Kill→`terminal:exit`→注册表回收。仿 ptyx_test 轮询风格规避 ConPTY 异步刷新 race；**round-trip ×5 稳定**。
+- **接线**：`app.go` 预创建 `terminal.New(cliadapters.Default())` + 进 Services 列表 + `termSvc.AttachApp(app)`（镜像 subSvc 模式）。
+
+### 验证（§4 全绿）
+- `go build`/`go vet`/`go test ./internal/...` 均 **dev + production 双模式 exit=0**（terminal 12 测 + 既有 appinfo/cliadapters/storage/ptyx 全 ok）。
+- `wails3 generate bindings` exit=0 → 6 Services / 28 Methods / 29 Models / 4 Events（+terminal 服务，+CreateSpec/SessionInfo 模型）。
+- `cd frontend; pnpm typecheck` exit=0（新 bindings 解析通过）。
+
+### 保真度 spot-check（对照 cc-pane terminal_service.rs:1147-1204）
+- `buildEnv` 与 cc-pane env 注入逐项核对：TERM/COLORTERM 用 `or_insert`（=Go「不存在才设」）、`CC_PANES_PTY_SESSION_ID` 强制写——**一致**。其余 env（snapshot/launch_id/runtime_kind/orchestrator API/WSL distro）均 Phase 3/4/5 特性，MVP 正确延后并标 TODO。spawn cwd≡ProjectPath（铁律 D7）一致。
+- **1 个良性微差异**（记 findings J6）：cc-pane 对裸 shell 也注入 `CC_PANES_CLI_TOOL=none`，本实现对 "none"/"" 跳过——无害（裸 shell 无 cli-hook 消费该值），保留实现者本意不改。
+
+### commit / 下一步
+- commit：见下方 hash（`Phase 2: 后端 terminal_service`）。一个单元一个 commit。
+- **下一单元（Phase 2 续）**：前端 `services/TerminalService.ts`（包 @bindings/xkpane terminal）→ `TerminalContext`（面板树/活动会话，替代 usePanesStore）→ `TerminalView`(xterm.js) + 自实现 SplitView + TabBar(@dnd-kit) → 侧边栏项目树最小版 + 右键启动。
+
+### 遇到的坑
+- `go mod tidy` 因 goproxy.cn 对 go-pty 深层 test 依赖（u-root/gobusybox）返回 504 网络超时而中断——**与本改动无关**，go.mod/go.sum 未被改动（无 diff），uuid 解析正常、build/test 全过。后果：uuid 仍带 `// indirect` 标记（陈旧但无害，下次联网 tidy 自动消除）。记 findings J6。
+- `AttachApp` 漏进前端 bindings（+1 方法）——**既有 subprocess 服务同样如此**（连 EventNamePrefix 也漏），属 foundation 脚手架既定约定；无害（前端无法构造 `*application.App` 调它）。按外科手术原则匹配既有约定不单独改，记 findings J6 为 Phase 6 统一清理候选。
