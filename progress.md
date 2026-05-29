@@ -554,6 +554,11 @@
 ### 下一单元（候选）
 - Git 后续 unit（git 面板：结构化 status+stage/commit/diff / network / worktree·stash）——面板部分依赖视觉验证；或 **Local History 后端**（file_versions 快照，独立 history.db，可测）；或会话恢复后端。Git network/worktree 后端可测不依赖渲染。**视觉验证债持续**：终端栈 + 项目面板从未真机跑，建议用户 `wails3 dev` 验。
 
+### ⏸ LOOP 暂停于此（会话27 末，2026-05-30）
+- **暂停理由**（非失败、非全完成）：连续 ~15 轮已交付 Phase 0-3 全部 + provider 管理 UI（可达可验）+ git 只读包，量大且全部 tested/committed/文档化。但**余下所有高价值工作都被「用户验证/方向」门控**：① 几乎所有面向用户的下一步是「依赖未验证终端渲染的前端」；② 其余可测后端（git network/worktree/panel、Local History、会话恢复）都是「后端就绪、前端消费方待建」——即时用户价值递减；③ 大新子系统（Local History）或**用户强调的早期子系统（Bedrock/MCPE/notify/memory，现排 Phase 5）**涉及方向选择。最高杠杆动作 = 用户 2 分钟视觉验证 + 方向指示，我做不了。
+- **续跑路径**：用户随时重发 `/loop` 即继续（默认按计划走 Git network/worktree → Local History；或用户指定方向，如优先早期子系统）。所有状态在本文件 + task_plan + findings，resume 无缝。
+- **欠用户验证**：`wails3 dev` → 终端页（项目面板「+」开目录→点项目→shell 起/回显/关标签回收 PTY）+ 设置→接入 Provider（增删改/设默认）。发现问题反馈，下一轮优先修。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
