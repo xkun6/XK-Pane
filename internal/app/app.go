@@ -13,6 +13,7 @@ import (
 	"xkpane/internal/services/cliadapters"
 	"xkpane/internal/services/greet"
 	"xkpane/internal/services/preferences"
+	"xkpane/internal/services/project"
 	"xkpane/internal/services/storagesvc"
 	"xkpane/internal/services/subprocess"
 	"xkpane/internal/services/terminal"
@@ -71,6 +72,7 @@ func Run(assets embed.FS) error {
 			application.NewService(preferences.New(holder)),
 			application.NewService(appsettings.New(holder)),
 			application.NewService(storagesvc.New(holder, cfgMgr)),
+			application.NewService(project.New(holder)),
 			application.NewService(subSvc),
 			application.NewService(termSvc),
 		},
