@@ -4,24 +4,34 @@
 // 与 foundation 既有 Provider（PreferencesProvider / FoundationThemeProvider）同构：
 //   createContext + Provider 组件 + use* hook（消费者不在 Provider 内会抛错）。
 //
-// TODO(下一单元 · 随 TerminalView)：TerminalService 生命周期 effect ——
-//   newTab 后调 TerminalService.create(...) 拿 sessionId → dispatch setTabSession 回填；
-//   订阅 onExit → 清理对应 leaf/Tab。本单元只落地纯状态层（可 Vitest 覆盖的 reducer + Provider 壳）。
+// 生命周期 reconcile effect（会话11）：对账 rootPane 期望态 vs 后端实际 PTY ——
+//   有 projectPath 且无 session 的 Tab → TerminalService.create → setTabSession 回填；
+//   树中已消失的 session → kill（防泄漏，含「创建途中 Tab 被关」的二次校验）。
+//   纯对账计算在 sessionReconcile.ts（可测）；onExit 由各 TerminalView 自订阅（写退出提示）。
 
 import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useReducer,
+  useRef,
   type ReactNode,
 } from 'react';
+import { TerminalService } from '@/services';
 import {
   createInitialTreeState,
   terminalTreeReducer,
   type NewTabOptions,
   type TerminalTreeState,
 } from './reducer';
+import {
+  collectTabsWithPane,
+  orphanedSessionIds,
+  tabsNeedingSession,
+  treeSessionIds,
+} from './sessionReconcile';
 import type { PaneNode, SplitDirection } from './types';
 
 export interface TerminalContextValue {
@@ -95,6 +105,64 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
       dispatch({ type: 'setTabSession', paneId, tabId, sessionId }),
     [],
   );
+
+  // ── 生命周期 reconcile：树变化时对账后端 PTY 会话（创建缺失 / 清理孤儿）──
+  const aliveRef = useRef(true);
+  const rootPaneRef = useRef(state.rootPane);
+  const creatingRef = useRef<Set<string>>(new Set());
+  // knownRef = 上一轮 reconcile 观察到的「树内会话集」；据此 diff 出被关闭的孤儿会话。
+  const knownRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    rootPaneRef.current = state.rootPane;
+  });
+
+  useEffect(() => {
+    const tabs = collectTabsWithPane(state.rootPane);
+
+    // 1) 为「有 projectPath 且无 session」的 Tab 创建 PTY，完成后回填 sessionId。
+    for (const t of tabsNeedingSession(tabs, creatingRef.current)) {
+      creatingRef.current.add(t.tabId);
+      TerminalService.create({
+        projectPath: t.projectPath,
+        workspacePath: t.workspacePath,
+        cliTool: t.cliTool,
+      })
+        .then((sessionId) => {
+          // 创建途中 Tab 可能已被关闭 → 二次校验，避免把 session 回填到不存在的 Tab（泄漏）。
+          const stillNeeds = collectTabsWithPane(rootPaneRef.current).some(
+            (x) => x.tabId === t.tabId && x.sessionId === null,
+          );
+          if (stillNeeds && aliveRef.current) {
+            // 用捕获的 t.paneId 回填 —— 当前安全：reducer 未实现 moveTab/reorderTabs（Tab 不会换 pane）。
+            // TODO(移植 moveTab 时)：Tab 可跨 pane 迁移后，须按 tabId 查当前 pane 再回填，否则
+            // setTabSession 落到旧 paneId 会 no-op 并泄漏该 session（reconcile 评审 wf_651d3b47 指出）。
+            dispatch({ type: 'setTabSession', paneId: t.paneId, tabId: t.tabId, sessionId });
+          } else {
+            void TerminalService.kill(sessionId).catch(() => {});
+          }
+        })
+        .catch(() => {
+          // 创建失败：不回填；下次树变化时（creatingRef 已清）才会重试，无紧循环。
+        })
+        .finally(() => {
+          creatingRef.current.delete(t.tabId);
+        });
+    }
+
+    // 2) 清理孤儿：上轮已知但本轮已不在树中的会话（Tab/面板被关）→ kill。
+    const current = treeSessionIds(tabs);
+    for (const sid of orphanedSessionIds(knownRef.current, current)) {
+      void TerminalService.kill(sid).catch(() => {});
+    }
+    knownRef.current = current;
+  }, [state.rootPane]);
 
   const value = useMemo<TerminalContextValue>(
     () => ({
