@@ -48,7 +48,7 @@
 - [x] `internal/utils/ptyx`：跨平台 PTY 门面（go-pty v0.2.3）。Windows ConPTY + JobObject(CREATE_SUSPENDED→assign→ResumeThread)；Unix 不叠 Setpgid（go-pty 强制 Setsid）kill 用 `Kill(-pid,SIGKILL)`。✅ **R1 spike 在 Win11 实跑通过**（`TestSpawnEchoProducesOutput`/`TestResizeNoError` PASS；Unix 交叉编译 exit=0）
 - [x] `internal/events`：注册终端类型化事件 `terminal:output`/`:status`/`:exit`（+payload struct）。bindings 重生成确认 4 Events
 - [x] `internal/storage/models_ccpane.go`：移植 7 张 data.db 核心表 GORM 模型（Project/LaunchHistory/Todo/TodoSubtask/Spec/TerminalSession/TaskBinding），`init()` 追加 AllModels，显式 `TableName()`。✅ AutoMigrate 守门测试通过。时间戳用 time.Time（greenfield）；敏感字段 last_prompt/ssh_config 标 TODO 待 Phase 3 写入方落地加 cryptox 钩子
-- [ ] `internal/services/cliadapters`：8 个 CLI 适配器（claude/codex/gemini/kimi/glm/opencode/cursor/reclaude）的 build_command 逻辑 + 路径字段铁律（D7）+ 守门测试（27 个，findings J4）。注意 GLM 可执行名是 `crush`
+- [x] `internal/services/cliadapters`：8 个 CLI 适配器 build_command + 路径字段铁律（D7）+ Registry/Detect + 可执行解析（Windows npm shim）。✅ 18 守门测试（双模式 ok），GLM 可执行=`crush`、reclaude versionArgs=`version`。**延后**（标 TODO(phase5)，依赖未落地属投机）：claude/reclaude `generate_mcp_config`（需 orchestrator port/token）、codex `~/.codex/config.toml` 解析（disable_unlisted_mcp 默认关）、项目 hooks 机制（需 cc-panes-cli-hook 二进制 + 已延后的 IM 桥接，对应 5 个 hooks 守门测试一并延后）
 - [ ] `internal/services/subprocess`：扩展白名单（git 各子命令，供 go-git fallback）
 - ⚠️ Phase 2 待办（ptyx 测试暴露）：ConPTY 输出是异步屏幕刷新，终端服务在子进程退出后须留 drain 宽限再 Close PTY，否则丢尾部输出
 - **verify**：`go test ./internal/...` 通过；✅ ptyx 已起 shell 读到输出；适配器守门测试覆盖 path 语义；AutoMigrate 建表测试
@@ -104,7 +104,7 @@
 | 阶段 | 状态 | 备注 |
 |------|------|------|
 | Phase 0 | ✅ complete | 改名 + Dev/Release 隔离，全验证通过 |
-| Phase 1 | 🔵 in_progress | ptyx ✅（R1 已实跑验证）；cliadapters/models/events/whitelist 待做 |
+| Phase 1 | 🔵 in_progress | ptyx ✅ / events ✅ / models ✅ / cliadapters ✅（18 守门 ok，部分 MCP/hooks 延后 Phase 5）；剩 subprocess git 白名单 |
 | Phase 2 | ⬜ pending | 终端闭环（MVP runnable） |
 | Phase 3 | ⬜ pending | 管理面 + 设置 |
 | Phase 4 | ⬜ pending | 常用增强 |

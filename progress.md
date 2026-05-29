@@ -65,11 +65,34 @@
 - 测试 `models_ccpane_test.go`：AutoMigrate 建表 + 注册校验，通过。
 - **ptyx 测试 flaky 修复**：上次侥幸通过的 echo 测试这次因 ConPTY 异步刷新 race 失败（Wait 后立刻 Close 丢尾部输出）。改为**轮询缓冲区等 marker**，`-count=3` 稳定通过。教训记入 Phase 2 待办（终端服务进程退出后须留 drain 宽限）。
 
+### cliadapters（8 适配器 + 守门测试）✅（2026-05-29）
+- 读全 9 个 cc-pane Rust 源（lib + 8 适配器）后忠实移植到 `internal/services/cliadapters/`（11 个源文件 + 4 个测试文件）：
+  - `adapter.go`：types（ToolInfo/Capabilities/Provider/Context/CommandResult，camelCase json tag）+ `Adapter` 接口 + `base`（内嵌提供 Info/Capabilities/Detect 默认）+ `detectDefault`/`probeVersion`（LookPath + procx 版本探测，honor 子进程铁律）+ 共享 `buildAddDirArgs`（路径铁律 D7）/`orchestratorEnv`。
+  - `resolve.go`：`findExecutableInDirs`/`windowsNpmShimInvocation`/`isWindowsBatchFile`/`claudeCliJsForNpmShim`/`nodeForNpmShim`/`windowsExecutableExtensions`/`resolveClaudeLike`/`findWindowsExecutable`（与 Rust `#[cfg(any(windows,test))]` 一致——纯函数跨平台可测；真实 PATH 解析按 runtime.GOOS 分支，免拆 build-tag 文件）。
+  - 8 适配器：claude/reclaude（共享 npm shim + add-dir + CLAUDECODE 移除 + orchestrator env）、codex（MCP `-c` dotted-key 覆盖 + JSON 编码 + 隔离排序）、glm（crush + CRUSH_*/ZAI_* env + crush.json，--cwd 恒 project_path）、kimi（per-session config + add-dir + KIMI_SHARE_DIR）、cursor/gemini/opencode（位置参数）。
+  - `registry.go`：Registry + `Default()` 按 claude/codex/gemini/kimi/glm/opencode/cursor/reclaude 顺序注册。
+- **范围决策**（CLAUDE.md 简洁铁律 + 用户延后项）：
+  - ⏸ 延后：claude/reclaude `generate_mcp_config`（写 mcp-*.json，依赖 Phase 5 orchestrator port/token）→ stub 返回 ""；codex `~/.codex/config.toml` 解析（`disable_unlisted_mcp` 默认关）→ `configuredMCPServerNames` 返回 nil，免引入 TOML 依赖；**项目 hooks 机制**（依赖未移植的 `cc-panes-cli-hook` 二进制 + 已确认延后的 IM 桥接）→ 暂不进接口。均以 `TODO(phase5)` 标注 hook 点。
+  - 写配置文件（glm crush.json / kimi config）走 `filex.WriteAtomic`+`EnsureDir`（配置文件铁律）；npm shim 回退告警走 `logx`。
+- **测试**（守门 18 个 = build_command/路径铁律/exe 解析；hooks 相关 5 个随机制延后，terminal 1 属 Phase 2、web 3 属前端）：
+  - claude/reclaude 在 Rust 里重复的 add_dir(各3)/find_exec/npm_shim 因 Go 共享辅助而**去重合并**（共享函数测一次），断言串与 Rust 测试逐字对齐。
+  - `resolve_test.go`(6)：find_exec 4 态 + npm shim 2；`adapter_test.go`(5)：add-dir 3 态 + 注册表顺序 + 元信息/能力（GLM=crush、reclaude versionArgs=[version]、多目录能力矩阵）；`codex_test.go`(3)：dotted-key/dev-instructions/隔离排序；`glm_test.go`(2)：launch_cwd 恒 project_path。
+- **验证全绿**：`go build`(dev+prod) / `go test ./internal/services/cliadapters/...`(dev+prod) / `go test ./internal/...`(全量) / `go vet ./internal/...` 全 exit=0。
+- 启动 workflow `wf_9968c0f6-862` 做 Rust↔Go 保真度审查（6 并行对照器，覆盖未被守门测试实跑的完整 BuildCommand 参数装配 + env + 全 8 适配器 info/caps）。
+
+### cliadapters 保真度审查结论（workflow wf_9968c0f6-862）✅
+- codex / glm / kimi / cursor+gemini+opencode / resolve+registry-fields：**全部 faithful**（完整 BuildCommand 参数顺序、env、flag 名、能力/兼容 Provider 类型逐一核对一致）。
+- **1 个实质 drift（已修）**：注册顺序。审查指出 cc-pane **生产注册点** `src-tauri/src/lib.rs:920-927` 为 Claude→**Reclaude**→Codex→Gemini→Kimi→Glm→OpenCode→Cursor（Reclaude 紧跟 Claude），而我误用 findings 的随手枚举顺序把 Reclaude 放末位。**已 Grep 核实真实源码后修正** `Default()` 与守门测试 `TestDefaultRegistersAllEightInOrder`。
+- **2 个 low 备注（裁定不改 / 加注）**：
+  - kimi 配置 0o600 vs Rust 0o644：该文件含 `api_key`（密钥），无法加密（CLI 需明文读），0o600 仅属主是更安全的**有意加固**——保留并加注释说明。
+  - kimi `Some("")` vs `APIKey==""`：全适配器一致的 `""==None` 约定，非 drift。
+- 修正后 `go test`（dev+prod）/`go vet` 全 exit=0。
+
 ### 下一步（Phase 1 续）
-- cliadapters（8 适配器 + 27 守门测试，findings J4；GLM=crush）→ subprocess git 白名单。可考虑 workflow 并行 8 个适配器。
+- 最后一项：`internal/services/subprocess` git 子命令白名单扩展（go-git CLI fallback 用）。
 
 ### 测试结果（Phase 1 累计）
-- `go test ./internal/...`（dev + production）全 ok：appinfo / storage / ptyx（×3 稳定）。
+- `go test ./internal/...`（dev + production）全 ok：appinfo / storage / ptyx（×3 稳定）/ cliadapters（18 守门，双模式）。
 - `go vet`（dev+prod）exit=0；`wails3 generate bindings` exit=0（5 Services/27 Models/4 Events）；`pnpm typecheck` exit=0。
 
 ### 遇到的错误
