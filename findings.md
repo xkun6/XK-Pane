@@ -177,3 +177,15 @@ React 19.2 / @mui/material 9 / @mui/icons-material 9 / @mui/x-charts 9 / emotion
   - 含义：用户既能把窗口拆成多个 Panel（每个 Panel 一排 tab），又能在**单个 Tab 内**把终端再拆分。两个 SplitView 渲染层（外层渲染 PaneNode，TabContent 内渲染 terminalRootPane）。
 - **MVP 落点（会话 4，commit 见 progress）**：`frontend/src/terminal/{types.ts,paneTree.ts}` 移植两级类型 + 外层纯 helpers（findPane/findParent/collectPanels/createPanel/createTab/generateId）。**裁剪** provider/resume/ssh/wsl/snapshot/launch-profile/非 terminal contentType/pinned 等 Phase 3/4/5 字段（types.ts 文件头列明）。`createTab` 可选参换成 MVP 的 `{cliTool,workspacePath,title}`。
 - **下一步（TerminalContext）需补的 usePanesStore 关键逻辑**（1743 行里挑 MVP 子集）：split（在目标 Panel 外包一层 SplitPane）、close（移除节点后**折叠只剩单子的 split**——回退成单 Panel/单 leaf，避免空壳 split 堆积）、activate（setActivePanel/setActiveTab）、内层 terminalRootPane 的对应操作。这些是树操作的 bug 高发区，建议 Workflow 多视角对抗验证 + 考虑引入 Vitest 单测纯树函数。
+
+### J8. Project / Workspace 后端模型（已验证 / workflow `wf_79a917da-67a`，2026-05-30）
+
+> 完整三份调查 + 综合规格原文见 transcript task 输出 `...\tasks\wbk3e0q5k.output`。Phase 3 第一单元（后端 `internal/services/project`）据此落地。
+
+- **cc-pane 有「两套并行的 project 概念」，只有一套被 live UI 消费**：
+  1. **扁平 Project**（`projects` 表，ProjectService/ProjectRepository/project_commands）——全局「已知目录登记表」。**已移植**为 `internal/services/project`（本单元）。其前端 `projectService.ts`/`useProjectsStore` 在 cc-pane 里**已包装但 live 侧边栏不消费**（仅自带单测）。
+  2. **WorkspaceProject**（内嵌在 workspace.json 的 `projects[]` 数组里，`{id,path,alias?,launchProfileId?,wslRemotePath?,ssh?}`）——cc-pane **live 侧边栏实际渲染的就是这套**（ExplorerView→WorkspaceTree→WorkspaceItem→ProjectListView，按 workspace 分组）。
+- **扁平 Project 保真铁律**（本单元已逐字锁，对应守门测试）：path **原样存储绝不规范化**、去重逐字节相等、Add 非 upsert（"Project already exists"）、List `created_at DESC`、alias trim→NULL、name=basename（"unnamed" 回退）、UpdateName 存未 trim 值（与 alias 存 trim 值非对称）、id-keyed、affected-rows==0→"Project does not exist"、validate_path 结构化码 PATH_EMPTY/TRAVERSAL/NOT_ABSOLUTE。**XK-Pane 原生差异（非 drift）**：`time.Time` created_at + 自动 UpdatedAt（替 RFC3339 文本列，models_ccpane.go 头已声明）。
+- **⚠️ Workspace 是「文件存储」不是 SQLite 表（决策待定，见下）**：cc-pane 的 workspace **没有 `workspaces` 表**——它是文件实体 `<data_dir>/workspaces/<name>/workspace.json`（目录名=身份，rename=`fs::rename`），由 `WorkspaceService` 纯文件 I/O 管理（list 遍历目录 / create mkdir+写 json / 读改写 json + notify 文件监视发 `WORKSPACES_CHANGED` + 迁移快照）。data.db 只在 launch_history / terminal_sessions 上存 `workspace_name`/`workspace_path`/`workspace_snapshot_id` 的**反规范化快照串**，从不存 workspace 定义本身。另有 `WorkspaceSnapshot`（布局/面板快照，`workspace_snapshot_id` 指它，≠ workspace 定义）。
+- **🚧 待定决策 D9（Workspace 持久化模型，决策门）**：忠实移植 = 文件存储（workspace.json + 文件监视），但**违背 XK-Pane「跨会话状态只能走 SQLite」铁律**；XK-Pane 原生 = 加 `Workspace`+`WorkspaceProject` GORM 表。本次是**全新重构**（不迁移 cc-pane 旧数据），倾向 SQLite 原生，但这是**显著架构选择 + 触及铁律**，**到 workspace 单元时停在决策门询问用户**，不静默定。**当前不阻塞**：近期 Phase 3 单元（前端扁平 project service/Context/侧边栏树、launch_history、会话恢复）都不依赖它。
+- **MVP 侧边栏路径选择**：先做**扁平 project 侧边栏**（顶层项目列表，复用本单元后端，替换临时「打开文件夹」工具条）——比 cc-pane 的 workspace 分组树简单且更快可用；workspace 分组作为后续增强（届时触 D9 决策门）。

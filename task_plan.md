@@ -61,9 +61,12 @@
 - [ ] 侧边栏工作区/项目树（最小版）+ 右键启动
 - **verify**：打开项目→新建终端标签→看到 shell/CLI 输出→输入回显；分屏可拖拽；关闭标签干净回收 PTY
 
-### Phase 3 — 工作区/项目/会话/设置/主题·i18n ⬜ pending
+### Phase 3 — 工作区/项目/会话/设置/主题·i18n 🔵 in_progress
 **目标**：补齐管理面与配置面，达到日常可用。
-- [ ] Workspace/Project CRUD、别名、Provider 绑定（后端 service + 前端 Context + 侧边栏）
+- Project/Workspace CRUD、别名、Provider 绑定（详见 findings J8：cc-pane 有扁平 Project 表 + workspace.json 文件存储两套；live UI 用 workspace 分组，但本重构 MVP 先走扁平 project 侧边栏）：
+  - [x] **后端扁平 `project` service**（`internal/services/project`：List/Add/Get/Remove/UpdateName/UpdateAlias + 非导出 existsByPath + validatePath 结构化码）。忠实移植 cc-pane ProjectService/Repository（spec workflow `wf_79a917da-67a`），19 守门测试锁全部保真铁律（path 原样存/逐字节去重/非 upsert/created_at DESC/alias trim→NULL/name basename·"unnamed"/UpdateName 未 trim·非对称/affected-rows→"Project does not exist"）。接进 app.go（纯 CRUD 无 AttachApp），bindings=7 Services/34 Methods（existsByPath 非导出未绑）。✅ go build/vet/test(dev+prod)+全量+typecheck+前端 37 测全绿，commit `c8df705`。对抗保真审查 workflow `wf_7bc251b0-c1f` 进行中。
+  - [ ] 前端 `ProjectService.ts` + `ProjectContext`（Context，弃 Zustand）+ 侧边栏扁平项目树（替换 TerminalPage 临时「打开文件夹」工具条）+ 右键/工具条启动（选 CLI 工具 → newTab(projectPath)）。
+  - [ ] 🚧 **Workspace 子系统（含 D9 决策门：文件存储 vs SQLite 原生）** —— 到此单元**停下询问用户**（findings J8）。含 workspace 分组、Provider 绑定。
 - [ ] 启动历史（launch_history）+ 会话恢复（terminal_sessions，跨重启）
 - [ ] Provider 管理（多 API Provider，敏感字段 cryptox 加密）
 - [ ] 设置页：按 SettingsPage 子目录隔离规范新增 `provider/terminal/shortcuts/proxy/about` 子页
@@ -107,7 +110,7 @@
 | Phase 0 | ✅ complete | 改名 + Dev/Release 隔离，全验证通过 |
 | Phase 1 | ✅ complete | ptyx ✅ / events ✅ / models ✅ / cliadapters ✅（18 守门 ok，MCP/hooks 延后 Phase 5）；subprocess git 白名单改判延后 Phase 4（层次修正） |
 | Phase 2 | 🟡 待视觉验证 | **结构完成、可运行**：后端 service + 状态层(reducer/Context+reconcile) + TerminalView/SplitView/TabBar + PaneTree + App 接线（TerminalProvider/终端页/路由）+ MVP 启动入口（打开文件夹→裸 shell）。全程 typecheck/build/单测(37)/对抗审查全绿，但**前端从未在真 app 跑过**→ **loop 停在此里程碑，待用户首个视觉 checkpoint**（开文件夹→shell 输出→回显→分屏拖拽→关标签回收 PTY）。验证 OK 后转 ✅。侧边栏树/右键启动/CLI 选择/TabBar 拖拽重排 → Phase 3 或另列单元 |
-| Phase 3 | ⬜ pending | 管理面 + 设置 |
+| Phase 3 | 🔵 in_progress | 后端扁平 `project` service ✅(c8df705，19 测+对抗审查 wf_7bc251b0-c1f)；前端 project Context/侧边栏树 + 会话恢复/设置/i18n/窗口形态待做；**Workspace 持久化模型 = D9 决策门（文件存储 vs SQLite，到该单元停问用户，findings J8）** |
 | Phase 4 | ⬜ pending | 常用增强 |
 | Phase 5 | ⬜ pending | Bedrock/MCPE/notify/memory |
 | Phase 6 | ⬜ pending | 收尾打包 |

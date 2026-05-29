@@ -346,3 +346,31 @@
 - commit `44b9116`（App 接线，可运行）。
 - **停 loop（不调度下一轮）**，请用户验证。验证 OK → 重新发 `/loop` 续到 Phase 3（管理面/设置/i18n/窗口形态）；若发现运行时问题 → 反馈，下一轮修。
 - 续跑后下一单元候选：依验证结果定（修问题 优先）；否则 Phase 3 起步 = Workspace/Project 后端 service + 侧边栏项目树（替换临时「打开文件夹」工具条）+ CLI 工具选择启动。
+
+## 会话 13 — Phase 3 起步：后端扁平 project service（2026-05-30，autonomous /loop）
+
+### 入场
+- 用户重发 `/loop`（未显式回报 Phase 2 视觉验证；按既定协议「重发 /loop = 续到 Phase 3」推进）。Phase 2 仍 🟡 待视觉验证——本单元是**纯 Go 后端**，与 Phase 2 视觉层正交，即便 Phase 2 有运行时问题也不在其上复利，故安全推进。
+- 收口工作树 `M go.mod/go.sum`：是 findings J6 预告的「联网 tidy」（go-pty/uuid 转直接依赖 + go-pty test 依赖校验和 + x/crypto·sys·term 小升），benign，go build/vet 验证后单独 `chore` 提交 `8ffa23d` 复位干净树。
+
+### 选取单元（§2 后端→bindings→service→Context→View 序的最小首增量）
+- Phase 3 首单元 = **后端扁平 `project` CRUD service**。先跑尽调+规格 workflow `wf_79a917da-67a`（3 并行全源阅读 cc-pane project/workspace 后端 + 前端消费面 → 综合 Go 移植规格），动代码前消除「workspace 是什么」未知。
+
+### 关键发现（→ findings J8，含决策门 D9）
+- cc-pane **两套并行 project**：扁平 Project（`projects` 表，本单元移植）+ WorkspaceProject（内嵌 workspace.json，live 侧边栏实际用）。
+- **Workspace 是文件存储不是 SQLite 表**（`<data_dir>/workspaces/<name>/workspace.json`，目录名=身份 + 文件监视 WORKSPACES_CHANGED）。→ **DEFER**（违 XK-Pane SQLite 铁律；忠实移植=文件存储 vs 原生=GORM 表 = **D9 决策门，到 workspace 单元停问用户**）。MVP 侧边栏先走扁平 project 树。
+
+### 做了什么（`internal/services/project/`）
+- `project.go`：Service{holder} + List/Add/Get/Remove/UpdateName/UpdateAlias + 非导出 existsByPath + isUniqueViolation 兜底。
+- `validate.go`：validatePath（empty→traversal→absolute，结构化码 PATH_EMPTY/TRAVERSAL/NOT_ABSOLUTE）+ deriveName（basename，"unnamed" 回退）。
+- `project_test.go`：**19 守门测试**逐条锁保真铁律——path 原样存/逐字节去重（含带尾分隔符算不同项目）/非 upsert/created_at DESC/空→非 nil []/alias trim→NULL（nil·空·空白三态）/name basename·"unnamed"/UpdateName 存未 trim·非对称/affected-rows==0→"Project does not exist"/Get miss→nil/validate 码。
+- 接进 `app.go`（`application.NewService(project.New(holder))`，纯 CRUD 无 AttachApp）。
+
+### 验证（§4 全绿）
+- `go build`/`go vet`/`go test`（dev+prod）+ 全量 `go test ./internal/...` 全 exit=0；`wails3 generate bindings`=**7 Services/34 Methods**（existsByPath 非导出**未绑**，确认外科手术式绑定面）/Project 模型新增；`pnpm typecheck` exit=0；`pnpm test` 37/37 无回归。
+- **踩坑**：`go build ./...` 含 build/ios target（Win 上 `main is undeclared`，预存无关）→ 用 `./internal/...`；validate.go 的 switch 重复 case（Win 上 `string(filepath.Separator)`=="\\" 撞字面 "\\"）→ 去冗余 case。
+
+### commit / 下一步
+- commit `8ffa23d`（chore tidy）+ `c8df705`（project service）。
+- 对抗保真审查 workflow **`wf_7bc251b0-c1f`** 后台跑（2 lens：cc-pane 保真 + GORM/SQLite 对抗——重点 UpdateAlias nil→NULL 绑定 / no-op update RowsAffected / UNIQUE 串匹配 / DESC 排序），refute-by-default 校验。**下一轮**：读审查结论，有真 bug 先修；否则下一单元 = **前端 `ProjectService.ts` + `ProjectContext`（弃 Zustand）+ 侧边栏扁平项目树**（替换 TerminalPage 临时「打开文件夹」工具条）+ CLI 工具选择启动。
+- ⚠️ 仍欠用户的 **Phase 2 视觉 checkpoint**：后端推进不依赖它，但前端 project 单元接侧边栏时会与终端链路交汇——届时视觉验证价值更高，可一并请用户验。
