@@ -233,3 +233,24 @@
 ### commit / 下一步
 - commit `d71ac8f`（layout scheduler）+ `653eb00`（gitignore tsbuildinfo）。
 - **下一单元**：`TerminalView`(xterm.js) View/VM/Style ——VM 创建真 Terminal+FitAddon、open 进 host、用 layoutScheduler 接 ResizeObserver、onData→TerminalService.write、onOutput(sessionId 过滤)→term.write、dispose 回收；View 渲染 `<div ref>` + 样式。随后把生命周期 effect（newTab→create→setTabSession / onExit→清理）接进 TerminalProvider。该单元视觉为主，自动验证 = typecheck + `pnpm build`（视觉正确性留用户 checkpoint）。
+
+## 会话 7 — Phase 2 TerminalView（xterm.js）（2026-05-30，autonomous /loop）
+
+### 做了什么（一个单元：TerminalView View/VM/Style）
+- `frontend/src/components/TerminalView/`（放 foundation 既有组件目录，与 AppLayout/Sidebar 同级；终端**域逻辑**仍在 `src/terminal/`）：
+  - `useTerminalView.ts`（VM）：mount effect 创建 `Terminal`+`FitAddon`→`open(host)`→建 `layoutScheduler`（resizeBackend→TerminalService.resize）→`term.onData`→TerminalService.write→`ResizeObserver`(debounce 150 / minDelta 5)→schedule；sessionId effect 订阅 `onOutput(sid)`→term.write、`onExit`→writeln+回调，attach 时 force-flush；active effect flush+focus；cleanup 全回收。ref-sync effect 避免过期闭包。
+  - `TerminalView.tsx`（View）：`<Box ref sx={styles.host}>` + `import '@xterm/xterm/css/xterm.css'`。
+  - `TerminalView.styles.ts`：host 取 `foundation.bg.content`，沿用 `(theme)=>Record<string,SxProps>` 约定。
+- **MVP 裁剪**（cc-pane TerminalView 全量 1256 行）：延后 WebGL 渲染器 / 运行时切主题热更（mount 捕获主题色）/ ConPTY buildNumber 调优 / 写入流控 / reconnect·restore / wheel→方向键 / drag-fit 节流 / unicode11；会话**创建**不在本组件（消费给定 sessionId，创建在后续 Provider 生命周期 effect）。
+
+### 验证（§4 前端门 = typecheck + build）
+- `pnpm typecheck` exit=0；`pnpm build` exit=0（1831 模块，xterm 接入主 bundle 847KB）；`pnpm test` 25/25 无回归。视觉正确性留用户 checkpoint。
+
+### 效果生命周期审查（workflow wf_8b582fe9-39a，2 lens）✅
+- **lifecycle 对抗**：**0 真实 bug**。逐一追证并裁定 benign：cleanup dispose 顺序（同步 null 赋值 + ?. 守门覆盖 output-after-dispose 窗口）、StrictMode mount→dispose→mount（xterm.dispose 卸 DOM，open 干净重挂）、effect 声明序（mount 先于 sub/active；ref-sync 声明最先）、所有订阅 unmount/重订阅各释放一次无泄漏。
+- **completeness vs cc-pane**：**0 MVP-critical 遗漏**。重点裁定 **Windows 写入流控（createTerminalWriteFlowControl）MVP 不需要**——它只节流前端→xterm 的 promise 链，**无法**反压后端；而本后端 output 走 fire-and-forget 批量 Wails Events（无 ack/backpressure 通道），且 `xterm.write` 内部自带队列、不丢/不乱序。故 `term.write(data)` 对 MVP 正确，流控纯属大爆发(cat 大文件)内存平滑优化，正确延后。初始 resize 经 session.attach force-flush 落实（lastSize=null → 首 fit 必回调 resizeBackend，后端学到真 cols/rows）。
+- **1 个 cosmetic nit（裁定不改）**：`repaint()` 的 rAF 未纳入 scheduler.cancel() 跟踪——审查确认 null-guard + 单帧自解，不崩不漏，纯洁癖；按简洁铁律不为已验证的非问题加代码，记此备查。
+
+### commit / 下一步
+- commit `4df3cca`（TerminalView）。
+- **下一单元**：自实现 `SplitView` 分屏——消费 `TerminalContext` 的 `rootPane`（递归渲染 Panel/SplitPane）+ `resizePanels`（拖拽分隔条），叶子 Panel 渲染 TabBar + 活动 Tab 的 TerminalView。之后 TabBar(@dnd-kit) + 把生命周期 effect（newTab→create→setTabSession / onExit→清理）接进 TerminalProvider + 侧边栏项目树最小版 + 右键启动 → Phase 2 闭环可演示。
