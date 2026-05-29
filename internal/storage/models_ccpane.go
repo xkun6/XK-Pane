@@ -23,7 +23,31 @@ func init() {
 		ModelDescriptor{Model: &Spec{}, TableName: "specs", LabelKey: "specs", Clearable: true},
 		ModelDescriptor{Model: &TerminalSession{}, TableName: "terminal_sessions", LabelKey: "terminalSessions", Clearable: true},
 		ModelDescriptor{Model: &TaskBinding{}, TableName: "task_bindings", LabelKey: "taskBindings", Clearable: true},
+		// Provider 含敏感凭据 → Clearable:false（禁设置页一键清空，同 projects/app_settings 档）。
+		ModelDescriptor{Model: &Provider{}, TableName: "providers", LabelKey: "providers", Clearable: false},
 	)
+}
+
+// Provider 是一个 CLI Agent 的接入凭据/配置（移植自 cc-pane Provider 模型）。
+//
+// **偏离说明**：cc-pane 把 providers 存成明文 `providers.json` 文件（无 DB 表、无加密）；
+// XK-Pane 按 D8 铁律落 SQLite，且 APIKey **以 cryptox 密文存储**（在 provider service
+// 层加解密，不走 GORM 钩子——因为读路径返回脱敏 DTO 无需解密、写路径是 patch 保留）。
+// 故 **APIKey 字段恒为密文**：任何消费方读出后须 `cryptox.DecryptString`。无 model 字段（与源一致）。
+type Provider struct {
+	ID           string `gorm:"primaryKey;size:36" json:"id"`
+	Name         string `gorm:"type:text;not null" json:"name"`
+	ProviderType string `gorm:"type:text;not null;default:'anthropic'" json:"providerType"` // snake_case: anthropic|bedrock|vertex|proxy|config_profile|open_ai|gemini|kimi|glm|cursor|opencode
+	APIKey       string `gorm:"type:text;column:api_key" json:"-"`                          // 密文（cryptox）；json:"-" 防意外序列化；"" = 未设
+	BaseURL      string `gorm:"type:text;column:base_url" json:"baseUrl,omitempty"`
+	Region       string `gorm:"type:text" json:"region,omitempty"`
+	ProjectID    string `gorm:"type:text;column:project_id" json:"projectId,omitempty"`
+	AWSProfile   string `gorm:"type:text;column:aws_profile" json:"awsProfile,omitempty"`
+	ConfigDir    string `gorm:"type:text;column:config_dir" json:"configDir,omitempty"`
+	IsDefault    bool   `gorm:"not null;default:false;index" json:"isDefault"`
+
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // Project 是一个 Git 仓库 / 工作目录。Path 全局唯一（一个目录只登记一次）。
@@ -163,3 +187,4 @@ func (TodoSubtask) TableName() string     { return "todo_subtasks" }
 func (Spec) TableName() string            { return "specs" }
 func (TerminalSession) TableName() string { return "terminal_sessions" }
 func (TaskBinding) TableName() string     { return "task_bindings" }
+func (Provider) TableName() string        { return "providers" }
