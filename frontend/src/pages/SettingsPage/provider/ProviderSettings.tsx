@@ -42,6 +42,24 @@ const PROVIDER_TYPES = [
   'opencode',
 ] as const;
 
+// 每种 provider 类型在表单里显示哪些字段（与 provider.EnvVars 的 to_env_vars 映射对齐）：
+// key 类只需 apiKey(+baseUrl)；云类用 region/awsProfile/projectId；config_profile 用 configDir。
+type ProviderField = 'apiKey' | 'baseUrl' | 'region' | 'awsProfile' | 'projectId' | 'configDir';
+const DEFAULT_FIELDS: ProviderField[] = ['apiKey', 'baseUrl'];
+const FIELDS_BY_TYPE: Record<string, ProviderField[]> = {
+  anthropic: ['apiKey', 'baseUrl'],
+  proxy: ['apiKey', 'baseUrl'],
+  open_ai: ['apiKey', 'baseUrl'],
+  gemini: ['apiKey', 'baseUrl'],
+  kimi: ['apiKey', 'baseUrl'],
+  glm: ['apiKey', 'baseUrl'],
+  opencode: ['apiKey', 'baseUrl'],
+  cursor: ['apiKey'],
+  bedrock: ['region', 'awsProfile'],
+  vertex: ['region', 'projectId'],
+  config_profile: ['configDir'],
+};
+
 export const ProviderSettings = () => {
   const theme = useTheme();
   const styles = providerSettingsStyles(theme);
@@ -178,28 +196,35 @@ export const ProviderSettings = () => {
               </MenuItem>
             ))}
           </TextField>
-          <TextField
-            label={t('settings.provider.form.apiKey')}
-            placeholder={
-              vm.editingId
-                ? t('settings.provider.form.apiKeyPlaceholderEdit')
-                : t('settings.provider.form.apiKeyPlaceholderNew')
-            }
-            value={vm.draft.apiKey}
-            onChange={(e) => vm.setField('apiKey', e.target.value)}
-            type="password"
-            fullWidth
-            size="small"
-            sx={styles.formField}
-          />
-          <TextField
-            label={t('settings.provider.form.baseUrl')}
-            value={vm.draft.baseUrl}
-            onChange={(e) => vm.setField('baseUrl', e.target.value)}
-            fullWidth
-            size="small"
-            sx={styles.formField}
-          />
+          {(FIELDS_BY_TYPE[vm.draft.providerType] ?? DEFAULT_FIELDS).map((field) =>
+            field === 'apiKey' ? (
+              <TextField
+                key="apiKey"
+                label={t('settings.provider.form.apiKey')}
+                placeholder={
+                  vm.editingId
+                    ? t('settings.provider.form.apiKeyPlaceholderEdit')
+                    : t('settings.provider.form.apiKeyPlaceholderNew')
+                }
+                value={vm.draft.apiKey}
+                onChange={(e) => vm.setField('apiKey', e.target.value)}
+                type="password"
+                fullWidth
+                size="small"
+                sx={styles.formField}
+              />
+            ) : (
+              <TextField
+                key={field}
+                label={t(`settings.provider.form.${field}`)}
+                value={vm.draft[field]}
+                onChange={(e) => vm.setField(field, e.target.value)}
+                fullWidth
+                size="small"
+                sx={styles.formField}
+              />
+            ),
+          )}
           {vm.editingId === null && (
             <FormControlLabel
               sx={styles.formField}
