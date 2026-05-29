@@ -131,7 +131,7 @@ func failingCmd(code int) *exec.Cmd {
 // --- buildEnv ---
 
 func TestBuildEnvInjectsTermAndSessionID(t *testing.T) {
-	env := buildEnv("sess-123", "claude", map[string]string{"FOO": "bar"}, nil)
+	env := buildEnv("sess-123", "claude", nil, map[string]string{"FOO": "bar"}, nil)
 	m := envToMap(env)
 	if m["CC_PANES_PTY_SESSION_ID"] != "sess-123" {
 		t.Errorf("session id = %q, want sess-123", m["CC_PANES_PTY_SESSION_ID"])
@@ -152,7 +152,7 @@ func TestBuildEnvInjectsTermAndSessionID(t *testing.T) {
 
 func TestBuildEnvRemoveAndOverride(t *testing.T) {
 	t.Setenv("XKPANE_TEST_REMOVE_ME", "present")
-	env := buildEnv("s", "none", map[string]string{"TERM": "override-term"}, []string{"XKPANE_TEST_REMOVE_ME"})
+	env := buildEnv("s", "none", nil, map[string]string{"TERM": "override-term"}, []string{"XKPANE_TEST_REMOVE_ME"})
 	m := envToMap(env)
 	if _, ok := m["XKPANE_TEST_REMOVE_ME"]; ok {
 		t.Errorf("envRemove did not remove the variable")
@@ -171,23 +171,60 @@ func TestBuildEnvRemoveAndOverride(t *testing.T) {
 func TestResolveLaunchBareShell(t *testing.T) {
 	svc := New(cliadapters.Default())
 	for _, tool := range []string{"", "none"} {
-		cmd, _, inject, remove, err := svc.resolveLaunch("id", CreateSpec{ProjectPath: ".", CliTool: tool})
+		cmd, _, providerEnv, inject, remove, err := svc.resolveLaunch(context.Background(), "id", CreateSpec{ProjectPath: ".", CliTool: tool})
 		if err != nil {
 			t.Fatalf("tool=%q: %v", tool, err)
 		}
 		if strings.TrimSpace(cmd) == "" {
 			t.Errorf("tool=%q: empty shell command", tool)
 		}
-		if inject != nil || remove != nil {
-			t.Errorf("tool=%q: bare shell should not inject/remove env", tool)
+		if providerEnv != nil || inject != nil || remove != nil {
+			t.Errorf("tool=%q: bare shell (no provider) should not inject/remove env", tool)
 		}
 	}
 }
 
 func TestResolveLaunchUnknownTool(t *testing.T) {
 	svc := New(cliadapters.Default())
-	if _, _, _, _, err := svc.resolveLaunch("id", CreateSpec{ProjectPath: ".", CliTool: "no-such-tool"}); err == nil {
+	if _, _, _, _, _, err := svc.resolveLaunch(context.Background(), "id", CreateSpec{ProjectPath: ".", CliTool: "no-such-tool"}); err == nil {
 		t.Fatalf("expected error for unknown cli tool")
+	}
+}
+
+// resolveLaunch + 注入的 ProviderResolver：Tier-A providerEnv 透传 + Tier-B
+// cctx.Provider 传给 adapter（glm 据此自注入 ZAI_*）。用 fake resolver，不触 DB。
+func TestResolveLaunchWithProvider(t *testing.T) {
+	svc := New(cliadapters.Default())
+	svc.SetProviderResolver(func(_ context.Context, id string) (map[string]string, *cliadapters.Provider, error) {
+		if id != "prov-1" {
+			t.Fatalf("unexpected provider id %q", id)
+		}
+		return map[string]string{"ANTHROPIC_API_KEY": "k", "ANTHROPIC_BASE_URL": "u"},
+			&cliadapters.Provider{ID: "prov-1", ProviderType: "glm", APIKey: "zk", BaseURL: "zu"}, nil
+	})
+	// 裸 shell + provider：Tier-A env 应透传（无 adapter）
+	_, _, providerEnv, _, _, err := svc.resolveLaunch(context.Background(), "id", CreateSpec{ProjectPath: ".", CliTool: "none", ProviderID: "prov-1"})
+	if err != nil {
+		t.Fatalf("resolveLaunch: %v", err)
+	}
+	if providerEnv["ANTHROPIC_API_KEY"] != "k" {
+		t.Errorf("providerEnv not threaded: %v", providerEnv)
+	}
+	// buildEnv 合并后，Tier-A env 落入最终环境
+	env := envToMap(buildEnv("id", "none", providerEnv, nil, nil))
+	if env["ANTHROPIC_API_KEY"] != "k" || env["ANTHROPIC_BASE_URL"] != "u" {
+		t.Errorf("provider env not merged into final env: %v", env["ANTHROPIC_API_KEY"])
+	}
+}
+
+// resolver 报错（如密钥损坏）应让 resolveLaunch 报错。
+func TestResolveLaunchProviderError(t *testing.T) {
+	svc := New(cliadapters.Default())
+	svc.SetProviderResolver(func(_ context.Context, _ string) (map[string]string, *cliadapters.Provider, error) {
+		return nil, nil, errors.New("decrypt failed")
+	})
+	if _, _, _, _, _, err := svc.resolveLaunch(context.Background(), "id", CreateSpec{ProjectPath: ".", CliTool: "none", ProviderID: "x"}); err == nil {
+		t.Fatal("expected error when provider resolver fails")
 	}
 }
 

@@ -5,6 +5,36 @@ import (
 	"testing"
 )
 
+// ResolveLaunchEnv：一次加载返回 Tier-A env + Tier-B cli provider（含解密明文 key）。
+func TestResolveLaunchEnv(t *testing.T) {
+	svc := newTestService(t)
+	dto := mustAdd(t, svc, ProviderInput{Name: "g", ProviderType: "glm", APIKey: "zk", BaseURL: "zu"})
+	env, cli, err := ResolveLaunchEnv(context.Background(), svc.db(), dto.ID)
+	if err != nil {
+		t.Fatalf("ResolveLaunchEnv: %v", err)
+	}
+	if env["ZAI_API_KEY"] != "zk" {
+		t.Errorf("env ZAI_API_KEY = %q, want zk", env["ZAI_API_KEY"])
+	}
+	if cli == nil {
+		t.Fatal("cli provider should be non-nil")
+	}
+	if cli.ProviderType != "glm" || cli.APIKey != "zk" || cli.BaseURL != "zu" {
+		t.Errorf("cli provider wrong: %+v", cli)
+	}
+}
+
+func TestResolveLaunchEnvEmptyId(t *testing.T) {
+	svc := newTestService(t)
+	env, cli, err := ResolveLaunchEnv(context.Background(), svc.db(), "")
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(env) != 0 || cli != nil {
+		t.Fatalf("empty id → empty env + nil cli, got %v / %v", env, cli)
+	}
+}
+
 func TestEnvVarsEmptyId(t *testing.T) {
 	svc := newTestService(t)
 	m, err := EnvVars(context.Background(), svc.db(), "")

@@ -51,10 +51,19 @@ const (
 	drainGraceTimeout = 2 * time.Second
 )
 
+// ProviderResolver 据 providerId 解析启动所需：Tier-A 启动 env + Tier-B adapter
+// Provider 上下文（含解密明文 key）。由 app 装配（闭包调 provider.ResolveLaunchEnv +
+// holder）；nil = 无 provider 支持（裸单测）。**绝不暴露给前端**——明文经此进 PTY env。
+type ProviderResolver func(ctx context.Context, providerID string) (env map[string]string, cli *cliadapters.Provider, err error)
+
 // Service 是 Wails 终端服务，前端通过生成的 bindings 调用。
 type Service struct {
 	registry *cliadapters.Registry
 	logger   *slog.Logger
+
+	// resolveProvider 把 providerId 解析成启动 env + adapter Provider 上下文；
+	// nil 时跳过 provider 注入（与 ProviderID=="" 等效）。由 SetProviderResolver 注入。
+	resolveProvider ProviderResolver
 
 	// emit 把事件推给前端；nil 时丢弃（unit test 或 app 未就绪）。
 	// 用字段而非直接持 *application.App，便于测试注入捕获回调。
@@ -63,6 +72,11 @@ type Service struct {
 
 	mu       sync.Mutex
 	sessions map[string]*session
+}
+
+// SetProviderResolver 注入 provider 解析器（app 装配阶段调，镜像 AttachApp 模式）。
+func (s *Service) SetProviderResolver(r ProviderResolver) {
+	s.resolveProvider = r
 }
 
 // session 是一次终端会话的内部状态。
@@ -128,6 +142,9 @@ type CreateSpec struct {
 	WorkspacePath string `json:"workspacePath"`
 	// CliTool 适配器 id（claude/codex/...）；"" 或 "none" = 裸 shell。
 	CliTool string `json:"cliTool"`
+	// ProviderID 选定的接入 Provider id；"" = 不注入 provider env。后端经注入的
+	// ProviderResolver 解析为 Tier-A 启动 env + Tier-B adapter Provider 上下文。
+	ProviderID string `json:"providerId"`
 	// Cols/Rows 初始终端尺寸；0 取 ptyx 默认。前端拿到真实尺寸后应立即 Resize。
 	Cols uint16 `json:"cols"`
 	Rows uint16 `json:"rows"`
@@ -145,19 +162,19 @@ type SessionInfo struct {
 
 // CreateSession 在 ProjectPath 下用 CliTool（或裸 shell）启动 PTY 会话，返回 sessionId。
 // 启动后输出经 terminal:output 事件流式推送，退出经 terminal:exit 通知。
-func (s *Service) CreateSession(_ context.Context, spec CreateSpec) (string, error) {
+func (s *Service) CreateSession(ctx context.Context, spec CreateSpec) (string, error) {
 	if strings.TrimSpace(spec.ProjectPath) == "" {
 		return "", errors.New("terminal: empty projectPath")
 	}
 
 	id := newSessionID()
 
-	command, args, envInject, envRemove, err := s.resolveLaunch(id, spec)
+	command, args, providerEnv, envInject, envRemove, err := s.resolveLaunch(ctx, id, spec)
 	if err != nil {
 		return "", err
 	}
 
-	env := buildEnv(id, spec.CliTool, envInject, envRemove)
+	env := buildEnv(id, spec.CliTool, providerEnv, envInject, envRemove)
 
 	pt, err := ptyx.Spawn(context.Background(), ptyx.Spec{
 		Command: command,
@@ -266,16 +283,31 @@ func (s *Service) killSession(sess *session) {
 
 // resolveLaunch 决定要在 PTY 里启动的命令：裸 shell 或经 cliadapters 拼装的 CLI。
 // cwd 永远是 spec.ProjectPath（铁律 D7），由调用方传给 ptyx，不在此返回。
-func (s *Service) resolveLaunch(id string, spec CreateSpec) (command string, args []string, envInject map[string]string, envRemove []string, err error) {
+//
+// Provider 注入两路（cc-pane terminal_service 双层）：① Tier-A 启动 env（providerEnv，
+// 由注入的 resolveProvider 产出，在 buildEnv 里于 adapter EnvInject 之前合并）；
+// ② Tier-B adapter 上下文 cctx.Provider（glm/cursor 自注入同名 env、kimi 据此写 per-session
+// 配置）。ProviderID=="" 或无 resolver 时两路皆空。裸 shell 也应用 Tier-A env（无 adapter）。
+func (s *Service) resolveLaunch(ctx context.Context, id string, spec CreateSpec) (command string, args []string, providerEnv map[string]string, envInject map[string]string, envRemove []string, err error) {
+	var cli *cliadapters.Provider
+	if spec.ProviderID != "" && s.resolveProvider != nil {
+		penv, pc, perr := s.resolveProvider(ctx, spec.ProviderID)
+		if perr != nil {
+			return "", nil, nil, nil, nil, fmt.Errorf("terminal: resolve provider %s: %w", spec.ProviderID, perr)
+		}
+		providerEnv = penv
+		cli = pc
+	}
+
 	toolID := spec.CliTool
 	if toolID == "" || toolID == "none" {
 		c, a := defaultShell()
-		return c, a, nil, nil, nil
+		return c, a, providerEnv, nil, nil, nil
 	}
 
 	adapter, ok := s.registry.Get(toolID)
 	if !ok {
-		return "", nil, nil, nil, fmt.Errorf("terminal: unknown cli tool %q", toolID)
+		return "", nil, nil, nil, nil, fmt.Errorf("terminal: unknown cli tool %q", toolID)
 	}
 
 	cctx := &cliadapters.Context{
@@ -283,15 +315,16 @@ func (s *Service) resolveLaunch(id string, spec CreateSpec) (command string, arg
 		ProjectPath:   spec.ProjectPath,
 		WorkspacePath: spec.WorkspacePath,
 		InitialPrompt: spec.InitialPrompt,
-		// TODO(phase5): Provider 选择 / orchestrator port·token / MCP 注入。
+		Provider:      cli, // Tier-B：glm/cursor/kimi 据此自注入
+		// TODO(phase5): orchestrator port·token / MCP 注入。
 		// 当前无 orchestrator，强制 SkipMCP 避免 adapter 生成依赖未落地端口的 MCP 配置。
 		SkipMCP: true,
 	}
 	res, err := adapter.BuildCommand(cctx)
 	if err != nil {
-		return "", nil, nil, nil, fmt.Errorf("terminal: build command for %s: %w", toolID, err)
+		return "", nil, nil, nil, nil, fmt.Errorf("terminal: build command for %s: %w", toolID, err)
 	}
-	return res.Command, res.Args, res.EnvInject, res.EnvRemove, nil
+	return res.Command, res.Args, providerEnv, res.EnvInject, res.EnvRemove, nil
 }
 
 // readLoop 循环读 PTY 原始字节 → UTF-8 安全处理 → 投递给 batcher。
@@ -429,8 +462,12 @@ func nowMilli() int64 { return time.Now().UnixMilli() }
 
 // buildEnv 从父进程环境派生子进程完整环境（ptyx 要求 Env 非 nil 时完全替换）。
 // 注入 TERM/COLORTERM（Release .app 从 Finder 启动不继承终端环境）与 CC_PANES_* 标识，
-// 叠加 adapter 的 envInject，最后移除 adapter 声明的 envRemove。
-func buildEnv(sessionID, toolID string, inject map[string]string, remove []string) []string {
+// 合并 provider 的 Tier-A env，再叠加 adapter 的 envInject，最后移除 adapter 声明的 envRemove。
+//
+// 合并顺序（与 cc-pane terminal_service 一致）：base → providerEnv(Tier-A) →
+// adapter inject(Tier-B) → remove。故 adapter 自注入覆盖 provider 同名键（如 glm ZAI_*
+// 两层都设、值相同，无害）。
+func buildEnv(sessionID, toolID string, providerEnv, inject map[string]string, remove []string) []string {
 	m := make(map[string]string)
 	for _, kv := range os.Environ() {
 		if k, v, ok := strings.Cut(kv, "="); ok {
@@ -449,7 +486,10 @@ func buildEnv(sessionID, toolID string, inject map[string]string, remove []strin
 	if toolID != "" && toolID != "none" {
 		m["CC_PANES_CLI_TOOL"] = toolID
 	}
-	for k, v := range inject {
+	for k, v := range providerEnv { // Tier-A provider env（adapter inject 之前）
+		m[k] = v
+	}
+	for k, v := range inject { // Tier-B adapter inject（覆盖 Tier-A 冲突键）
 		m[k] = v
 	}
 	for _, k := range remove {

@@ -18,6 +18,7 @@ export interface CreateSpec {
   projectPath: string;
   workspacePath?: string; // 仅多目录 CLI 且 ≠projectPath 时拼 --add-dir；缺省 ''
   cliTool?: string;       // 适配器 id；'' | 'none' = 裸 shell
+  providerId?: string;    // 选定 Provider id；'' = 不注入 provider env
   cols?: number;          // 0 取 ptyx 默认；拿到真实尺寸后应立即 resize
   rows?: number;
   initialPrompt?: string; // 初始 prompt（CLI 位置参数）；缺省 ''
@@ -78,6 +79,7 @@ export const TerminalService = {
       projectPath: spec.projectPath,
       workspacePath: spec.workspacePath ?? '',
       cliTool: spec.cliTool ?? '',
+      providerId: spec.providerId ?? '',
       cols: spec.cols ?? 0,
       rows: spec.rows ?? 0,
       initialPrompt: spec.initialPrompt ?? '',

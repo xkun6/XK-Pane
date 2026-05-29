@@ -3,6 +3,7 @@
 package app
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"log/slog"
@@ -89,6 +90,12 @@ func Run(assets embed.FS) error {
 	})
 	subSvc.AttachApp(app)
 	termSvc.AttachApp(app)
+	// 注入 provider 解析器：启动时据 spec.ProviderID 解析 Tier-A 启动 env +
+	// Tier-B adapter Provider 上下文（含解密明文 key）。闭包从 holder 取活跃 DB，
+	// 故切换数据路径后仍解析到正确库。provider.ResolveLaunchEnv 非绑定（不暴露明文给前端）。
+	termSvc.SetProviderResolver(func(ctx context.Context, providerID string) (map[string]string, *cliadapters.Provider, error) {
+		return provider.ResolveLaunchEnv(ctx, holder.Current().GORM, providerID)
+	})
 
 	app.Window.NewWithOptions(windowOptions())
 
