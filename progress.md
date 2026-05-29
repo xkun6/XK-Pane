@@ -254,3 +254,24 @@
 ### commit / 下一步
 - commit `4df3cca`（TerminalView）。
 - **下一单元**：自实现 `SplitView` 分屏——消费 `TerminalContext` 的 `rootPane`（递归渲染 Panel/SplitPane）+ `resizePanels`（拖拽分隔条），叶子 Panel 渲染 TabBar + 活动 Tab 的 TerminalView。之后 TabBar(@dnd-kit) + 把生命周期 effect（newTab→create→setTabSession / onExit→清理）接进 TerminalProvider + 侧边栏项目树最小版 + 右键启动 → Phase 2 闭环可演示。
+
+## 会话 8 — Phase 2 自实现 SplitView 分屏组件（2026-05-30，autonomous /loop）
+
+### 关键发现
+- cc-pane 的分屏其实**已自实现**（非 allotment）：`PaneContainer`(递归分发) → `SplitContainer`(归一化 + 调 resizePanes) → `SplitView`(flex + sash 拖拽)。其 `allotment` 依赖另作他用。故 D6「自实现 SplitView」= 忠实移植其 SplitView 的拖拽机制。
+
+### 选取单元（§2）
+- 本轮只做**低层 `SplitView` widget**（N 子 + 拖拽 sash + sizes，children/onDragEnd 进出，**不依赖** TerminalContext/TabBar/session）。递归树渲染器（PaneContainer/SplitContainer 等价物，消费 TerminalContext + 委托 panel）留与 TabBar 同做的整合单元。
+
+### 做了什么（`frontend/src/components/SplitView/`）
+- `splitGeometry.ts`（纯，可测）：`computeSashResize`（拖拽 delta% 重算相邻两 pane + 最小百分比约束，溢出转嫁）+ `normalizeSizesToHundred`（末位吸收舍入，和恰 100）——抽自 cc-pane SplitView 拖拽 + SplitContainer.handleDragEnd。
+- `useSplitView.ts`（VM）：忠实移植 cc-pane 指针拖拽——pointerdown→pointermove 双 rAF 节流→直接改 DOM flexBasis（不 re-render）→pointerup 回调 onDragEnd；卸载清理。**未移植** cc-pane 全局 `setDragging`（供 TerminalView drag-fit 节流；本 MVP 用固定 debounce 无需）。
+- `SplitView.styles.ts` + `SplitView.tsx`（View）：容器/pane 纯布局走内联 CSSProperties，sash 走 sx（`foundation.accent` hover）；`<div data-splitview-pane>` 供 VM querySelector；`keys` 防 2→1 误 remount。
+
+### 验证（§4 前端门）
+- `pnpm typecheck` exit=0；`pnpm test` **32/32**（reducer 21 + scheduler 4 + **splitGeometry 7**）；`pnpm build` exit=0。
+- 几何数学 7 测覆盖（最易藏 bug 处）+ 拖拽逻辑逐字移植 cc-pane 工作代码 = 充分验证，**无需重型 workflow**（同 scheduler 判断）。bundle 未变（SplitView 尚未被入口 import，tree-shaken；待整合单元接入）。
+
+### commit / 下一步
+- commit `559fe13`（SplitView）。
+- **下一单元**：递归 `PaneTree` 渲染器 + 把 Phase 2 拼起来——消费 `TerminalContext.rootPane` 递归渲染（split→SplitView 包 PaneTree，panel→挂活动 Tab 的 TerminalView）+ 生命周期 effect（newTab→create→setTabSession / onExit）接进 TerminalProvider。TabBar(@dnd-kit) 可与此同做或紧随。然后 侧边栏项目树最小版 + 右键启动 → 接进 App（路由/页面）→ **Phase 2 闭环可演示**（首个可运行里程碑）。
