@@ -4,6 +4,7 @@ import { registerHomePageLocales } from '@/pages/HomePage/lang';
 import { registerSettingsPageLocales } from '@/pages/SettingsPage/lang';
 import { registerTerminalPageLocales } from '@/pages/TerminalPage/lang';
 import { PreferencesProvider } from '@/preferences';
+import { ProjectProvider } from '@/project';
 import { RouterProvider } from '@/router';
 import { routes } from '@/routes';
 import { FoundationThemeProvider, registerFoundationThemes } from '@/styles/themes';
@@ -27,16 +28,19 @@ registerTerminalPageLocales();
 //  ② FoundationThemeProvider —— CssBaseline 在这里注入；与 i18n 互不依赖
 //  ③ PreferencesProvider —— 行为偏好
 //  ④ TerminalProvider —— 终端面板树 / 会话生命周期（全局，跨路由保活；reconcile effect 在此）
-//  ⑤ RouterProvider —— 路由切换时上面都已就绪
+//  ⑤ ProjectProvider —— 项目登记表（全局，侧边栏项目树消费；mount 异步拉取）
+//  ⑥ RouterProvider —— 路由切换时上面都已就绪
 export const App = () => {
   return (
     <I18nProvider>
       <FoundationThemeProvider>
         <PreferencesProvider>
           <TerminalProvider>
-            <RouterProvider routes={routes}>
-              <AppLayout />
-            </RouterProvider>
+            <ProjectProvider>
+              <RouterProvider routes={routes}>
+                <AppLayout />
+              </RouterProvider>
+            </ProjectProvider>
           </TerminalProvider>
         </PreferencesProvider>
       </FoundationThemeProvider>
