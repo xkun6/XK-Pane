@@ -473,3 +473,15 @@
 - `go build`/`go vet`/`go test`（dev+prod，-count=3）+ 全量全绿；`wails3 generate bindings`=**9 Services/42 Methods**；`pnpm typecheck` exit=0。commit `c86bc60`。
 - 后台启动**安全+保真对抗审查** workflow `wf_4dfb9634-31c`（2 lens：fidelity/deviations + security/cryptox/GORM——重点「明文 key 是否可能泄漏到前端」），refute-by-default。**下一轮**：读审查结论，有真 bug 先修。
 - 之后候选：前端 ProviderService.ts + provider 设置子页（按脱敏 DTO 契约设计）；或**启动接线单元**（GetEnvVars + resolveLaunch 设 Provider + buildEnv 合 provider env，让「选定 Provider 启动」头条能力真正打通）。
+
+## 会话 21 — provider 审查收口 + provider.EnvVars（2026-05-30，autonomous /loop）
+
+### 审查结论（wf_4dfb9634-31c）：clean
+- **1 finding，0 真实**。唯一 finding（get_default_provider 未移植）自评 nit，校验确认是**有意范围决策**（它是暴露明文的启动侧 helper，移植现在要么死代码要么违反脱敏偏离）→ 不改。provider service 安全+保真**全绿**。
+
+### 做了什么：provider.EnvVars（启动接线的 Tier-A 核心）
+- `internal/services/provider/envvars.go`：`EnvVars(ctx,db,id)→map[string]string` 复刻 cc-pane to_env_vars——解密 apiKey 后按 11 种 ProviderType 产出启动 env（每变量仅源字段非空才写）。**包级函数非 Service 方法 → 不进 bindings**（暴露明文，仅后端启动路径调）。id""/未知→空 map；解密失败→报错。codex 易错点保留（open_ai→CODEX_API_KEY）；config_profile 仅 dir-mode。
+- **8 测**（含 加密落库→解密注入 完整往返、bedrock 无 key、open_ai vs opencode key 名、空字段省略）。dev+prod 全绿（~30s：每测 storage.Open AutoMigrate + cryptox 取密钥）。EnvVars 非绑定 → 无需 regen bindings。commit `9dde34b`。
+
+### 下一单元：终端启动接线（打通「选定 Provider 启动」）
+- 改 `terminal.CreateSpec` 加 `providerId`；给 terminal 服务注入「provider env 解析器」（holder 或 resolver 函数）；`resolveLaunch` 据 providerId 设 `cctx.Provider`（ToCliProvider 字段拷贝——在 terminal 包做，避 provider→cliadapters 耦合）；`buildEnv` 合并 `provider.EnvVars`（中央 Tier-A 在 adapter EnvInject 之前，Tier-B 覆盖）。+ 守门测试（给定 providerId，PTY env 含对应 provider 变量）。需读 terminal.go（会话2 代码）后改。**纯后端可测**，仍不依赖终端渲染。
