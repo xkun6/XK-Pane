@@ -327,3 +327,22 @@
 ### commit / 下一步
 - commit `06a3720`（reconcile effect + 评审 TODO 注释）。
 - **下一单元（到达 Phase 2 闭环）**：接进 App —— ① `<TerminalProvider>` 进 App.tsx Provider 链；② 新建终端页（`pages/<TerminalPage>/`，渲染 `PaneTree` 消费 rootPane）+ routes.tsx 注册（slot primary，图标 MUI Rounded）；③ MVP 启动入口：页内「打开文件夹」动作走 `NativeDialogs.openDirectory()`→`newTab(activePane, {projectPath:dir, cliTool:'none'})`→reconcile 起裸 shell。完成后 **dev 跑通 → 请用户做首个视觉 checkpoint**（验证：打开文件夹→见 shell 输出→输入回显→分屏拖拽→关标签回收 PTY）。侧边栏项目树/右键启动/CLI 工具选择留 Phase 3。
+
+## 会话 12 — Phase 2 接进 App（终端可运行闭环）（2026-05-30，autonomous /loop）
+
+### 做了什么（整合到可运行）
+- `pages/TerminalPage/`：View（顶部工具条「打开文件夹」+ `<PaneTree node={rootPane}>`）/ VM（`openFolder(title)`→`NativeDialogs.openDirectory`→`newTab(activePane,{projectPath:dir,cliTool:'none'})`，dialogTitle 由 View 传，遵 MVVM）/ Style / skeleton / lang（`terminalPage.*` + 公用 locale 加 `route.terminal`）/ index。
+- `routes.tsx`：terminal 路由（slot primary，**lazy**——xterm 拆出主 bundle，**keepAlive**——保活 xterm 实例与滚动回溯）+ MUI `TerminalRounded` 图标 + skeleton fallback。
+- `App.tsx`：`<TerminalProvider>` 入 Provider 链（I18n>Theme>Pref>**Terminal**>Router，全局跨路由保活；reconcile effect 随之全局生效，初始空 Tab projectPath='' 不会误启）+ `registerTerminalPageLocales()`。
+
+### 验证（§4 前端门）
+- `pnpm typecheck` exit=0；`pnpm build` exit=0 —— **xterm 成功 lazy 拆分**：`TerminalPage-*.js` 354KB（按需）+ `TerminalPage-*.css` 3.9KB（xterm.css），主 bundle 856KB（MUI 为主，>500KB 警告留 Phase 6 code-split）；`pnpm test` 37/37 无回归。
+
+### Phase 2 状态：**结构完成、可运行，待首个视觉 checkpoint**
+- 后端 service + 状态层(reducer/Context+reconcile) + TerminalView/SplitView/TabBar + PaneTree + App 接线 + 启动入口 **全部就位且编译/单测/构建全绿**。
+- **但全部前端从未在真实 app 跑过**（loop 仅能 typecheck/build/单测 + 对抗审查，无法自验视觉/运行时）。**遂在此里程碑停 loop，交还用户做首个视觉 checkpoint**——这是 ~10 个前端单元后第一个可运行点，验证整条终端链路（事件桥 terminal:output 投递 / xterm 在 Wails webview 渲染 / reconcile 起会话 / 拖拽分屏 / 关标签回收 PTY）是否如设计工作，再在其上建 Phase 3 才稳妥。
+
+### commit / 下一步
+- commit `44b9116`（App 接线，可运行）。
+- **停 loop（不调度下一轮）**，请用户验证。验证 OK → 重新发 `/loop` 续到 Phase 3（管理面/设置/i18n/窗口形态）；若发现运行时问题 → 反馈，下一轮修。
+- 续跑后下一单元候选：依验证结果定（修问题 优先）；否则 Phase 3 起步 = Workspace/Project 后端 service + 侧边栏项目树（替换临时「打开文件夹」工具条）+ CLI 工具选择启动。

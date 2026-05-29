@@ -106,13 +106,13 @@
 |------|------|------|
 | Phase 0 | ✅ complete | 改名 + Dev/Release 隔离，全验证通过 |
 | Phase 1 | ✅ complete | ptyx ✅ / events ✅ / models ✅ / cliadapters ✅（18 守门 ok，MCP/hooks 延后 Phase 5）；subprocess git 白名单改判延后 Phase 4（层次修正） |
-| Phase 2 | 🔵 in_progress | 后端 terminal_service ✅；前端：TerminalService.ts ✅ + types/paneTree ✅ + TerminalContext(reducer+Provider) ✅ + layoutScheduler ✅ + TerminalView(xterm.js) ✅ + SplitView ✅ + MVP TabBar ✅ + 递归 PaneTree 渲染器 ✅ + **生命周期 reconcile effect ✅**（会话11，race 评审 0 bug，5 测）；待做 → 接进 App（`<TerminalProvider>`+终端页+路由）+ MVP 启动入口（NativeDialogs.openDirectory→newTab→裸 shell）→ **Phase 2 闭环可演示 → 首个视觉 checkpoint**（侧边栏树/右键启动/CLI 选择/TabBar 拖拽重排 → Phase 3 或另列单元）|
+| Phase 2 | 🟡 待视觉验证 | **结构完成、可运行**：后端 service + 状态层(reducer/Context+reconcile) + TerminalView/SplitView/TabBar + PaneTree + App 接线（TerminalProvider/终端页/路由）+ MVP 启动入口（打开文件夹→裸 shell）。全程 typecheck/build/单测(37)/对抗审查全绿，但**前端从未在真 app 跑过**→ **loop 停在此里程碑，待用户首个视觉 checkpoint**（开文件夹→shell 输出→回显→分屏拖拽→关标签回收 PTY）。验证 OK 后转 ✅。侧边栏树/右键启动/CLI 选择/TabBar 拖拽重排 → Phase 3 或另列单元 |
 | Phase 3 | ⬜ pending | 管理面 + 设置 |
 | Phase 4 | ⬜ pending | 常用增强 |
 | Phase 5 | ⬜ pending | Bedrock/MCPE/notify/memory |
 | Phase 6 | ⬜ pending | 收尾打包 |
 
-状态图例：⬜ pending / 🔵 in_progress / ✅ complete / ⚠️ blocked
+状态图例：⬜ pending / 🔵 in_progress / 🟡 待人工验证 / ✅ complete / ⚠️ blocked
 
 ---
 
