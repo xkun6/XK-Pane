@@ -211,3 +211,25 @@
 ### commit / 下一步
 - commit `a34bcf3`（`Phase 2: TerminalContext reducer + Provider + Vitest (21 tests, fidelity-reviewed)`）。
 - **下一单元**：`TerminalView`(xterm.js) ——需先 `pnpm add @xterm/xterm @xterm/addon-fit`（等）+ View/VM/Style 三件；随后 `TerminalService` 生命周期 effect 接进 Provider（newTab→create→setTabSession；订阅 onOutput 喂 xterm、onExit 清理）。再后 自实现 SplitView（消费 rootPane/resizePanes）+ TabBar(@dnd-kit) + 侧边栏项目树最小版 + 右键启动。
+
+## 会话 6 — Phase 2 终端布局调度器（2026-05-29，autonomous /loop）
+
+### 选取单元（§2）+ 关键发现
+- 探 cc-pane `web/components/panes/` 发现终端渲染**已拆成可测控制器**：`terminalRendererController.ts`（WebGL 渲染器+上下文丢失恢复+纹理图集）/ `terminalLayoutScheduler.ts`（fit/resize 调度）/ `TerminalView.tsx`（React 胶水），前两者各带 `.test.ts`。这是因为它们用**注入式依赖**（getter/callback），可用 fake term/fit 单测——正好破解「前端视觉无法自动验证」的难题。
+- **范围裁剪**（不贪多 + 简洁铁律）：本轮只做**最可自动验证**的 `layoutScheduler`（+ 移植其 test）。**WebGL `terminalRendererController` 延后**（性能增强，MVP 用 xterm DOM 渲染器即可，且依赖 terminalRenderer 决策 + settings 类型 + addon-webgl）。`TerminalView.tsx` React 胶水（视觉，仅 typecheck/build 间接验证）留下一轮。
+
+### 做了什么
+- `pnpm add @xterm/xterm@^6 @xterm/addon-fit@^0.11`（对齐 cc-pane 版本）+ `pnpm add -D jsdom@^28`（调度器 test 需 DOM 宿主）。
+- `frontend/src/terminal/layoutScheduler.ts`：**逐字忠实移植** cc-pane `terminalLayoutScheduler.ts`（双 rAF + delay 去抖调度、容器抖动跳过 minContainerDelta、非活动/不可渲染门控、cols/rows 变化才回调 resizeBackend、isTerminalHostRenderable）。全依赖注入，零业务耦合。
+- `frontend/src/terminal/layoutScheduler.test.ts`：逐字移植 cc-pane 的 4 个 test（可见性探测 / fit·repaint·resize / 非活动延后 / 抖动跳过+force）。**per-file `// @vitest-environment jsdom`** 切环境（reducer.test 仍跑 node 默认环境）。
+
+### 验证（§4 前端门）
+- `pnpm typecheck` exit=0；`pnpm test` **25/25 pass**（2 文件：reducer 21 node + layoutScheduler 4 jsdom）。纯前端，无 Go 改动。
+- 逐字移植 + cc-pane 原 test 通过 = 强验证，**无需重型保真度 workflow**（与 reducer 的 clone-then-mutate 语义翻译不同，此处零翻译风险）。
+
+### 顺手 hygiene
+- `frontend/tsconfig.tsbuildinfo`（tsc 增量缓存）此前被 track，每次 typecheck 都让工作树变脏污染 §1「上次提交干净」校验 → 加进 .gitignore + `git rm --cached`。commit `653eb00`。
+
+### commit / 下一步
+- commit `d71ac8f`（layout scheduler）+ `653eb00`（gitignore tsbuildinfo）。
+- **下一单元**：`TerminalView`(xterm.js) View/VM/Style ——VM 创建真 Terminal+FitAddon、open 进 host、用 layoutScheduler 接 ResizeObserver、onData→TerminalService.write、onOutput(sessionId 过滤)→term.write、dispose 回收；View 渲染 `<div ref>` + 样式。随后把生命周期 effect（newTab→create→setTabSession / onExit→清理）接进 TerminalProvider。该单元视觉为主，自动验证 = typecheck + `pnpm build`（视觉正确性留用户 checkpoint）。

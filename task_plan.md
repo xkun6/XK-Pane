@@ -56,7 +56,7 @@
 ### Phase 2 — 终端核心闭环（首个可运行里程碑）🔵 in_progress
 **目标**：能在某项目目录下用内置终端跑起一个 CLI 并交互——MVP runnable。
 - [x] 后端 `terminal_service`：PTY 会话注册表 + I/O 隧道（batch Emit `terminal:output`/`:status`/`:exit`）+ resize/kill + drain 宽限关闭 + UTF-8 跨 read 安全处理；裸 shell / cliadapters 启动；路径铁律 D7（cwd≡ProjectPath）。已注册进 app.go + AttachApp + bindings 重生成（6 Services/28 Methods）。**12 单测全绿**（含真 ConPTY 闭环 round-trip ×5 稳定，dev+prod）。launch_cwd 上报接收端属 Phase 5（已注入 CC_PANES_PTY_SESSION_ID 备用）。
-- [ ] 前端保留组件：`TerminalView`(xterm.js)、自实现 `SplitView` 分屏、`TabBar`(@dnd-kit)
+- [~] 前端保留组件：`TerminalView`(xterm.js)、自实现 `SplitView` 分屏、`TabBar`(@dnd-kit)。**布局调度器 `layoutScheduler.ts` ✅**（会话6：逐字移植 cc-pane terminalLayoutScheduler，fit/resize 双 rAF 去抖 + 抖动跳过 + 可见性门控，jsdom 4 测；装 `@xterm/xterm@6`+`@xterm/addon-fit@0.11`+`jsdom`）。WebGL `terminalRendererController` 延后（MVP 用 DOM 渲染器）。待做 TerminalView View/VM/Style
 - [~] 前端 MVVM：**服务层 `TerminalService.ts` ✅** + **面板树类型/纯 helpers `terminal/{types,paneTree}.ts` ✅**（移植 cc-pane pane.ts/terminal.ts/paneTreeHelpers.ts 的 MVP 子集：外层 PaneNode 树〔Panel 含 tabs / SplitPane〕+ 内层 TerminalPaneNode 树〔leaf 持 sessionId / split〕+ generateId/createPanel/createTab/findPane/findParent/collectPanels；裁剪 provider/resume/ssh/wsl 等 Phase 3/4 字段；typecheck 绿）。**`TerminalContext`（Provider+reducer）✅**（会话5：clone-then-mutate 移植 8 个外层树操作 split/closePane/addTab/closeTab/selectTab/setActivePane/resizePanes + normalizePaneTree 折叠 + setTabSession 回填钩子；引入 Vitest，**21 测全绿**；3-lens 保真度审查 0 真实 drift）。待做：终端面板 View/VM/Style（`TerminalView` xterm.js）+ wire TerminalService 生命周期 effect（newTab→create→回填 / onExit→清理，随 View 接入）
 - [ ] 侧边栏工作区/项目树（最小版）+ 右键启动
 - **verify**：打开项目→新建终端标签→看到 shell/CLI 输出→输入回显；分屏可拖拽；关闭标签干净回收 PTY
@@ -106,7 +106,7 @@
 |------|------|------|
 | Phase 0 | ✅ complete | 改名 + Dev/Release 隔离，全验证通过 |
 | Phase 1 | ✅ complete | ptyx ✅ / events ✅ / models ✅ / cliadapters ✅（18 守门 ok，MCP/hooks 延后 Phase 5）；subprocess git 白名单改判延后 Phase 4（层次修正） |
-| Phase 2 | 🔵 in_progress | 后端 terminal_service ✅；前端状态层全绿：TerminalService.ts ✅ + types/paneTree ✅ + **TerminalContext(reducer+Provider) ✅**（Vitest 21 测 + 保真度审查，会话5）；待做 → TerminalView(xterm.js)+生命周期 effect → 自实现 SplitView/TabBar → 侧边栏树+右键启动 |
+| Phase 2 | 🔵 in_progress | 后端 terminal_service ✅；前端状态层全绿：TerminalService.ts ✅ + types/paneTree ✅ + TerminalContext(reducer+Provider) ✅ + **layoutScheduler ✅**（会话6：xterm6+fit+jsdom，25 测全绿）；待做 → TerminalView(xterm.js) View/VM/Style + 生命周期 effect → 自实现 SplitView/TabBar → 侧边栏树+右键启动 |
 | Phase 3 | ⬜ pending | 管理面 + 设置 |
 | Phase 4 | ⬜ pending | 常用增强 |
 | Phase 5 | ⬜ pending | Bedrock/MCPE/notify/memory |
