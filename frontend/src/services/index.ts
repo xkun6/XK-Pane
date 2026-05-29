@@ -1,4 +1,5 @@
 export { GreetService } from './greet/GreetService';
+export { ProjectService, type Project } from './project/ProjectService';
 export { PreferencesService } from './preferences/PreferencesService';
 export {
   AppSettingsService,
