@@ -1,9 +1,11 @@
 import HomeRoundedIcon from '@mui/icons-material/HomeRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
+import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
 import { lazy } from 'react';
 import { HomePage } from '@/pages/HomePage/HomePage';
 import { HomePageSkeleton } from '@/pages/HomePage/HomePage.skeleton';
 import { SettingsPageSkeleton } from '@/pages/SettingsPage/SettingsPage.skeleton';
+import { TerminalPageSkeleton } from '@/pages/TerminalPage/TerminalPage.skeleton';
 import type { RouteDefinition } from '@/router';
 
 // SettingsPage 走 React.lazy：调色板编辑器较重，首屏不进入 main bundle。
@@ -14,6 +16,13 @@ import type { RouteDefinition } from '@/router';
 const SettingsPage = lazy(async () => {
   const mod = await import('@/pages/SettingsPage/SettingsPage');
   return { default: mod.SettingsPage };
+});
+
+// TerminalPage 走 lazy：xterm 较重，拆出主 bundle；keepAlive 保活，避免离开终端页时丢失
+// xterm 实例与滚动回溯（会话状态由 TerminalProvider 持有，xterm DOM 由 keepAlive 保留）。
+const TerminalPage = lazy(async () => {
+  const mod = await import('@/pages/TerminalPage/TerminalPage');
+  return { default: mod.TerminalPage };
 });
 
 // 路由表是唯一事实源：
@@ -34,6 +43,16 @@ export const routes: RouteDefinition[] = [
     fallback: <HomePageSkeleton />,
     slot: 'primary',
     keepAlive: true, // 演示：离开后再回来，Greet 输入框保留上次内容
+  },
+  {
+    id: 'terminal',
+    labelKey: 'route.terminal',
+    label: 'Terminal',
+    icon: TerminalRoundedIcon,
+    element: <TerminalPage />,
+    fallback: <TerminalPageSkeleton />,
+    slot: 'primary',
+    keepAlive: true, // 保活：保留 xterm 实例与滚动回溯（终端页离开后再回不重建会话视图）
   },
   {
     id: 'settings',

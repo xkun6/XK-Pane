@@ -23,6 +23,7 @@ export const enUS: Locale = {
     },
     route: {
       home: 'Home',
+      terminal: 'Terminal',
       settings: 'Settings',
     },
     terminal: {
