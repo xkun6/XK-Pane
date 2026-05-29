@@ -186,3 +186,28 @@
 ### commit / 下一步
 - commit：见下方 hash（`Phase 2: 面板树类型 + 纯 helpers`）。
 - **下一单元**：`TerminalContext`（Provider + reducer）——状态化树操作（newTab/closeTab/setActiveTab/setActivePanel/splitPanel/closePanel，需移植 usePanesStore 对应 reducer 逻辑 + 折叠单子 split 等关键逻辑，建议 Workflow 保真度审查 + 考虑引入 Vitest 测树操作）+ wire TerminalService 生命周期（create→sessionId 回填 leaf、exit→清理）。
+
+## 会话 5 — Phase 2 TerminalContext reducer + Provider + Vitest（2026-05-29，autonomous /loop）
+
+### 选取单元（§2）
+- 取上轮 teed-up 的 `TerminalContext`。**范围裁剪**（不贪多）：本轮做**纯状态层**——外层面板树 reducer（8 个 in-scope action）+ React Context Provider（D2 弃 Zustand 用 useReducer）。**刻意延后**异步 `TerminalService` 生命周期 effect（create→回填、exit→清理）到下一单元（与 `TerminalView` 同落，需内层 terminalPane 树 + effect）。
+
+### 做了什么
+- `frontend/src/terminal/reducer.ts`：**clone-then-mutate** 手法忠实移植 usePanesStore 的 8 个外层操作（split/closePane/addTab/closeTab/selectTab/setActivePane/resizePanes + normalizePaneTree 折叠）。对 rootPane 做 `structuredClone` 后套用 cc-pane 可变逻辑再返回——1:1 复刻 immer 语义同时保持 reducer 纯函数可测。`setTabSession` 作为生命周期回填钩子先行落地。延后项（closedTabs 快照 / syncPtyRegistryUnregister / pinned / moveTab·reorderTabs / 内层分屏）文件头列明。
+- `frontend/src/terminal/TerminalContext.tsx`：`<TerminalProvider>` + `useTerminal()`，与 foundation `PreferencesProvider` 同构（useReducer + useCallback 绑定 + useMemo value）。生命周期 effect 标 TODO（下一单元）。
+- `frontend/src/terminal/index.ts`：域出口（Provider/hook + 公共类型）。
+- **引入 Vitest**（frontend/CLAUDE.md 推荐 + 上轮 teed-up）：`pnpm add -D vitest@4.1.7`（Vite 8 兼容）+ `vitest.config.ts`（node 环境，相对 import 无需别名）+ package.json `test`/`test:watch` 脚本。
+- `reducer.test.ts`：先 15 测（基础行为），保真度审查后**补 6 测**至 **21 测**覆盖 critic 标出的高危路径。
+
+### 验证（§4 前端门）
+- `pnpm typecheck` exit=0；`pnpm test`（vitest run）**21/21 pass**。纯前端单元，无 Go 改动（后端门不适用，无需 bindings 重生成）。
+
+### 保真度审查（workflow wf_ad8d281f-012，3 并行 lens）✅
+- **fidelity**：8 action 逐行对照 usePanesStore → **0 真实 drift**（4 条 low 均裁定 benign/intentional）。
+- **adversary**（clone-then-mutate 正确性）：**0 真实 bug**，自写 ~10 probe 测验证：返回树不与入参 state 共享引用；closeTab 委托 closePane 传原 state 安全（closePane 自己 fresh clone）；findParent indexOf 在 clone 上引用一致；normalizePaneTree 返回值均被接住；structuredClone 对这些纯对象判别联合安全。
+- **coverage**：6 条 `isReal=true` 的**测试缺口**（非 bug）。**当轮即补**（completeness-critic 输出转为即时工作）：3→2 子 sizes 重整([40,60])、activePaneId 兜底下钻 split、深层同方向合并、关末位子 Math.min 钳位、split 内多 Tab 面板 closeTab 非折叠、嵌套 split resize 不扰兄弟。补后 21/21 全绿——独立印证最易藏 bug 路径正确。
+- **微加固**（adversary 提示）：`resizePanes` 拷贝入参数组（`[...sizes]`）——reducer 须独占 state，恢复 immer 冻结曾给的保护（弃 immer 后显式拷贝）。
+
+### commit / 下一步
+- commit `a34bcf3`（`Phase 2: TerminalContext reducer + Provider + Vitest (21 tests, fidelity-reviewed)`）。
+- **下一单元**：`TerminalView`(xterm.js) ——需先 `pnpm add @xterm/xterm @xterm/addon-fit`（等）+ View/VM/Style 三件；随后 `TerminalService` 生命周期 effect 接进 Provider（newTab→create→setTabSession；订阅 onOutput 喂 xterm、onExit 清理）。再后 自实现 SplitView（消费 rootPane/resizePanes）+ TabBar(@dnd-kit) + 侧边栏项目树最小版 + 右键启动。
