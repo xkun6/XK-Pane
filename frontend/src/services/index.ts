@@ -25,3 +25,12 @@ export {
   type SubprocessItem,
   type ExitInfo,
 } from './subprocess/SubprocessService';
+export {
+  TerminalService,
+  type CreateSpec,
+  type SessionInfo,
+  type TerminalOutput,
+  type TerminalStatus,
+  type TerminalStatusKind,
+  type TerminalExit,
+} from './terminal/TerminalService';

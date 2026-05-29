@@ -57,7 +57,7 @@
 **目标**：能在某项目目录下用内置终端跑起一个 CLI 并交互——MVP runnable。
 - [x] 后端 `terminal_service`：PTY 会话注册表 + I/O 隧道（batch Emit `terminal:output`/`:status`/`:exit`）+ resize/kill + drain 宽限关闭 + UTF-8 跨 read 安全处理；裸 shell / cliadapters 启动；路径铁律 D7（cwd≡ProjectPath）。已注册进 app.go + AttachApp + bindings 重生成（6 Services/28 Methods）。**12 单测全绿**（含真 ConPTY 闭环 round-trip ×5 稳定，dev+prod）。launch_cwd 上报接收端属 Phase 5（已注入 CC_PANES_PTY_SESSION_ID 备用）。
 - [ ] 前端保留组件：`TerminalView`(xterm.js)、自实现 `SplitView` 分屏、`TabBar`(@dnd-kit)
-- [ ] 前端 MVVM：终端面板 View/VM/Style；`TerminalContext`（面板树/活动会话，替代 usePanesStore）
+- [~] 前端 MVVM：**服务层 `services/terminal/TerminalService.ts` ✅**（包 bindings 5 方法 create/write/resize/kill/list + 按 sessionId 过滤的 onOutput/onStatus/onExit 事件订阅；typecheck 绿）。待做：`TerminalContext`（面板树/活动会话，替代 usePanesStore——需对照 cc-pane usePanesStore 忠实移植）+ 终端面板 View/VM/Style
 - [ ] 侧边栏工作区/项目树（最小版）+ 右键启动
 - **verify**：打开项目→新建终端标签→看到 shell/CLI 输出→输入回显；分屏可拖拽；关闭标签干净回收 PTY
 
@@ -106,7 +106,7 @@
 |------|------|------|
 | Phase 0 | ✅ complete | 改名 + Dev/Release 隔离，全验证通过 |
 | Phase 1 | ✅ complete | ptyx ✅ / events ✅ / models ✅ / cliadapters ✅（18 守门 ok，MCP/hooks 延后 Phase 5）；subprocess git 白名单改判延后 Phase 4（层次修正） |
-| Phase 2 | 🔵 in_progress | 后端 terminal_service ✅（注册表+I/O隧道+drain关闭+12单测，已接 app.go+bindings）；前端 TerminalView/SplitView/TabBar/Context + 侧边栏树 待做 |
+| Phase 2 | 🔵 in_progress | 后端 terminal_service ✅；前端服务层 TerminalService.ts ✅（bindings 包装+事件订阅，typecheck 绿）；待做 TerminalContext（移植 usePanesStore）→ TerminalView/SplitView/TabBar → 侧边栏树+右键启动 |
 | Phase 3 | ⬜ pending | 管理面 + 设置 |
 | Phase 4 | ⬜ pending | 常用增强 |
 | Phase 5 | ⬜ pending | Bedrock/MCPE/notify/memory |

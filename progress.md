@@ -142,3 +142,24 @@
 ### 遇到的坑
 - `go mod tidy` 因 goproxy.cn 对 go-pty 深层 test 依赖（u-root/gobusybox）返回 504 网络超时而中断——**与本改动无关**，go.mod/go.sum 未被改动（无 diff），uuid 解析正常、build/test 全过。后果：uuid 仍带 `// indirect` 标记（陈旧但无害，下次联网 tidy 自动消除）。记 findings J6。
 - `AttachApp` 漏进前端 bindings（+1 方法）——**既有 subprocess 服务同样如此**（连 EventNamePrefix 也漏），属 foundation 脚手架既定约定；无害（前端无法构造 `*application.App` 调它）。按外科手术原则匹配既有约定不单独改，记 findings J6 为 Phase 6 统一清理候选。
+
+## 会话 3 — Phase 2 前端 TerminalService.ts（2026-05-29，autonomous /loop）
+
+### 选取单元（§2 一轮一个）
+- 上轮收口了后端 terminal_service。本轮取 Phase 2「前端 MVVM」的**最小首增量＝服务层 `TerminalService.ts`**（推进顺序：后端→bindings→**前端 services/<Domain>Service**→Context→View）。`TerminalContext`（含 usePanesStore 面板树移植 + 保真度审查）刻意留到下轮单做，避免一轮贪多带病推进。
+
+### 做了什么
+- 探索前端约定：以 `services/subprocess/SubprocessService.ts` 为模板（最相似——同为事件驱动的进程控制服务）。读 `shared/events.ts`/`useTimeEvent.ts`/`services/index.ts`/`frontend/CLAUDE.md`（MVVM 铁律）。
+- 核对生成的 bindings：`terminal/service.js`（CreateSession/WriteInput/Resize/Kill/List + 漏出的 AttachApp）+ `models.js`（CreateSpec{projectPath,workspacePath,cliTool,cols,rows,initialPrompt} / SessionInfo{id,pid,cwd,cliTool}）。
+- 新建 `frontend/src/services/terminal/TerminalService.ts`：
+  - 5 个方法 `create/write/resize/kill/list`（包 Binding，list 做 number 兜底 map）。
+  - 3 个事件订阅 `onOutput/onStatus/onExit`，返回取消函数。**关键差异**：terminal 事件名是固定单名（terminal:output/:status/:exit），sessionId 在 payload 里（vs subprocess 把 id 拼进事件名后缀）→ 抽 `onSession<T>` helper 订阅固定名 + 按 `payload.sessionId` 过滤。
+  - 导出强类型 `CreateSpec/SessionInfo/TerminalOutput/TerminalStatus/TerminalStatusKind/TerminalExit`。
+- `services/index.ts` barrel 追加 TerminalService + 6 个类型导出（镜像 subprocess 块）。
+
+### 验证
+- `cd frontend; pnpm typecheck` exit=0（纯前端单元，无 Go 改动，§4 后端门不适用）。
+
+### commit / 下一步
+- commit：见下方 hash（`Phase 2: 前端 TerminalService.ts`）。
+- **下一单元**：`TerminalContext`——对照 `cc-pane` 前端 `usePanesStore`（面板树/分屏嵌套/活动会话）忠实移植成 React Context（D2 弃 Zustand），含保真度审查。之后才是 `TerminalView`(xterm.js，需先 `pnpm add` xterm 系依赖) + 自实现 SplitView + TabBar(@dnd-kit)。
