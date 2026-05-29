@@ -169,3 +169,11 @@ React 19.2 / @mui/material 9 / @mui/icons-material 9 / @mui/x-charts 9 / emotion
 - **微差异（良性，有意保留）**：cc-pane 对裸 shell 也注入 `CC_PANES_CLI_TOOL=none`（`cli_tool.as_id()`），本实现对 "none"/"" 跳过。无害——该 env 仅供 cli-hook 上报 launch_cwd（Phase 5），裸 shell 无 hook 消费方。
 - **⚠️ 待 Phase 6 统一清理**：`AttachApp(app *application.App)` 会被 `wails3 generate bindings` 暴露给前端（terminal 与 **既有 subprocess 服务**皆如此，subprocess 连 `EventNamePrefix` 也漏）。属 foundation 脚手架既定模式，无害（前端无法构造 `*application.App`）。Phase 6 可调研 Wails v3「Internal/隐藏方法」机制对两个服务一并隐藏 app-wiring 方法。
 - **环境坑**：`go mod tidy` 经 goproxy.cn 拉取 go-pty 的深层 test 依赖（u-root/gobusybox）偶发 504；**与改动无关**，build/test 不受影响。后果仅 uuid 在 go.mod 仍标 `// indirect`（陈旧无害，下次联网 tidy 自动转直接依赖）。
+
+### J7. 前端面板树模型（两级嵌套分屏，移植自 cc-pane `web/types/{pane,terminal}.ts` + `paneTreeHelpers.ts`）
+- **关键结构**：cc-pane 终端布局是**两层独立的分屏树**，移植时务必都建模：
+  - **外层 `PaneNode`（窗口布局）** = `Panel`（`type:"panel"`，含 `tabs: Tab[]` + `activeTabId`）| `SplitPane`（`type:"split"`，`direction:"horizontal"|"vertical"` + `children:PaneNode[]` + `sizes:number[]`）。`SplitDirection="right"|"down"` 是**操作**语义（向右/向下拆）。
+  - **内层 `TerminalPaneNode`（单个 Tab 内）** = `TerminalPaneLeaf`（`type:"leaf"`，持 `sessionId:string|null`）| `TerminalPaneSplit`（同 split 结构）。即**每个 Tab 自身又是一棵终端分屏树**：`Tab.terminalRootPane` + `Tab.activeTerminalPaneId`。
+  - 含义：用户既能把窗口拆成多个 Panel（每个 Panel 一排 tab），又能在**单个 Tab 内**把终端再拆分。两个 SplitView 渲染层（外层渲染 PaneNode，TabContent 内渲染 terminalRootPane）。
+- **MVP 落点（会话 4，commit 见 progress）**：`frontend/src/terminal/{types.ts,paneTree.ts}` 移植两级类型 + 外层纯 helpers（findPane/findParent/collectPanels/createPanel/createTab/generateId）。**裁剪** provider/resume/ssh/wsl/snapshot/launch-profile/非 terminal contentType/pinned 等 Phase 3/4/5 字段（types.ts 文件头列明）。`createTab` 可选参换成 MVP 的 `{cliTool,workspacePath,title}`。
+- **下一步（TerminalContext）需补的 usePanesStore 关键逻辑**（1743 行里挑 MVP 子集）：split（在目标 Panel 外包一层 SplitPane）、close（移除节点后**折叠只剩单子的 split**——回退成单 Panel/单 leaf，避免空壳 split 堆积）、activate（setActivePanel/setActiveTab）、内层 terminalRootPane 的对应操作。这些是树操作的 bug 高发区，建议 Workflow 多视角对抗验证 + 考虑引入 Vitest 单测纯树函数。

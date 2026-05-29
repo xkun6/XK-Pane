@@ -163,3 +163,26 @@
 ### commit / 下一步
 - commit：见下方 hash（`Phase 2: 前端 TerminalService.ts`）。
 - **下一单元**：`TerminalContext`——对照 `cc-pane` 前端 `usePanesStore`（面板树/分屏嵌套/活动会话）忠实移植成 React Context（D2 弃 Zustand），含保真度审查。之后才是 `TerminalView`(xterm.js，需先 `pnpm add` xterm 系依赖) + 自实现 SplitView + TabBar(@dnd-kit)。
+
+## 会话 4 — Phase 2 面板树类型 + 纯 helpers（2026-05-29，autonomous /loop）
+
+### 选取单元（§2 拆分过大项）
+- 原定下一单元 `TerminalContext` 的源 `usePanesStore.ts` **达 1743 行**，且大半是 Phase 3/4/5 范围（SSH/WSL、provider 选择、会话恢复、拖拽重排）——单轮做不完且会硬塞未落地功能。按 §2「过大→拆最小可独立验证增量」，本轮只做**面板树类型 + 纯 helpers**（Context 状态化部分留下轮）。
+
+### 关键发现：两级嵌套分屏模型（记 findings J7）
+- 读 cc-pane `web/types/{pane,terminal}.ts` + `web/stores/paneTreeHelpers.ts` 后确认是**两层**分屏树：
+  - **外层 `PaneNode`**（窗口布局）：`Panel`（type:"panel"，含 tabs[] + activeTabId）| `SplitPane`（type:"split"，direction + children + sizes）。
+  - **内层 `TerminalPaneNode`**（单个 Tab 内）：`TerminalPaneLeaf`（type:"leaf"，持 sessionId）| `TerminalPaneSplit`。即每个 Tab 自身又是一棵终端分屏树（`Tab.terminalRootPane` + `activeTerminalPaneId`）。
+- paneTreeHelpers 操作的是**外层**树（findPane/findParent/collectPanels/createPanel/createTab）。
+
+### 做了什么
+- 新建 `frontend/src/terminal/types.ts`：移植两级树全部类型 + `CliTool/KnownCliTool`（对齐后端 8 适配器）。**MVP 裁剪**（文件头列明 TODO）：provider/launch-profile（Phase 3）、ssh/wsl/machineName/disconnected/restoring/savedSessionId（Phase 4）、resumeId（Phase 3）、contentType 非 terminal 变体（Phase 4/5）、pinned/minimized/dirty 等 UI 细节。
+- 新建 `frontend/src/terminal/paneTree.ts`：6 个纯函数 `generateId/createPanel/createTab/findPane/findParent/collectPanels`，**near-1:1 移植** paneTreeHelpers.ts。**有意调整**（非 drift）：`createTab` 可选参从 cc-pane 的 resumeId/workspaceName/providerId（Phase 3）换成 MVP 相关的 `{cliTool, workspacePath, title}`；findParent 加 `noUncheckedIndexedAccess` 守门（`if(!child)continue`）。
+- 放在 `frontend/src/terminal/`（终端域 Context 的家，与 foundation 的 `preferences/`/`i18n/` 顶层域目录一致）。
+
+### 验证
+- `cd frontend; pnpm typecheck` exit=0（纯前端，无 Go 改动）。纯函数无 Vitest（前端测试框架未配；§4 前端门=typecheck，未强制单测）——pane-tree 状态化 reducer 落地时再评估是否引入 Vitest。
+
+### commit / 下一步
+- commit：见下方 hash（`Phase 2: 面板树类型 + 纯 helpers`）。
+- **下一单元**：`TerminalContext`（Provider + reducer）——状态化树操作（newTab/closeTab/setActiveTab/setActivePanel/splitPanel/closePanel，需移植 usePanesStore 对应 reducer 逻辑 + 折叠单子 split 等关键逻辑，建议 Workflow 保真度审查 + 考虑引入 Vitest 测树操作）+ wire TerminalService 生命周期（create→sessionId 回填 leaf、exit→清理）。
