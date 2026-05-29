@@ -5,6 +5,11 @@ export {
   type LaunchRecord,
 } from './launchhistory/LaunchHistoryService';
 export { ProjectService, type Project } from './project/ProjectService';
+export {
+  ProviderService,
+  type Provider,
+  type ProviderInput,
+} from './provider/ProviderService';
 export { PreferencesService } from './preferences/PreferencesService';
 export {
   AppSettingsService,
