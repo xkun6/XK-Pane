@@ -5,6 +5,7 @@ import { registerSettingsPageLocales } from '@/pages/SettingsPage/lang';
 import { registerProjectPanelLocales } from '@/components/ProjectPanel';
 import { PreferencesProvider } from '@/preferences';
 import { ProjectProvider } from '@/project';
+import { ProviderProvider } from '@/provider';
 import { RouterProvider } from '@/router';
 import { routes } from '@/routes';
 import { FoundationThemeProvider, registerFoundationThemes } from '@/styles/themes';
@@ -29,7 +30,8 @@ registerProjectPanelLocales();
 //  ③ PreferencesProvider —— 行为偏好
 //  ④ TerminalProvider —— 终端面板树 / 会话生命周期（全局，跨路由保活；reconcile effect 在此）
 //  ⑤ ProjectProvider —— 项目登记表（全局，侧边栏项目树消费；mount 异步拉取）
-//  ⑥ RouterProvider —— 路由切换时上面都已就绪
+//  ⑥ ProviderProvider —— 接入 Provider 登记表（全局，设置子页 + 启动选 Provider 消费）
+//  ⑦ RouterProvider —— 路由切换时上面都已就绪
 export const App = () => {
   return (
     <I18nProvider>
@@ -37,9 +39,11 @@ export const App = () => {
         <PreferencesProvider>
           <TerminalProvider>
             <ProjectProvider>
-              <RouterProvider routes={routes}>
-                <AppLayout />
-              </RouterProvider>
+              <ProviderProvider>
+                <RouterProvider routes={routes}>
+                  <AppLayout />
+                </RouterProvider>
+              </ProviderProvider>
             </ProjectProvider>
           </TerminalProvider>
         </PreferencesProvider>
