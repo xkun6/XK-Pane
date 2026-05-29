@@ -293,3 +293,20 @@
 ### commit / 下一步
 - commit `fa312f0`（TabBar + locale）。
 - **下一单元**：递归 `PaneTree` 渲染器 + 生命周期整合——消费 `TerminalContext.rootPane` 递归渲染（split→`SplitView` 包 PaneTree 子节点 + `resizePanels`+`normalizeSizesToHundred`；panel→`TabBar` + 活动 Tab 的 `TerminalView`）+ 把生命周期 effect（newTab→`TerminalService.create`→`setTabSession` 回填；onExit→清理）接进 `TerminalProvider`。随后 接进 App（终端页/路由）+ 侧边栏项目树最小版 + 右键启动 → **Phase 2 闭环可演示**。届时 dev 跑通后可请用户做首个视觉 checkpoint。
+
+## 会话 10 — Phase 2 递归 PaneTree 渲染器（2026-05-30，autonomous /loop）
+
+### 选取单元（§2）
+- 本轮只做**纯组合渲染层 `PaneTree`**（机械、可 typecheck/build 验证）。把异步**生命周期 reconcile effect**（创建/清理 session）+ **App 接线/启动入口**留下一单元（那里一并解决「projectPath 从哪来」——后端 `resolveLaunch` 对空 projectPath 报错，故需项目树/启动提供真实 cwd）。
+
+### 做了什么（`frontend/src/components/PaneTree/`）
+- `PaneTree.tsx`：递归——`split`→`<SplitView>` 包裹各子 `<PaneTree>`，`onDragEnd`→`normalizeSizesToHundred`→`resizePanels(node.id, …)`；`panel`→`<PanelView>`。等价 cc-pane PaneContainer+SplitContainer（D2 消费 Context 非 store）。
+- `PanelView.tsx`：`<TabBar>`（活动 Tab，onSelect/onClose/onAdd→useTerminal 回调）+ 内容区（**每 Tab 一个 `<TerminalView sessionId active=visible>`，活动 display:block 其余 none，保持挂载以保留终端状态**；隐藏时 host 0 尺寸→layoutScheduler 自动延后 fit，切回 active-effect flush）。`onAdd` 以活动 Tab 的 project 派生新 Tab（MVP，待启动单元给真实 projectPath）。
+- `PaneTree.styles.ts`：SystemStyleObject 接口（同 TabBar 规避 sx 数组坑）；panel 列布局 + content relative + tabPane absolute inset:0。
+
+### 验证（§4 前端门）
+- `pnpm typecheck` exit=0；`pnpm build` exit=0；`pnpm test` 32/32 无回归。纯组合，无 workflow（机械）。运行时尚未接 Provider（与其他 widget 同，待 App 接线），编译验证即足。
+
+### commit / 下一步
+- commit `daf413f`（PaneTree）。
+- **下一单元（接近 Phase 2 闭环）**：① `TerminalProvider` 生命周期 **reconcile effect**——扫 rootPane：对 `projectPath!=='' && sessionId===null` 且未在创建中的 Tab 调 `TerminalService.create`→`setTabSession` 回填（creatingRef 防重复）；对树中已消失的 live session `kill`（knownSessions diff）。空 projectPath 跳过（初始空 Tab 不误启）。② 接进 App：终端页 + 路由（routes.tsx）+ `<TerminalProvider>` 进 Provider 链。③ 启动入口（侧边栏项目树最小版 + 右键启动 / 或临时 toolbar 用后端默认 cwd）。完成后 **dev 跑通 → 请用户做首个视觉 checkpoint**（loop 无法自验视觉）。

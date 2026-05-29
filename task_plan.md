@@ -106,7 +106,7 @@
 |------|------|------|
 | Phase 0 | ✅ complete | 改名 + Dev/Release 隔离，全验证通过 |
 | Phase 1 | ✅ complete | ptyx ✅ / events ✅ / models ✅ / cliadapters ✅（18 守门 ok，MCP/hooks 延后 Phase 5）；subprocess git 白名单改判延后 Phase 4（层次修正） |
-| Phase 2 | 🔵 in_progress | 后端 terminal_service ✅；前端：TerminalService.ts ✅ + types/paneTree ✅ + TerminalContext(reducer+Provider) ✅ + layoutScheduler ✅ + TerminalView(xterm.js) ✅ + SplitView ✅ + **MVP TabBar ✅**（会话9）；待做 → 递归 PaneTree 渲染器 + 把生命周期 effect 接进 Provider → 接进 App + 侧边栏树+右键启动 → Phase 2 闭环可演示（TabBar 拖拽重排另列单元，延后）|
+| Phase 2 | 🔵 in_progress | 后端 terminal_service ✅；前端：TerminalService.ts ✅ + types/paneTree ✅ + TerminalContext(reducer+Provider) ✅ + layoutScheduler ✅ + TerminalView(xterm.js) ✅ + SplitView ✅ + MVP TabBar ✅ + **递归 PaneTree 渲染器 ✅**（会话10）；待做 → 生命周期 reconcile effect 接进 Provider + 接进 App（终端页/路由）+ 侧边栏树+右键启动 → Phase 2 闭环可演示（→首个视觉 checkpoint；TabBar 拖拽重排另列单元，延后）|
 | Phase 3 | ⬜ pending | 管理面 + 设置 |
 | Phase 4 | ⬜ pending | 常用增强 |
 | Phase 5 | ⬜ pending | Bedrock/MCPE/notify/memory |
