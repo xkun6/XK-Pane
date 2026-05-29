@@ -388,3 +388,14 @@
 ### 验证 / commit / 下一步
 - `go build`/`go vet`/`go test`（dev+prod）+ 全量 + project 测全绿；storage 内部改动不触 binding 面，无需 regen/typecheck。commit `b7ac0e2`。
 - **project 后端单元彻底收口**（实现 + 19 测 + 对抗审查 + 修 1 bug）。**下一单元** = 前端 `ProjectService.ts`（包 7 Services/34 Methods 里的 project：List/Add/Get/Remove/UpdateName/UpdateAlias）——作为前端 project 三段（Service→Context→侧边栏树）的第一段。
+
+## 会话 15 — Phase 3 前端 ProjectService.ts（2026-05-30，autonomous /loop）
+
+### 做了什么（前端 project 三段之第一段：Service）
+- `frontend/src/services/project/ProjectService.ts`：包 project bindings 6 方法（list/add/get/remove/updateName/updateAlias）。定义对外纯接口 `Project{id,name,path,alias:string|null,createdAt,updatedAt}`（与生成类解耦，供 ViewModel 消费）+ `toProject` 规整（生成模型 `time.Time`→`any`→string；`alias` string|null|undefined→null 兜底）。
+- 范式对齐既有 TerminalService/PreferencesService：`import { Service as Binding }` + 纯对象 + async 透传。`init_project_history`（cc-pane add 后的 Local History 文件监视 best-effort 副作用）**不接**——独立子系统留 Phase 4/5（service 头注明）。
+- `services/index.ts` barrel 追加 `ProjectService` + `type Project`。
+
+### 验证 / commit / 下一步
+- `pnpm typecheck` exit=0；`pnpm test` 37/37 无回归。纯薄包装透传层（同 TerminalService），typecheck+test 即足，无 workflow。commit `2571ee0`。
+- **下一单元** = `ProjectContext`（Provider+state，弃 Zustand；list/add/remove/rename/alias 动作 + 启动时拉取 + 乐观更新或拉取刷新），第二段。之后第三段 = 侧边栏扁平项目树（替换 TerminalPage 临时「打开文件夹」工具条）+ 选 CLI 启动。
