@@ -374,3 +374,17 @@
 - commit `8ffa23d`（chore tidy）+ `c8df705`（project service）。
 - 对抗保真审查 workflow **`wf_7bc251b0-c1f`** 后台跑（2 lens：cc-pane 保真 + GORM/SQLite 对抗——重点 UpdateAlias nil→NULL 绑定 / no-op update RowsAffected / UNIQUE 串匹配 / DESC 排序），refute-by-default 校验。**下一轮**：读审查结论，有真 bug 先修；否则下一单元 = **前端 `ProjectService.ts` + `ProjectContext`（弃 Zustand）+ 侧边栏扁平项目树**（替换 TerminalPage 临时「打开文件夹」工具条）+ CLI 工具选择启动。
 - ⚠️ 仍欠用户的 **Phase 2 视觉 checkpoint**：后端推进不依赖它，但前端 project 单元接侧边栏时会与终端链路交汇——届时视觉验证价值更高，可一并请用户验。
+
+## 会话 14 — project service 对抗审查收口（UTC 时间戳修复）（2026-05-30，autonomous /loop）
+
+### 审查结论（workflow `wf_7bc251b0-c1f`，2 lens + refute-by-default 校验）
+- **1 真实 bug（low，已修）**：`created_at` 排序可跨时区倒挂。GORM 默认 NowFunc 返回本地时区，glebarez 把 time.Time 按其自身偏移序列化成 RFC3339 TEXT；SQLite 对 created_at 字典序排序 → 跨 DST/换时区两行偏移不同时，绝对更新的行可能排到更旧行之后（破坏 List「最新在前」），且偏离 cc-pane（`chrono::Utc::now`）。校验 agent 用真 SQLite 两路复现确认。
+- **1 驳回（isReal=false）**：「同 tick 快速 Add 无 tie-break」——校验确认是**忠实移植**（cc-pane 同样 `ORDER BY created_at DESC` 无次级键；加 `id DESC` 反而是 drift）。与我 spec 的风险注解一致，不改。
+
+### 修复（`internal/storage/db.go`，一行 + 回归测试）
+- gorm.Config 加 `NowFunc: func() time.Time { return time.Now().UTC() }`——全模型 CreatedAt/UpdatedAt 统一 UTC，字典序==绝对时序，且与 cc-pane 一致。读路径仍能解析旧的带偏移文本（time.ParseInLocation）。
+- `internal/storage/timestamp_test.go`：建一行（自动填 CreatedAt）→ 读原始 created_at TEXT，断言带 UTC 标记（"Z"/"+00:00"）。**修复前后实证**：存储文本从本地偏移翻成 `...Z`（测试断言里我先按审查给的 "+00:00" 格式写错，实测此 glebarez 版本用 RFC3339 'T'…'Z'，改断言接受两者）。
+
+### 验证 / commit / 下一步
+- `go build`/`go vet`/`go test`（dev+prod）+ 全量 + project 测全绿；storage 内部改动不触 binding 面，无需 regen/typecheck。commit `b7ac0e2`。
+- **project 后端单元彻底收口**（实现 + 19 测 + 对抗审查 + 修 1 bug）。**下一单元** = 前端 `ProjectService.ts`（包 7 Services/34 Methods 里的 project：List/Add/Get/Remove/UpdateName/UpdateAlias）——作为前端 project 三段（Service→Context→侧边栏树）的第一段。
