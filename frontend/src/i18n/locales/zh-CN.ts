@@ -32,6 +32,12 @@ export const zhCN: Locale = {
       home: '首页',
       settings: '设置',
     },
+    terminal: {
+      tab: {
+        new: '新建终端',
+        close: '关闭标签',
+      },
+    },
     common: {
       save: '保存',
       cancel: '取消',

@@ -25,6 +25,12 @@ export const enUS: Locale = {
       home: 'Home',
       settings: 'Settings',
     },
+    terminal: {
+      tab: {
+        new: 'New terminal',
+        close: 'Close tab',
+      },
+    },
     common: {
       save: 'Save',
       cancel: 'Cancel',
