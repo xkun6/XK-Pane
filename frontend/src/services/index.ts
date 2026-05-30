@@ -16,6 +16,12 @@ export {
   LocalHistoryService,
   type RecentChange,
   type FileVersion,
+  type DiffResult,
+  type DiffHunk,
+  type DiffLine,
+  type DiffStats,
+  type InlineChange,
+  type DiffChangeType,
 } from './localhistory/LocalHistoryService';
 export {
   TodoService,

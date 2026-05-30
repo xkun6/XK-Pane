@@ -15,6 +15,7 @@ import RestoreRoundedIcon from '@mui/icons-material/RestoreRounded';
 import LabelRoundedIcon from '@mui/icons-material/LabelRounded';
 import { useT } from '@/i18n';
 import type { RecentChange } from '@/services';
+import { DiffView } from '@/components/DiffView';
 import { historyPageStyles } from './HistoryPage.styles';
 import { useHistoryPage } from './useHistoryPage';
 
@@ -56,6 +57,15 @@ export const HistoryPage = () => {
       successMessage: t('history.restored.message'),
       errorTitle,
     });
+
+  const diffLabels = {
+    binary: t('history.diff.binary'),
+    truncated: t('history.diff.truncated'),
+    identical: t('history.diff.identical'),
+    added: t('history.diff.added'),
+    removed: t('history.diff.removed'),
+  };
+  const selectedChange = vm.changes.find((c) => c.versionId === vm.selectedVersionId) ?? null;
 
   return (
     <Box sx={styles.root}>
@@ -130,8 +140,19 @@ export const HistoryPage = () => {
               ) : (
                 <Box sx={styles.list}>
                   {vm.changes.map((c) => (
-                    <Box key={`${c.filePath}:${c.versionId}`} sx={styles.row}>
-                      <Box sx={styles.rowMain}>
+                    <Box
+                      key={`${c.filePath}:${c.versionId}`}
+                      sx={c.versionId === vm.selectedVersionId ? { ...styles.row, ...styles.rowSelected } : styles.row}
+                    >
+                      <Box
+                        sx={styles.rowMain}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => void vm.viewDiff(c, errorTitle)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') void vm.viewDiff(c, errorTitle);
+                        }}
+                      >
                         <Typography sx={styles.filePath} title={c.filePath}>
                           {c.filePath}
                         </Typography>
@@ -168,6 +189,19 @@ export const HistoryPage = () => {
                       </Tooltip>
                     </Box>
                   ))}
+                </Box>
+              )}
+
+              {vm.selectedVersionId && (
+                <Box sx={styles.diffSection}>
+                  <Typography sx={styles.diffTitle}>
+                    {t('history.diff.title', { path: selectedChange?.filePath ?? '' })}
+                  </Typography>
+                  {vm.diffLoading ? (
+                    <Box sx={styles.empty}>{t('history.diff.loading')}</Box>
+                  ) : (
+                    vm.diff && <DiffView diff={vm.diff} labels={diffLabels} />
+                  )}
                 </Box>
               )}
             </>

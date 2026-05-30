@@ -65,12 +65,26 @@ export const historyPageStyles = (theme: Theme): Styles => ({
     border: `1px solid ${theme.palette.foundation.divider}`,
     backgroundColor: theme.palette.foundation.bg.elevated,
   },
+  rowSelected: {
+    borderColor: theme.palette.foundation.accent,
+  },
   rowMain: {
     flex: 1,
     minWidth: 0,
     display: 'flex',
     flexDirection: 'column',
     gap: 0.25,
+    cursor: 'pointer',
+  },
+  diffSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 0.75,
+  },
+  diffTitle: {
+    fontSize: 13,
+    fontFamily: 'monospace',
+    color: theme.palette.foundation.text.primary,
   },
   filePath: {
     fontSize: 13,

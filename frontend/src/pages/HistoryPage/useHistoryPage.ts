@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { LocalHistoryService, NativeDialogs, type Project, type RecentChange } from '@/services';
+import { LocalHistoryService, NativeDialogs, type DiffResult, type Project, type RecentChange } from '@/services';
 import { useProjects } from '@/project';
 
 // HistoryPage ViewModel：消费全局 ProjectProvider 选项目 + 按 path 查 Local History 最近变更，
@@ -36,10 +36,14 @@ export interface UseHistoryPageResult {
   changes: RecentChange[];
   newFilePath: string;
   setNewFilePath: (v: string) => void;
+  selectedVersionId: string;
+  diff: DiffResult | null;
+  diffLoading: boolean;
   select: (path: string, errorTitle: string) => Promise<void>;
   refresh: (errorTitle: string) => Promise<void>;
   snapshot: (s: SnapshotStrings) => Promise<void>;
   restore: (c: RecentChange, s: RestoreStrings) => Promise<void>;
+  viewDiff: (c: RecentChange, errorTitle: string) => Promise<void>;
 }
 
 function messageOf(e: unknown): string {
@@ -54,8 +58,19 @@ export const useHistoryPage = (): UseHistoryPageResult => {
   const [busy, setBusy] = useState(false);
   const [changes, setChanges] = useState<RecentChange[]>([]);
   const [newFilePath, setNewFilePath] = useState('');
+  const [selectedVersionId, setSelectedVersionId] = useState('');
+  const [diff, setDiff] = useState<DiffResult | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
 
   const reqIdRef = useRef(0);
+  const diffReqRef = useRef(0);
+
+  const clearDiff = useCallback((): void => {
+    diffReqRef.current++;
+    setSelectedVersionId('');
+    setDiff(null);
+    setDiffLoading(false);
+  }, []);
 
   const load = useCallback(async (path: string, errorTitle: string): Promise<void> => {
     const myReq = ++reqIdRef.current;
@@ -75,6 +90,7 @@ export const useHistoryPage = (): UseHistoryPageResult => {
   const select = useCallback(
     async (path: string, errorTitle: string): Promise<void> => {
       setSelectedPath(path);
+      clearDiff(); // 切项目清空当前 diff
       if (!path) {
         reqIdRef.current++;
         setChanges([]);
@@ -82,7 +98,28 @@ export const useHistoryPage = (): UseHistoryPageResult => {
       }
       await load(path, errorTitle);
     },
-    [load],
+    [load, clearDiff],
+  );
+
+  // 查看某变更对应版本与当前工作树的 diff。请求令牌丢弃过期响应。
+  const viewDiff = useCallback(
+    async (c: RecentChange, errorTitle: string): Promise<void> => {
+      const myReq = ++diffReqRef.current;
+      setSelectedVersionId(c.versionId);
+      setDiff(null);
+      setDiffLoading(true);
+      try {
+        const d = await LocalHistoryService.versionDiff(selectedPath, c.filePath, c.versionId);
+        if (myReq !== diffReqRef.current) return;
+        setDiff(d);
+      } catch (e) {
+        if (myReq === diffReqRef.current) setDiff(null);
+        await NativeDialogs.error(errorTitle, messageOf(e));
+      } finally {
+        if (myReq === diffReqRef.current) setDiffLoading(false);
+      }
+    },
+    [selectedPath],
   );
 
   const refresh = useCallback(
@@ -133,6 +170,7 @@ export const useHistoryPage = (): UseHistoryPageResult => {
       try {
         await LocalHistoryService.restoreVersion(selectedPath, c.filePath, c.versionId, '');
         await NativeDialogs.info(s.successTitle, s.successMessage);
+        clearDiff(); // 工作树已变，旧 diff 失效
         await load(selectedPath, s.errorTitle);
       } catch (e) {
         await NativeDialogs.error(s.errorTitle, messageOf(e));
@@ -140,7 +178,7 @@ export const useHistoryPage = (): UseHistoryPageResult => {
         setBusy(false);
       }
     },
-    [selectedPath, busy, load],
+    [selectedPath, busy, load, clearDiff],
   );
 
   return {
@@ -151,9 +189,13 @@ export const useHistoryPage = (): UseHistoryPageResult => {
     changes,
     newFilePath,
     setNewFilePath,
+    selectedVersionId,
+    diff,
+    diffLoading,
     select,
     refresh,
     snapshot,
     restore,
+    viewDiff,
   };
 };

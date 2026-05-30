@@ -28,6 +28,15 @@ export const historyPageZhCN: Messages = {
       title: '回滚完成',
       message: '文件已恢复到所选版本。',
     },
+    diff: {
+      title: '差异：{{path}}（该版本 ↔ 当前工作树）',
+      loading: '正在计算差异…',
+      binary: '二进制文件，无法显示差异。',
+      truncated: '文件过大，差异已截断。',
+      identical: '与当前工作树文件无差异。',
+      added: '新增',
+      removed: '删除',
+    },
     error: {
       title: '本地历史操作失败',
     },

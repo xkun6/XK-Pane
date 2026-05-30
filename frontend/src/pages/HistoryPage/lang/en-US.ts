@@ -29,6 +29,15 @@ export const historyPageEnUS: Messages = {
       title: 'Restore complete',
       message: 'The file has been restored to the selected version.',
     },
+    diff: {
+      title: 'Diff: {{path}} (this version ↔ working tree)',
+      loading: 'Computing diff…',
+      binary: 'Binary file — diff not shown.',
+      truncated: 'File too large — diff truncated.',
+      identical: 'No differences from the current working-tree file.',
+      added: 'Added',
+      removed: 'Removed',
+    },
     error: {
       title: 'Local history operation failed',
     },
