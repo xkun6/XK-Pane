@@ -31,6 +31,7 @@ export const zhCN: Locale = {
     route: {
       home: '首页',
       terminal: '终端',
+      todo: '待办',
       settings: '设置',
     },
     terminal: {

@@ -6,6 +6,13 @@ export {
 } from './launchhistory/LaunchHistoryService';
 export { ProjectService, type Project } from './project/ProjectService';
 export {
+  TodoService,
+  type Todo,
+  type TodoSubtask,
+  type CreateTodoInput,
+  type UpdateTodoInput,
+} from './todo/TodoService';
+export {
   ProviderService,
   type Provider,
   type ProviderInput,

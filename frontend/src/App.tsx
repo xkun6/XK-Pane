@@ -2,10 +2,12 @@ import { AppLayout } from '@/components/AppLayout';
 import { I18nProvider, registerFoundationLocales } from '@/i18n';
 import { registerHomePageLocales } from '@/pages/HomePage/lang';
 import { registerSettingsPageLocales } from '@/pages/SettingsPage/lang';
+import { registerTodoPageLocales } from '@/pages/TodoPage';
 import { registerProjectPanelLocales } from '@/components/ProjectPanel';
 import { PreferencesProvider } from '@/preferences';
 import { ProjectProvider } from '@/project';
 import { ProviderProvider } from '@/provider';
+import { TodoProvider } from '@/todo';
 import { RouterProvider } from '@/router';
 import { routes } from '@/routes';
 import { FoundationThemeProvider, registerFoundationThemes } from '@/styles/themes';
@@ -22,6 +24,7 @@ registerFoundationThemes();
 registerFoundationLocales();
 registerHomePageLocales();
 registerSettingsPageLocales();
+registerTodoPageLocales();
 registerProjectPanelLocales();
 
 // Provider 嵌套顺序（自外向内）：
@@ -40,9 +43,11 @@ export const App = () => {
           <TerminalProvider>
             <ProjectProvider>
               <ProviderProvider>
-                <RouterProvider routes={routes}>
-                  <AppLayout />
-                </RouterProvider>
+                <TodoProvider>
+                  <RouterProvider routes={routes}>
+                    <AppLayout />
+                  </RouterProvider>
+                </TodoProvider>
               </ProviderProvider>
             </ProjectProvider>
           </TerminalProvider>

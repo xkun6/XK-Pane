@@ -20,6 +20,7 @@ import (
 	"xkpane/internal/services/storagesvc"
 	"xkpane/internal/services/subprocess"
 	"xkpane/internal/services/terminal"
+	"xkpane/internal/services/todo"
 	"xkpane/internal/storage"
 	"xkpane/internal/utils/httpx"
 	"xkpane/internal/utils/logx"
@@ -78,6 +79,7 @@ func Run(assets embed.FS) error {
 			application.NewService(project.New(holder)),
 			application.NewService(launchhistory.New(holder)),
 			application.NewService(provider.New(holder)),
+			application.NewService(todo.New(holder)),
 			application.NewService(subSvc),
 			application.NewService(termSvc),
 		},

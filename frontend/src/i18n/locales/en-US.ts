@@ -24,6 +24,7 @@ export const enUS: Locale = {
     route: {
       home: 'Home',
       terminal: 'Terminal',
+      todo: 'Todos',
       settings: 'Settings',
     },
     terminal: {

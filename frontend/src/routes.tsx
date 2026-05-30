@@ -1,8 +1,10 @@
 import HomeRoundedIcon from '@mui/icons-material/HomeRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
+import ChecklistRoundedIcon from '@mui/icons-material/ChecklistRounded';
 import { lazy } from 'react';
 import { HomePage } from '@/pages/HomePage/HomePage';
+import { TodoPage } from '@/pages/TodoPage';
 import { HomePageSkeleton } from '@/pages/HomePage/HomePage.skeleton';
 import { SettingsPageSkeleton } from '@/pages/SettingsPage/SettingsPage.skeleton';
 import { TerminalPageSkeleton } from '@/pages/TerminalPage/TerminalPage.skeleton';
@@ -53,6 +55,14 @@ export const routes: RouteDefinition[] = [
     fallback: <TerminalPageSkeleton />,
     slot: 'primary',
     keepAlive: true, // 保活：保留 xterm 实例与滚动回溯（终端页离开后再回不重建会话视图）
+  },
+  {
+    id: 'todo',
+    labelKey: 'route.todo',
+    label: 'Todos',
+    icon: ChecklistRoundedIcon,
+    element: <TodoPage />,
+    slot: 'primary',
   },
   {
     id: 'settings',
