@@ -14,8 +14,13 @@
 //     大仓性能热点 issue #181/#844）
 //   - Branches / Log：本地分支列表 / 最近提交（go-git 原生，常用增强）
 //
+// CLI-only 变更操作（go-git 弱项/无对应，对齐 cc-pane 100% CLI；见 gitx_worktree.go /
+// gitx_stash.go）：
+//   - Worktrees / WorktreeAdd / WorktreeRemove：worktree 增删查
+//   - Stash / StashPop：暂存 / 弹出
+//
 // 后续 unit：结构化 per-file status + stage/commit/diff（git 面板）、network（fetch/
-// push/pull/clone）、worktree（CLI-only）、stash（CLI-only，go-git 无 stash）。
+// push/pull/clone）。
 package gitx
 
 import (

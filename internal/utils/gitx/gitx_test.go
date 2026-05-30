@@ -183,3 +183,139 @@ func TestNotARepo(t *testing.T) {
 		t.Fatal("IsRepo(non-repo) = true, want false")
 	}
 }
+
+func TestParseWorktreeList(t *testing.T) {
+	// 合成 porcelain：主(branch) + linked(branch) + detached(无 branch) + 末块无结尾空行。
+	// 含 \r 以验 CRLF 容忍。
+	out := "worktree /repo/main\r\nHEAD aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r\nbranch refs/heads/master\r\n" +
+		"\r\n" +
+		"worktree /repo/wt-feat\nHEAD bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\nbranch refs/heads/feature/x\n" +
+		"\n" +
+		"worktree /repo/wt-detached\nHEAD cccccccccccccccccccccccccccccccccccccccc\ndetached\n"
+	got := parseWorktreeList(out)
+	if len(got) != 3 {
+		t.Fatalf("parsed %d worktrees, want 3", len(got))
+	}
+	if !got[0].IsMain || got[1].IsMain || got[2].IsMain {
+		t.Errorf("IsMain flags = [%v %v %v], want [true false false]", got[0].IsMain, got[1].IsMain, got[2].IsMain)
+	}
+	if got[0].Branch != "master" || got[1].Branch != "feature/x" {
+		t.Errorf("branches = %q,%q, want master,feature/x", got[0].Branch, got[1].Branch)
+	}
+	if got[2].Branch != "" {
+		t.Errorf("detached worktree branch = %q, want empty", got[2].Branch)
+	}
+	if got[0].Commit != "aaaaaaa" || len(got[2].Commit) != 7 {
+		t.Errorf("commit shorten wrong: %q / %q", got[0].Commit, got[2].Commit)
+	}
+	if got[2].Path != "/repo/wt-detached" {
+		t.Errorf("final block path = %q (末块无结尾空行应仍 flush)", got[2].Path)
+	}
+}
+
+func TestWorktrees(t *testing.T) {
+	requireGit(t)
+	ctx := context.Background()
+	dir := initRepo(t)
+	writeFile(t, dir, "a.txt", "a")
+	gitDo(t, dir, "add", ".")
+	gitDo(t, dir, "commit", "-m", "c1")
+
+	r, _ := Open(dir)
+
+	// 初始：仅主工作树。
+	wts, err := r.Worktrees(ctx)
+	if err != nil {
+		t.Fatalf("Worktrees: %v", err)
+	}
+	if len(wts) != 1 {
+		t.Fatalf("initial worktrees = %d, want 1", len(wts))
+	}
+	if !wts[0].IsMain {
+		t.Errorf("sole worktree IsMain=false, want true")
+	}
+	if wts[0].Branch == "" {
+		t.Errorf("main worktree branch empty, want default branch")
+	}
+	if len(wts[0].Commit) != 7 {
+		t.Errorf("commit %q not 7-char short hash", wts[0].Commit)
+	}
+
+	// 加一个带新分支的 worktree（路径在 repo 之外，git 自建该目录）。
+	wtPath := filepath.Join(t.TempDir(), "wt1")
+	if err := r.WorktreeAdd(ctx, wtPath, "feature-wt"); err != nil {
+		t.Fatalf("WorktreeAdd: %v", err)
+	}
+	wts, err = r.Worktrees(ctx)
+	if err != nil {
+		t.Fatalf("Worktrees after add: %v", err)
+	}
+	if len(wts) != 2 {
+		t.Fatalf("worktrees after add = %d, want 2", len(wts))
+	}
+	mainCount := 0
+	var added *WorktreeInfo
+	for i := range wts {
+		if wts[i].IsMain {
+			mainCount++
+		} else {
+			added = &wts[i]
+		}
+	}
+	if mainCount != 1 {
+		t.Errorf("IsMain count = %d, want 1", mainCount)
+	}
+	if added == nil || added.Branch != "feature-wt" {
+		t.Fatalf("added worktree branch = %v, want feature-wt", added)
+	}
+
+	// 移除（恒 --force）→ 回到仅主树。
+	if err := r.WorktreeRemove(ctx, wtPath); err != nil {
+		t.Fatalf("WorktreeRemove: %v", err)
+	}
+	wts, _ = r.Worktrees(ctx)
+	if len(wts) != 1 {
+		t.Fatalf("worktrees after remove = %d, want 1", len(wts))
+	}
+}
+
+func TestStash(t *testing.T) {
+	requireGit(t)
+	ctx := context.Background()
+	dir := initRepo(t)
+	writeFile(t, dir, "a.txt", "a")
+	gitDo(t, dir, "add", ".")
+	gitDo(t, dir, "commit", "-m", "c1")
+
+	r, _ := Open(dir)
+
+	// 改一个已跟踪文件 → dirty。
+	writeFile(t, dir, "a.txt", "changed")
+	if d, _ := r.IsDirty(ctx); !d {
+		t.Fatal("pre-stash IsDirty=false, want true")
+	}
+
+	// Stash → 工作树回到干净。
+	if _, err := r.Stash(ctx); err != nil {
+		t.Fatalf("Stash: %v", err)
+	}
+	if d, _ := r.IsDirty(ctx); d {
+		t.Fatal("post-stash IsDirty=true, want false")
+	}
+
+	// Pop → 改动恢复。
+	if _, err := r.StashPop(ctx); err != nil {
+		t.Fatalf("StashPop: %v", err)
+	}
+	if d, _ := r.IsDirty(ctx); !d {
+		t.Fatal("post-pop IsDirty=false, want true")
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "a.txt")); string(b) != "changed" {
+		t.Fatalf("post-pop a.txt = %q, want changed", b)
+	}
+
+	// 无 stash 再 pop → 报错。
+	if _, err := r.StashPop(ctx); err == nil {
+		t.Fatal("StashPop on empty stash returned nil err, want error")
+	}
+}
