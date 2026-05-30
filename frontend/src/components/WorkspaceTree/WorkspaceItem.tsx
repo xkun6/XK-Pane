@@ -3,7 +3,6 @@ import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import StarRoundedIcon from '@mui/icons-material/StarRounded';
 import StarBorderRoundedIcon from '@mui/icons-material/StarBorderRounded';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import type { Workspace, WorkspaceProject } from '@/services';
 import type { WorkspaceTreeSx } from './WorkspaceTree.styles';
 import type { MenuAnchor } from './WorkspaceContextMenu';
@@ -48,8 +47,9 @@ export const WorkspaceItem = ({
   const count = workspace.projects.length;
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
     useSortable({ id: workspace.id });
+  // 垂直列表：只取 Y 轴位移，锁定 X=0（否则指针水平移动会把节点推出，触发横向滚动条）。
   const style = {
-    transform: CSS.Transform.toString(transform),
+    transform: transform ? `translate3d(0px, ${transform.y}px, 0)` : undefined,
     transition,
     opacity: isDragging ? 0.4 : undefined,
   };

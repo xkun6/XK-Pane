@@ -1,7 +1,6 @@
 import { Box } from '@mui/material';
 import FolderRoundedIcon from '@mui/icons-material/FolderRounded';
 import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import type { WorkspaceProject } from '@/services';
 import type { WorkspaceTreeSx } from './WorkspaceTree.styles';
 import type { MenuAnchor } from './WorkspaceContextMenu';
@@ -27,8 +26,9 @@ export const WorkspaceProjectItem = ({ project, styles, onOpenMenu }: WorkspaceP
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: project.id,
   });
+  // 垂直列表：只取 Y 轴位移，锁定 X=0（否则指针水平移动会把节点推出，触发横向滚动条）。
   const style = {
-    transform: CSS.Transform.toString(transform),
+    transform: transform ? `translate3d(0px, ${transform.y}px, 0)` : undefined,
     transition,
     opacity: isDragging ? 0.4 : undefined,
   };

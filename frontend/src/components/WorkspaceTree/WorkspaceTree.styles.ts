@@ -54,7 +54,7 @@ export const workspaceTreeStyles = (theme: Theme): WorkspaceTreeSx => {
       textTransform: 'uppercase',
       letterSpacing: 0.5,
     },
-    list: { flex: 1, minHeight: 0, overflowY: 'auto', py: 0.5 },
+    list: { flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', py: 0.5 },
     empty: { px: 1.5, py: 3, textAlign: 'center' },
     emptyText: { fontSize: 13, color: fp.text.secondary },
     emptyHint: { fontSize: 11, color: fp.text.muted, mt: 0.5, lineHeight: 1.5 },
