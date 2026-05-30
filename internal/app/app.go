@@ -24,6 +24,7 @@ import (
 	"xkpane/internal/services/storagesvc"
 	"xkpane/internal/services/subprocess"
 	"xkpane/internal/services/terminal"
+	"xkpane/internal/services/workspace"
 	"xkpane/internal/storage"
 	"xkpane/internal/utils/httpx"
 	"xkpane/internal/utils/logx"
@@ -95,6 +96,7 @@ func Run(assets embed.FS) error {
 			application.NewService(subSvc),
 			application.NewService(termSvc),
 			application.NewService(clitools.New(cliRegistry)),
+			application.NewService(workspace.New(holder)),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
