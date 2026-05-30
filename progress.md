@@ -679,6 +679,14 @@
 - **层次边界**（留后续）：worktree 分组目录策略 / 名称安全校验 / pull·push·stash 前 Local History 自动打标签钩子——属上层 UX / 历史子系统，本 service 只做原语 1:1 暴露。
 - **下一单元（续接前端）**：Git 面板 UI（GitService.ts 收口 + src/git Provider + 面板组件，消费 gitsvc）/ 或 localhistorysvc + 历史面板 / 或注册 session 服务。各为独立切片。
 
+### ▶ 续：Git 状态查看页 — 消费 gitsvc，让 Git 后端可真机验（同 /loop 自主续）
+- `services/git/GitService.ts`：收口 gitsvc 只读子集（isRepo / getStatus / branches / log），DTO 干净化（GitStatus / GitBranch / GitCommit；when=RFC3339 字符串）。变更操作（worktree/stash/网络）暂不收口（留后续单元，含原生确认）。
+- `pages/GitPage/`（View/VM/Style/lang）：选已登记项目（下拉，消费既有 `useProjects()`）→ 展示**分支名 + 脏/净 Chip + 本地分支列表（当前分支高亮）+ 最近 20 提交（短哈希/主题/作者）**。非仓库友好降级显示「不是 Git 仓库」。刷新按钮。
+- **有意偏离原计划「src/git Provider」**：Git 状态是**按 path 即查的视图态**（非跨页面共享的全局登记表），与 project/provider/todo 那类全局列表性质不同 —— 建 Provider 是投机抽象（违简洁优先），故状态留 VM；`reqIdRef` 请求令牌丢弃快速切换时的过期响应。若将来侧边栏需 per-project Git 角标等多消费方，再提升为 Provider。
+- routes 加 git 路由（AccountTreeRounded，slot primary）；i18n `route.git` + `git.*` 命名空间（zh/en）；App 注册 locale。遵循全部 MVVM 铁律。typecheck + build 通过（本 tick 无 Go 改动，后端不变）。commit `fcd73cd`。
+- **🎯 现在可真机验证**：`wails3 dev` → 侧边栏「Git」页 → 选项目 → 看分支/脏标/提交历史。**第二个端到端可验功能**（Todo 之后），打通 gitsvc 全链路。
+- **下一单元（续接前端）**：Git 变更操作 UI（worktree 增删 / stash±/ fetch·pull·push，带原生确认 + 错误提示）/ 或 localhistorysvc + 历史面板 / 或注册 session 服务。各为独立切片。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
