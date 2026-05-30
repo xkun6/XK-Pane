@@ -797,3 +797,14 @@
 - **🎯 现在可真机验证**：`wails3 dev` → 需求规格页 → 选项目 → 新建规格（.xkpanes/specs/<slug>.spec.md 生成）→ 编辑内容保存 → 激活（互斥）→ 归档（移 archived/）→ 删除。**Spec 域核心 surface 完毕**。
 - **进度盘点 + runway 收窄提示**：可 surface 的 dep-free 域（Git/Local History/Todo 全/Spec 核心/session 脱敏）**已基本做完**。**剩余 dep-free 可测 runway**：Spec↔Todo 集成（create 建关联 Todo todoType=spec + Tasks 段 checkbox 双向同步 + Log 追加；markdown 解析/渲染是纯函数有 cc-pane 单测可直移；orchestration 用注入式 TodoLinker 同 gitsvc.AutoLabeler）——dep-free + 可测 + 有消费方（完成 Spec 子系统）。之后 **早期子系统**（notify/memory 待盘是否自包含；Bedrock 重 + MCP dep；MCPE 需 MCP 桥）。**门控类**（待用户回来）：终端栈真机验证 / 会话恢复前端 / reorder·batch UI（视觉）、file-watcher（fsnotify 决策门）。
 - **下一单元**：倾向 **Spec↔Todo 集成**（dep-free 可测，完成 Spec 子系统；先移植 cc-pane spec_service 的 markdown 纯函数 + 测，再做 TodoLinker 注入式 orchestration）。若该单元后多数剩余皆门控，则向用户陈列决策门（早期子系统选型 / 视觉验证）而非空转。
+
+### ▶ 续：Spec↔Todo 关联 + 一处 Wails 绑定误解纠正（同 /loop 自主续）
+- **首个 Spec↔Todo 跨域集成**（对齐 cc-pane create_spec/delete_spec）：建 Spec 建一个 todoType="spec" 关联 Todo（scope=project/scopeRef=projectPath/desc 记 spec id）并回填 todo_id；删 Spec 级联删该 Todo（best-effort）。linker 失败按 cc-pane 补偿整体回滚（删文件+DB 行）。dep-free 可测，经现有 Todo/Specs 两页即可验证。
+- **范围裁剪**：Tasks 段 checkbox 双向同步 / Log 段追加 / active spec 摘要注入终端**仍延后**——它们的上游触发（终端/AI 工作流）受视觉门控，不是任意延后。本切片只做「建/删时的关联」这一可立即验证的部分。
+- **⚠ 纠正长期误解**：此前多 tick 记「含 func 参数的 setter 不被 Wails 绑定」**是错的**。Wails v3 绑定**任何**导出方法；func/interface 参数的 setter 也会被绑成前端不可用的桩（只发 warning，非跳过）。`gitsvc.SetAutoLabeler` / `termSvc.SetProviderResolver` 一直是「已绑定但前端不可用的桩」。本单元 specsvc 改用**构造期注入** `New(holder, create, del)`（todoSvc 在 app.New 前已就绪）彻底回避多出 SetXxx 桩——重生 bindings 确认 SetTodoLinker 未绑定、方法数回 97、specsvc 的 warning 消失。gitsvc/terminal 因需 app 引用只能 post-New setter，桩留存（无害，前端不可用）。
+- +3 测：Create 关联（todoId 回填+参数正确）/ Delete 级联 / linker 失败整体回滚（DB 行 + .md 文件均补偿删）。dev+prod 全绿；前端 typecheck 通过。commit `57ee1d7`。**Spec 子系统核心完成**（CRUD+文件+生命周期+UI+Todo 关联）。
+- **🚦 已抵达「门控边界」**：dep-free 可自验簇（Git / Local History / Todo 全 / Spec 全 / session 脱敏）**做完**。剩余皆需**用户决策或视觉验证**：
+  - **视觉门控**（仅用户 `wails3 dev` 可验）：终端栈 + 项目启动 CLI（headline goal）/ 会话恢复前端 / Todo reorder·batch UI。
+  - **决策门**（需用户定，**不自引依赖**）：file-watcher（fsnotify 新依赖）/ Bedrock（22MB embed + MCP SDK D5，重）/ MCPE（需 MCP 桥）。
+  - **待盘**：早期子系统 notify（cc-notify，或可走 Wails 原生通知=dep-free？）/ memory（cc-memory，或可 SQLite 后端=dep-free？）——**下一 tick 先只读盘点 cc-pane 源判断是否 dep-free**：若 dep-free 则实现（续 roadmap），若需新依赖则 AskUserQuestion 陈列决策。
+- **下一单元**：只读调研 cc-notify / cc-memory 的依赖面（判 dep-free vs 决策门）。若两者皆需新依赖 / 皆门控，则本自主轮**收尾**——向用户陈列决策门清单 + 视觉验证清单，停 loop 待用户回来定向（不空转、不自引依赖、不堆视觉债）。
