@@ -610,6 +610,11 @@
 - **延后单元**（findings J12 列全）：diff 引擎（**Go diff 库选型=后续决策点**）/ 标签 / restore / 最近变更 / pruning / gzip 压缩 / gitsvc 服务层（按项目缓存 Store + gitx auto-label 钩子）/ `.xkpanes` 自动 gitignore 的 UX。
 - **下一单元倾向**：Local History 标签(labels+label_snapshots，纯可测，且是 gitx auto-label 钩子的直接依赖) 或 pruning(可测) 或 restore(可测)；diff 引擎需先定 Go diff 库（到该单元再问用户）。
 
+### ▶ 续：Local History unit 2 — 标签（同 /loop 自主续）
+- `labels.go`：Label + LabelSnapshot 表 + HistoryLabel/LabelFileSnapshot 组合视图。PutLabel(ON CONFLICT upsert + 整体替换快照,事务,实证 glebarez/modernc 支持 ON CONFLICT) / ListLabels(timestamp DESC,两查询+Go 分组避 N+1,空快照非 nil) / DeleteLabel(显式删两表不靠 FK cascade) / GetAllLatestSnapshots(每文件 MAX(id))。AutoMigrate 追加两表。
+- 标签是 **gitx Pull/Push/Stash auto-label 钩子的直接依赖**（钩子在 gitsvc 服务层补）。+TestLabels（snapshots 取最新 / put / upsert 改名+整体替换 / timestamp DESC 排序 / 删除连快照）。localhistory **7 测** dev+prod 全绿。commit `a089f0b`。
+- **下一单元倾向**：restore（按标签/版本写回工作树，可测——cc-pane 有 restore_version/restore_label）或 pruning（cleanup_old_versions + cleanup_by_total_size LRU + cleanup_orphan_blobs，可测）；diff 引擎仍待先定 Go diff 库。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
