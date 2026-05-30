@@ -615,6 +615,13 @@
 - 标签是 **gitx Pull/Push/Stash auto-label 钩子的直接依赖**（钩子在 gitsvc 服务层补）。+TestLabels（snapshots 取最新 / put / upsert 改名+整体替换 / timestamp DESC 排序 / 删除连快照）。localhistory **7 测** dev+prod 全绿。commit `a089f0b`。
 - **下一单元倾向**：restore（按标签/版本写回工作树，可测——cc-pane 有 restore_version/restore_label）或 pruning（cleanup_old_versions + cleanup_by_total_size LRU + cleanup_orphan_blobs，可测）；diff 引擎仍待先定 Go diff 库。
 
+### ▶ 续：Local History unit 3 — restore + CreateAutoLabel（同 /loop 自主续）
+- `restore.go`：RestoreVersion（恢复前自动打 "Before Restore: <file>" 标签 + 写回工作树 + mkdir 父目录）/ RestoreToLabel（"Before Rollback" + 逐快照 best-effort 写回 + 返回已恢复列表 + 未知标签报错）/ CreateAutoLabel（快照全部最新 + uuid auto 标签——**gitx Pull/Push/Stash auto-label 钩子的服务层入口已就位**）。
+- **写回工作树用 os.WriteFile 不用 filex.WriteAtomic**：对已存在文件截断写入保留原权限（可执行位等），原子写 temp+rename 会重置权限——恢复须保权限（blob 内部写仍原子）。branch 由服务层经 gitx.CurrentBranch 传入（Store 与 git 解耦）。
+- +3 测（RestoreVersion 写回+恢复前标签 / 恢复嵌套路径建父目录 / RestoreToLabel 回滚+Before Rollback+未知标签报错）。localhistory **10 测** dev+prod 全绿。commit `49ad357`。
+- **Local History 已具备**：存储基座 + 标签 + restore/auto-label。**剩**：diff 引擎（先定 Go diff 库 = 决策点）/ 最近变更 + 目录变更 + 已删文件列表（纯查询，可测）/ pruning（可测）/ gzip 压缩 / HistoryConfig（config.toml）/ Wails 服务层（按项目缓存 Store）。
+- **下一单元倾向**：最近变更/目录变更/已删文件（get_recent_changes + list_directory_changes + list_deleted_files，纯 SQL 查询、可测、无门）或 pruning（可测）；diff 引擎到该单元再定 Go diff 库。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
