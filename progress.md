@@ -595,6 +595,21 @@
 - 测试：+`TestNetworkCloneFetchPullPush`（本地 bare 远端：work1 push→gitx.Clone→work2，work1 再 push→work2 fetch+pull 拿到 b.txt + clone 到已存在目录报错）——无真网络/鉴权，也证实 `git clone` 支持 `--`。**8 测** go build/vet/test dev+prod 全绿。commit `4d6f9d4`。
 - **Git 后端原语阶段性收口**（只读 + worktree/stash + network 三 unit，8 测）。**剩**：git 面板（结构化 per-file status XY + stage/unstage/commit + diff，net-new 增强，**面板 UI 视觉门控**）；gitsvc 服务层（Wails 包装 + bindings + Local History 标签钩子，待 Local History 子系统）。**下一单元倾向**：转 Local History 后端（file_versions 快照，独立 history.db，纯可测，且正好补上 Git 的 auto-label 钩子依赖方），或 git 面板结构化 status 后端（可测，不含 UI）。
 
+## 会话 29 — Phase 4 Local History 存储基座 + 决策门 D10（2026-05-30，autonomous /loop）
+
+### 决策门 D10（读 cc-pane history_file_repo.rs 后向用户提问 → 已定）
+- Local History 与 D8（app 级单一 xkpane.db + Holder + AllModels）**根本不同**：cc-pane 是**每项目独立** `<proj>/.ccpanes/history/{history.db, blobs/}` + 内容寻址磁盘 blob。属真决策门（动数百行 + 偏离铁律 + 写用户项目目录）→ 按停止粒度停下 AskUserQuestion。完整盘点见 findings J12。
+- **用户定**：① 存储位置 = 每项目独立（**目录名改 `.xkpanes`**，对齐品牌，非 `.ccpanes`）；② 现在开工，先存储基座。记 task_plan 决策表 D10。
+
+### 做了什么（`internal/localhistory/store.go` + `store_test.go`，commit `43d6f80`）
+- `FileVersion`{id(时间戳ms+4位计数,复合 PK 之一), file_path(复合 PK), hash(SHA256), size, created_at(RFC3339 UTC), is_deleted, branch}。
+- `Open(projectPath)`：建 `.xkpanes/history/blobs` + GORM/glebarez 开 history.db + WAL/NORMAL/busy_timeout + AutoMigrate。**「按项目多 db」模式**（不走 Holder——Holder 是单 app db；这是 D10 的有意分层）。
+- `SaveVersion`：SHA256 内容寻址 blob（filex 原子写，同 hash 不重写）+ 同 file_path+branch 最新版 hash 相同→去重跳过 + min_interval 节流跳过 + is_deleted 版本不去重/不节流。返回 (nil,nil) 表跳过。
+- `ListVersions`/`ListVersionsByBranch`/`GetFileBranches`/`GetVersionContent`(gzip 魔数兼容读，前向兼容未来压缩单元)。
+- 测试：6 测（目录布局 / 保存+去重+列举+内容回放+缺失版本 / 节流 / is_deleted 绕过去重 / 分支隔离 / 跨文件 blob 去重）。go build/vet/test dev+prod 全绿。
+- **延后单元**（findings J12 列全）：diff 引擎（**Go diff 库选型=后续决策点**）/ 标签 / restore / 最近变更 / pruning / gzip 压缩 / gitsvc 服务层（按项目缓存 Store + gitx auto-label 钩子）/ `.xkpanes` 自动 gitignore 的 UX。
+- **下一单元倾向**：Local History 标签(labels+label_snapshots，纯可测，且是 gitx auto-label 钩子的直接依赖) 或 pruning(可测) 或 restore(可测)；diff 引擎需先定 Go diff 库（到该单元再问用户）。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
