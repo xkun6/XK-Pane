@@ -204,3 +204,13 @@ React 19.2 / @mui/material 9 / @mui/icons-material 9 / @mui/x-charts 9 / emotion
 - **default 提升用 `ORDER BY rowid`（插入序）**：等价 cc-pane providers[0]；**不可用 created_at**——同 tick 多次 Add 时间戳撞、字典序非确定（**实测**：created_at 版在 prod test 偶发倒挂，rowid 版 3×dev+3×prod 稳定）。同教训见 storage UTC 修复。
 - **延后到「启动接线」单元（非本单元）**：`GetEnvVars`（to_env_vars 中央映射，11 type→env）+ `ToCliProvider` 桥接——**它们暴露明文 env，绝不能进 Wails bindings**，做成非绑定 helper 由 terminal 启动路径直接调。届时还需：`terminal.resolveLaunch` 设 `cctx.Provider` + `buildEnv` 合 provider env（cc-pane 中央 Tier-A 当前 XK-Pane 完全缺失，claude/codex/gemini 等拿不到 ANTHROPIC_*/CODEX_* 等）。Tier-B（glm/cursor/kimi 自注入）已在 cliadapters 移植就位。
 - **codex 易错点**：OpenAI(codex)→`CODEX_API_KEY`+`OPENAI_BASE_URL`（**非** OPENAI_API_KEY）；OpenCode→`OPENAI_API_KEY`+`OPENAI_BASE_URL`。移植 GetEnvVars 时注意。
+
+### J10. ⚠️ Wails v3 alpha 的 confirm 对话框平台陷阱（实测 + 源码坐实，2026-05-30 会话28）
+
+> 用户真机验证暴露「provider 删除点是后删不掉」，溯源到 `NativeDialogs.confirm`。读 Wails v3 alpha.96 全平台对话框源码坐实。修复 commit `6505173`。
+
+- **Windows（`pkg/application/dialogs_windows.go`）**：`QuestionDialogType` 在 `calculateMessageDialogFlags` 里**硬编码 `MB_YESNO`**，完全**忽略**传入的自定义按钮 label，只显示系统本地化的「是/否」。`MessageBox` 返回 `IDYES(6)/IDNO(7)`，映射回字符串表 `responses[]` = `"Yes"/"No"`；随后只有当某 dialog button 的 `Label` **字面等于** 该字符串时才触发其 `Callback`。而 `messageprocessor_dialog.go` 正是靠这个 Callback 把 label 推进 `resp` 通道、再 `<-resp` 返回前端。**若没有按钮 label 等于 "Yes"/"No"，resp 永远收不到值 → 前端 `Dialogs.Question` 的 Promise 永久挂起**（不是返回 false，是彻底不 resolve）。
+- **macOS（NSAlert）/ Linux（GTK）**：原生支持自定义按钮 label，点击触发对应按钮回调、回传**该自定义 label 本身**。故 `choice === okLabel` 在 mac/linux 正确，仅 Windows 坏。
+- **本仓修复**：`NativeDialogs.confirm` 内 `isWindows` 分支用固定 `"Yes"/"No"` 作 label（Windows 上反正不可见）并以 `choice === "Yes"` 判定；mac/linux 保留自定义 label + `choice === okLabel`。
+- **铁律（写给后续）**：① 任何走 `NativeDialogs.confirm` 的新代码**不要依赖自定义 OK/Cancel 按钮文案在 Windows 上的可见性或语义**——Windows 永远是 native 是/否。② 若将来要在 Windows 上显示真正的自定义按钮文案，需绕开 Wails Question 对话框（自绘 MUI Dialog——但那违反"原生对话框铁律"，须先与用户确认）。③ 这是 alpha.96 行为，升级 Wails 后复验本结论。
+- **同源噪声（commit `97d44f3`）**：GORM 默认 logger 把 `ErrRecordNotFound` 当 error 打日志。本项目把它当「查不到」正常控制流（Get 类 `First`+`errors.Is`→nil；provider.Remove 提升默认项无剩余）。`storage/db.go` 开 `logger.Config{IgnoreRecordNotFoundError:true}` 全局静音；真错误照常记录。

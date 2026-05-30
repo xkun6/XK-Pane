@@ -559,6 +559,24 @@
 - **续跑路径**：用户随时重发 `/loop` 即继续（默认按计划走 Git network/worktree → Local History；或用户指定方向，如优先早期子系统）。所有状态在本文件 + task_plan + findings，resume 无缝。
 - **欠用户验证**：`wails3 dev` → 终端页（项目面板「+」开目录→点项目→shell 起/回显/关标签回收 PTY）+ 设置→接入 Provider（增删改/设默认）。发现问题反馈，下一轮优先修。
 
+## 会话 28 — ▶ LOOP 恢复：用户真机验证暴露 2 个 Windows 真 bug（2026-05-30，/loop 续）
+
+### 触发：用户做了视觉验证（兑现暂停 note 的「续跑路径」），报告 provider 删除链路
+1. **「provider 删除→弹确认框→点是后删不掉」**（前端 confirm 失效）。
+2. 修复后用户贴出后端日志 `provider.go:213 record not found / rows:0`（误以为是错误）。
+
+### Bug 1：`NativeDialogs.confirm` 在 Windows 上永不返回 true（commit `6505173`）
+- **根因（读 Wails v3 alpha.96 源码全平台坐实）**：`dialogs_windows.go` 的 Question 对话框硬编码 `MB_YESNO`，**忽略**自定义按钮 label，只显示系统本地化「是/否」；且仅当某按钮 `Label` 字面等于映射回的 `"Yes"/"No"` 才触发其回调（`messageprocessor_dialog.go` 靠该回调把 label 推入 resp 通道）。我们传 `"删除"/"取消"` → 无匹配 → resp 收不到值 → **前端 Promise 永久挂起**（表现为点是后毫无反应）。mac(NSAlert)/linux(GTK) 原生支持自定义 label，回传 label 本身，故无此问题。
+- **修复**：`confirm` 内平台分支——`isWindows` 时用 `"Yes"/"No"` 作 label（反正不可见）并以 `choice==="Yes"` 判定；mac/linux 保留自定义 label。**集中一处修好全部 4 个 confirm 调用点**（删项目 / 删 provider / 数据库重置 / 逐表清空——这些之前在 Windows 上全坏）。verify：pnpm typecheck + build 通过。
+- **教训写 findings J10**：Wails v3 alpha 的 confirm 在 Windows 是 native Yes/No、自定义按钮文案不可渲染、且 label 不匹配会挂起——任何走 `NativeDialogs.confirm` 的新代码不要依赖自定义按钮文案语义。
+
+### Bug 2（实为噪声非错误）：GORM 把 ErrRecordNotFound 当 error 打日志（commit `97d44f3`）
+- 那条 `provider.go:213` 日志其实**证明 Bug1 修复生效、删除已成功**：Remove 删掉默认 provider 后试图提升「最早剩余项」为新默认、但已无剩余 → 命中 `errors.Is(err, ErrRecordNotFound)→return nil` 正常分支。
+- ErrRecordNotFound 在本项目是「查不到」的正常控制流（Get 类 First+errors.Is→nil；Remove 提升默认）。`db.go` 给 GORM logger 开 `IgnoreRecordNotFoundError:true` 全局静音此类噪声（写端仍 stdout，与原 `logger.Default` 一致）；真错误照常记录，代码处理不受影响。verify：go build/vet/test（dev+prod，storage+provider）全 ok。
+
+### 状态
+- 两 commit 在 `rebuild/cc-pane`，未 push。**确认前端 confirm + 后端噪声两类问题已修**。等用户重测删除（应：点「是」即删；删最后一个默认项不再刷红日志）+ 反馈其余验证项（项目面板开目录/点项目/shell 起回显、设置→Provider 其余增改/设默认）。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
