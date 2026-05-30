@@ -9,8 +9,9 @@
 //   - Delete：删文件 + DB 行
 //
 // 偏离 cc-pane：目录 `.ccpanes/specs` → `.xkpanes/specs`（对齐 D10 每项目 .xkpanes）。
-// **延后**（独立的跨服务 / 高级单元）：关联 Todo（todoType="spec"）、Tasks 段 checkbox 双向同步、
-// Log 段追加、active spec 摘要注入终端。故本切片 Create **不**建关联 Todo、Delete **不**级联 Todo。
+// 关联 Todo（todoType="spec"）：Create 建关联待办、Delete 级联删除它（经注入式 TodoLinker）。
+// **仍延后**（耦合于受门控的终端 / AI 工作流，其上游触发尚未落地）：Tasks 段 checkbox 双向同步、
+// Log 段追加、active spec 摘要注入终端。
 //
 // 存储：specs 表在 app 级单库（AllModels，走 Holder），按 project_path 列查（同 todo/session）。
 package specsvc
@@ -41,11 +42,29 @@ const (
 // 合法状态集（对齐 cc-pane SpecStatus）。
 var validStatus = map[string]bool{"draft": true, "active": true, "archived": true}
 
+// 关联 Todo 回调类型（app 层注入 todo.Service 适配，连接 Spec↔Todo，对齐 cc-pane
+// create_spec/delete_spec 的关联 Todo）。nil 则跳过关联（独立 / 测试用）。
+type (
+	// CreateTodoForSpec 为 spec 建一个关联待办（todoType="spec"），返回 todo id。
+	CreateTodoForSpec func(ctx context.Context, projectPath, title, specID string) (string, error)
+	// DeleteLinkedTodo 删除关联待办（级联其子任务）。
+	DeleteLinkedTodo func(ctx context.Context, todoID string) error
+)
+
 type Service struct {
-	holder *storage.Holder
+	holder     *storage.Holder
+	linkCreate CreateTodoForSpec
+	linkDelete DeleteLinkedTodo
 }
 
-func New(holder *storage.Holder) *Service { return &Service{holder: holder} }
+// New 创建 specsvc。linkCreate/linkDelete 为 Spec↔Todo 关联回调，**构造期注入**（todoSvc 在
+// app.New 前已就绪，无需 post-New setter）。这样就不产生 SetXxx 方法 —— 注意 Wails v3 会把
+// **任何**导出方法都绑定到前端，含 func/interface 参数的 setter 也会被绑成不可用的桩（只是发个
+// warning，并非跳过；gitsvc.SetAutoLabeler / termSvc.SetProviderResolver 因需 app 引用只能 post-New
+// setter，故仍是这种已绑定但前端不可用的桩）。specsvc 用构造注入彻底回避多出一个桩方法。
+func New(holder *storage.Holder, linkCreate CreateTodoForSpec, linkDelete DeleteLinkedTodo) *Service {
+	return &Service{holder: holder, linkCreate: linkCreate, linkDelete: linkDelete}
+}
 
 func (s *Service) db() *gorm.DB { return s.holder.Current().GORM }
 
@@ -126,6 +145,21 @@ func (s *Service) Create(ctx context.Context, projectPath, title string) (storag
 	if err := filex.WriteAtomic(path, []byte(content), 0o644); err != nil {
 		_ = s.db().WithContext(ctx).Where("id = ?", entry.ID).Delete(&storage.Spec{})
 		return storage.Spec{}, fmt.Errorf("specsvc: write spec file: %w", err)
+	}
+	// 关联 Todo（todoType="spec"），让 Spec 出现在 Todo 面板（对齐 cc-pane）。未注入 linker 则跳过。
+	// linker 失败按 cc-pane 补偿：删文件 + DB 行（关联是 create 的组成部分，失败则整体回滚）。
+	if s.linkCreate != nil {
+		todoID, lerr := s.linkCreate(ctx, projectPath, t, entry.ID)
+		if lerr != nil {
+			_ = os.Remove(path)
+			_ = s.db().WithContext(ctx).Where("id = ?", entry.ID).Delete(&storage.Spec{})
+			return storage.Spec{}, fmt.Errorf("specsvc: link todo: %w", lerr)
+		}
+		if err := s.db().WithContext(ctx).Model(&storage.Spec{}).Where("id = ?", entry.ID).
+			Update("todo_id", todoID).Error; err != nil {
+			return storage.Spec{}, err
+		}
+		entry.TodoID = &todoID
 	}
 	return entry, nil
 }
@@ -236,7 +270,8 @@ func (s *Service) Update(ctx context.Context, id string, title *string, status *
 	return s.Get(ctx, id)
 }
 
-// Delete 删除某 spec：先删 .md 文件（best-effort），再删 DB 行。无匹配行报错。
+// Delete 删除某 spec：先级联删关联 Todo（best-effort），再删 .md 文件（best-effort），最后删 DB 行。
+// 无匹配行报错。
 func (s *Service) Delete(ctx context.Context, projectPath, id string) error {
 	entry, err := s.Get(ctx, id)
 	if err != nil {
@@ -244,6 +279,10 @@ func (s *Service) Delete(ctx context.Context, projectPath, id string) error {
 	}
 	if entry == nil {
 		return errors.New("specsvc: spec not found")
+	}
+	// 级联删关联 Todo（含其子任务）。失败不阻断 spec 删除（best-effort，对齐 cc-pane）。
+	if entry.TodoID != nil && *entry.TodoID != "" && s.linkDelete != nil {
+		_ = s.linkDelete(ctx, *entry.TodoID)
 	}
 	if path := resolveSpecPath(projectPath, *entry); path != "" {
 		if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) {

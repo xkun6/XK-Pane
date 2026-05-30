@@ -2,6 +2,7 @@ package specsvc
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,14 +11,38 @@ import (
 	"xkpane/internal/storage"
 )
 
-func newTestService(t *testing.T) *Service {
+func newHolder(t *testing.T) *storage.Holder {
 	t.Helper()
 	db, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("storage.Open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	return New(storage.NewHolder(db))
+	return storage.NewHolder(db)
+}
+
+// 无关联 Todo 的 service（多数测试用）。
+func newTestService(t *testing.T) *Service { return New(newHolder(t), nil, nil) }
+
+// fakeLinker 记录 Spec↔Todo 关联调用，供注入测试。create/del 方法值满足 specsvc 的回调函数类型，
+// 直接传给 New（构造期注入）。
+type fakeLinker struct {
+	created    []struct{ projectPath, title, specID string }
+	deleted    []string
+	failCreate bool
+}
+
+func (f *fakeLinker) create(_ context.Context, projectPath, title, specID string) (string, error) {
+	if f.failCreate {
+		return "", errors.New("linker boom")
+	}
+	f.created = append(f.created, struct{ projectPath, title, specID string }{projectPath, title, specID})
+	return "todo-" + specID, nil
+}
+
+func (f *fakeLinker) del(_ context.Context, todoID string) error {
+	f.deleted = append(f.deleted, todoID)
+	return nil
 }
 
 func TestTitleToFilename(t *testing.T) {
@@ -188,6 +213,73 @@ func TestGetActiveNone(t *testing.T) {
 	svc := newTestService(t)
 	if got, err := svc.GetActive(ctx, t.TempDir()); err != nil || got != nil {
 		t.Errorf("GetActive(no active) = (%+v, %v), want (nil, nil)", got, err)
+	}
+}
+
+// 注入 linker：Create 关联 Todo（todoId 回填）+ 记录正确参数。
+func TestCreateLinksTodo(t *testing.T) {
+	ctx := context.Background()
+	fake := &fakeLinker{}
+	svc := New(newHolder(t), fake.create, fake.del)
+	proj := t.TempDir()
+
+	sp, err := svc.Create(ctx, proj, "Linked Spec")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if sp.TodoID == nil || *sp.TodoID != "todo-"+sp.ID {
+		t.Fatalf("todoId = %v, want todo-%s", sp.TodoID, sp.ID)
+	}
+	if len(fake.created) != 1 {
+		t.Fatalf("CreateForSpec calls = %d, want 1", len(fake.created))
+	}
+	c := fake.created[0]
+	if c.projectPath != proj || c.title != "Linked Spec" || c.specID != sp.ID {
+		t.Errorf("CreateForSpec args = %+v, want proj/Linked Spec/%s", c, sp.ID)
+	}
+	// 回读确认 todo_id 已落库。
+	got, _ := svc.Get(ctx, sp.ID)
+	if got == nil || got.TodoID == nil || *got.TodoID != *sp.TodoID {
+		t.Errorf("persisted todoId = %v, want %v", got.TodoID, sp.TodoID)
+	}
+}
+
+// 删 Spec 级联删关联 Todo。
+func TestDeleteCascadesTodo(t *testing.T) {
+	ctx := context.Background()
+	fake := &fakeLinker{}
+	svc := New(newHolder(t), fake.create, fake.del)
+	proj := t.TempDir()
+
+	sp, _ := svc.Create(ctx, proj, "Has Todo")
+	if err := svc.Delete(ctx, proj, sp.ID); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if len(fake.deleted) != 1 || fake.deleted[0] != *sp.TodoID {
+		t.Errorf("deleted todos = %v, want [%s]", fake.deleted, *sp.TodoID)
+	}
+}
+
+// linker 失败 → Create 整体回滚（删文件 + DB 行）。
+func TestCreateLinkerFailureCompensates(t *testing.T) {
+	ctx := context.Background()
+	fake := &fakeLinker{failCreate: true}
+	svc := New(newHolder(t), fake.create, fake.del)
+	proj := t.TempDir()
+
+	if _, err := svc.Create(ctx, proj, "Doomed"); err == nil {
+		t.Fatal("Create(linker fails) err=nil, want error")
+	}
+	// DB 行已补偿删除。
+	if specs, _ := svc.List(ctx, proj, ""); len(specs) != 0 {
+		t.Errorf("specs after failed create = %d, want 0 (row compensated)", len(specs))
+	}
+	// .md 文件也已补偿删除（specs 目录无 .spec.md）。
+	entries, _ := os.ReadDir(specDir(proj))
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".spec.md") {
+			t.Errorf("orphan spec file left after compensation: %s", e.Name())
+		}
 	}
 }
 

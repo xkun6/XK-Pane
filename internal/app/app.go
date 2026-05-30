@@ -75,6 +75,30 @@ func Run(assets embed.FS) error {
 	// 打 Local History 标签（cc-pane auto_label_before_git）。两者皆注册，连接经 SetAutoLabeler。
 	gitSvc := gitsvc.New()
 	lhSvc := localhistorysvc.New()
+	// specsvc / todo 预创建以便互联：Create Spec 建关联 Todo（todoType="spec"）、Delete Spec 级联删它
+	// （对齐 cc-pane create_spec/delete_spec）。**构造期注入**两个闭包（todoSvc 已就绪），不留
+	// post-New setter（避免多一个被 Wails 绑定的桩方法）。
+	todoSvc := todo.New(holder)
+	specSvc := specsvc.New(
+		holder,
+		func(ctx context.Context, projectPath, title, specID string) (string, error) {
+			scope, todoType, desc := "project", "spec", "Spec: "+specID
+			dto, err := todoSvc.Create(ctx, todo.CreateTodoInput{
+				Title:       title,
+				Description: &desc,
+				Scope:       &scope,
+				ScopeRef:    &projectPath,
+				TodoType:    &todoType,
+			})
+			if err != nil {
+				return "", err
+			}
+			return dto.ID, nil
+		},
+		func(ctx context.Context, todoID string) error {
+			return todoSvc.Delete(ctx, todoID)
+		},
+	)
 
 	app := application.New(application.Options{
 		Name:        "XK-Pane",
@@ -87,9 +111,9 @@ func Run(assets embed.FS) error {
 			application.NewService(project.New(holder)),
 			application.NewService(launchhistory.New(holder)),
 			application.NewService(provider.New(holder)),
-			application.NewService(todo.New(holder)),
+			application.NewService(todoSvc),
 			application.NewService(session.New(holder)),
-			application.NewService(specsvc.New(holder)),
+			application.NewService(specSvc),
 			application.NewService(gitSvc),
 			application.NewService(lhSvc),
 			application.NewService(subSvc),
