@@ -25,7 +25,6 @@ export const enUS: Locale = {
       home: 'Home',
       terminal: 'Terminal',
       git: 'Git',
-      sessions: 'Sessions',
       settings: 'Settings',
     },
     terminal: {

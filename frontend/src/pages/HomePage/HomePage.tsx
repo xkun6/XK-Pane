@@ -1,7 +1,6 @@
 import { Box, Typography, useTheme } from '@mui/material';
 import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
-import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import SmartToyRoundedIcon from '@mui/icons-material/SmartToyRounded';
 import type { ReactNode } from 'react';
@@ -21,7 +20,6 @@ export const HomePage = () => {
   const actions: Array<{ id: string; label: string; icon: ReactNode }> = [
     { id: 'terminal', label: t('home.actions.terminal'), icon: <TerminalRoundedIcon /> },
     { id: 'git', label: t('home.actions.git'), icon: <AccountTreeRoundedIcon /> },
-    { id: 'sessions', label: t('home.actions.sessions'), icon: <RestartAltRoundedIcon /> },
     { id: 'settings', label: t('home.actions.settings'), icon: <SettingsRoundedIcon /> },
   ];
 

@@ -16,7 +16,6 @@ export const homePageEnUS: Messages = {
       title: 'Quick actions',
       terminal: 'Open Terminal',
       git: 'Source Control',
-      sessions: 'Sessions',
       settings: 'Settings',
     },
     recent: {

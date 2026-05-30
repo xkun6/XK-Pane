@@ -32,7 +32,6 @@ export const zhCN: Locale = {
       home: '首页',
       terminal: '终端',
       git: 'Git',
-      sessions: '会话',
       settings: '设置',
     },
     terminal: {

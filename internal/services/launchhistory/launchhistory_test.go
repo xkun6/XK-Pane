@@ -129,50 +129,6 @@ func TestListLimit(t *testing.T) {
 	}
 }
 
-// LastPrompt 落库必须密文（cryptox），List 读出解密回明文；ResumeSessionID 明文。
-func TestRecordEncryptsLastPrompt(t *testing.T) {
-	svc := newTestService(t)
-	const plain = "fix the resume passthrough chain end to end"
-	rec, err := svc.Record(context.Background(), RecordSpec{
-		ProjectPath:     "/p",
-		CliTool:         "claude",
-		ResumeSessionID: ptr("sess-abc-123"),
-		LastPrompt:      ptr(plain),
-	})
-	if err != nil {
-		t.Fatalf("Record: %v", err)
-	}
-	// 返回值是明文（DTO 不外泄密文）。
-	if rec.LastPrompt == nil || *rec.LastPrompt != plain {
-		t.Fatalf("returned LastPrompt = %v, want plaintext", rec.LastPrompt)
-	}
-	// 数据库列必须是密文（≠明文）。
-	var raw *string
-	if err := svc.db().Raw("SELECT last_prompt FROM launch_history WHERE id = ?", rec.ID).Scan(&raw).Error; err != nil {
-		t.Fatalf("raw scan: %v", err)
-	}
-	if raw == nil || *raw == "" {
-		t.Fatal("last_prompt column should be non-empty ciphertext")
-	}
-	if *raw == plain {
-		t.Fatal("last_prompt stored as plaintext — cryptox not applied")
-	}
-	// List 读出解密回明文；ResumeSessionID 明文。
-	list, err := svc.List(context.Background(), 1)
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	if len(list) != 1 {
-		t.Fatalf("len = %d, want 1", len(list))
-	}
-	if list[0].LastPrompt == nil || *list[0].LastPrompt != plain {
-		t.Fatalf("List LastPrompt = %v, want decrypted %q", list[0].LastPrompt, plain)
-	}
-	if list[0].ResumeSessionID == nil || *list[0].ResumeSessionID != "sess-abc-123" {
-		t.Fatalf("ResumeSessionID = %v, want plaintext sess-abc-123", list[0].ResumeSessionID)
-	}
-}
-
 func TestListEmpty(t *testing.T) {
 	svc := newTestService(t)
 	list, err := svc.List(context.Background(), 10)

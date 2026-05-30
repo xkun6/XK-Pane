@@ -14,14 +14,10 @@ export interface RecordSpec {
   runtimeKind: string; // local | wsl | ssh
   workspaceName?: string | null;
   workspacePath?: string | null;
-  // resume（P3b）：从历史会话恢复时填。resumeSessionId 明文；lastPrompt 后端 cryptox 加密落库。
-  resumeSessionId?: string | null;
-  lastPrompt?: string | null;
-  providerId?: string | null;
-  launchCwd?: string | null;
 }
 
-// LaunchRecord 对外纯接口（与生成类解耦）。含 resume 字段（lastPrompt 后端已解密成明文）。
+// LaunchRecord 对外纯接口（与生成类解耦）。MVP 字段集；会话恢复相关字段
+// （resumeSessionId / ptySessionId / lastPrompt 等）待后续再纳入。
 export interface LaunchRecord {
   id: number;
   projectId: string;
@@ -32,10 +28,6 @@ export interface LaunchRecord {
   launchedAt: string; // 后端 time.Time 序列化（UTC RFC3339）
   workspaceName: string | null;
   workspacePath: string | null;
-  resumeSessionId: string | null;
-  lastPrompt: string | null; // 后端读出已解密为明文
-  providerId: string | null;
-  launchCwd: string | null;
 }
 
 function toRecord(r: RawLaunchHistory): LaunchRecord {
@@ -49,10 +41,6 @@ function toRecord(r: RawLaunchHistory): LaunchRecord {
     launchedAt: typeof r.launchedAt === 'string' ? r.launchedAt : '',
     workspaceName: r.workspaceName ?? null,
     workspacePath: r.workspacePath ?? null,
-    resumeSessionId: r.resumeSessionId ?? null,
-    lastPrompt: r.lastPrompt ?? null,
-    providerId: r.providerId ?? null,
-    launchCwd: r.launchCwd ?? null,
   };
 }
 
@@ -67,10 +55,6 @@ export const LaunchHistoryService = {
       runtimeKind: spec.runtimeKind,
       workspaceName: spec.workspaceName ?? null,
       workspacePath: spec.workspacePath ?? null,
-      resumeSessionId: spec.resumeSessionId ?? null,
-      lastPrompt: spec.lastPrompt ?? null,
-      providerId: spec.providerId ?? null,
-      launchCwd: spec.launchCwd ?? null,
     });
     return toRecord(r);
   },
@@ -79,15 +63,5 @@ export const LaunchHistoryService = {
   async list(limit: number): Promise<LaunchRecord[]> {
     const rows = await Binding.List(limit);
     return (rows ?? []).map(toRecord);
-  },
-
-  // 删除一条启动记录（幂等）。
-  async delete(id: number): Promise<void> {
-    await Binding.Delete(id);
-  },
-
-  // 清空所有启动记录。
-  async clear(): Promise<void> {
-    await Binding.Clear();
   },
 } as const;

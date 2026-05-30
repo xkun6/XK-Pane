@@ -17,7 +17,6 @@ export const homePageZhCN: Messages = {
       title: '快捷操作',
       terminal: '打开终端',
       git: '源代码管理',
-      sessions: '会话',
       settings: '设置',
     },
     recent: {
