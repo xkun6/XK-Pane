@@ -9,9 +9,10 @@
 // 改用「按项目打开一个 *gorm.DB」的多 db 模式（服务层后续按项目缓存 Store）。目录名 .xkpanes
 // （对齐 XK-Pane 品牌；cc-pane 原版是 .ccpanes）。移植自 cc-pane history_file_repo.rs。
 //
-// 本单元 = 存储基座：Open/Close + SaveVersion（hash 去重 + 间隔节流 + blob 落盘）+
+// 存储基座（本文件）：Open/Close + SaveVersion（hash 去重 + 间隔节流 + blob 落盘）+
 // ListVersions(_ByBranch) + GetFileBranches + GetVersionContent（gzip 兼容读）。
-// 后续单元：diff 引擎 / 标签 / 回滚 restore / 最近变更 / 清理 pruning（max_age/max_versions/
+// 标签（labels.go）：PutLabel / ListLabels / DeleteLabel / GetAllLatestSnapshots。
+// 后续单元：diff 引擎 / 回滚 restore / 最近变更 / 清理 pruning（max_age/max_versions/
 // max_total_size + 孤儿 blob 回收）/ gzip 压缩 / Wails 服务层 + auto-label 钩子（供 gitx
 // Pull/Push/Stash 外层调用）。
 package localhistory
@@ -95,7 +96,7 @@ func Open(projectPath string) (*Store, error) {
 			return nil, fmt.Errorf("localhistory: pragma: %w", err)
 		}
 	}
-	if err := gdb.AutoMigrate(&FileVersion{}); err != nil {
+	if err := gdb.AutoMigrate(&FileVersion{}, &Label{}, &LabelSnapshot{}); err != nil {
 		return nil, fmt.Errorf("localhistory: migrate: %w", err)
 	}
 	return &Store{gdb: gdb, projectPath: projectPath, blobs: blobs}, nil
