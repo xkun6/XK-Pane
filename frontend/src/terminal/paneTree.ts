@@ -28,6 +28,19 @@ export function createPanel(tab?: Tab): Panel {
   };
 }
 
+/**
+ * 创建一个空面板（无 Tab）—— 终端页初始态 / 关掉最后一个会话后回到的「空态」。
+ * 空面板由 PanelView 渲染为「从左侧启动会话」提示，不凭空开一个无意义的空 shell。
+ */
+export function createEmptyPanel(): Panel {
+  return {
+    type: 'panel',
+    id: generateId('pane'),
+    tabs: [],
+    activeTabId: '',
+  };
+}
+
 /** 创建一个终端 Tab（含单 leaf 的 terminalRootPane）。 */
 export function createTab(
   projectId: string,

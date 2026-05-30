@@ -14,6 +14,7 @@
 
 import {
   collectPanels,
+  createEmptyPanel,
   createPanel,
   createTab,
   findPane,
@@ -65,9 +66,9 @@ function normalizePaneTree(root: PaneNode): PaneNode {
   return root;
 }
 
-/** 初始状态：单个空面板（含一个空终端 Tab），活动面板即该面板。 */
+/** 初始状态：单个空面板（无 Tab），活动面板即该面板。终端页打开即空态，由 WorkspaceTree 启动会话。 */
 export function createInitialTreeState(): TerminalTreeState {
-  const panel = createPanel();
+  const panel = createEmptyPanel();
   return { rootPane: panel, activePaneId: panel.id };
 }
 
@@ -126,7 +127,7 @@ export function terminalTreeReducer(
       if (!parentResult) return state;
 
       if (parentResult.parent === null) {
-        const newPane = createPanel();
+        const newPane = createEmptyPanel();
         return { rootPane: newPane, activePaneId: newPane.id };
       }
 

@@ -24,12 +24,12 @@ function panels(state: TerminalTreeState): Panel[] {
 // ── 初始状态 ──
 
 describe('createInitialTreeState', () => {
-  it('单面板 + 单空 Tab，活动面板即该面板', () => {
+  it('单空面板（无 Tab），活动面板即该面板', () => {
     const s = createInitialTreeState();
     const p = rootPanel(s);
-    expect(p.tabs).toHaveLength(1);
+    expect(p.tabs).toHaveLength(0);
     expect(s.activePaneId).toBe(p.id);
-    expect(p.activeTabId).toBe(p.tabs[0]!.id);
+    expect(p.activeTabId).toBe('');
   });
 });
 
@@ -38,18 +38,24 @@ describe('createInitialTreeState', () => {
 describe('addTab', () => {
   it('追加 Tab 并激活，且不改动原状态（纯函数）', () => {
     const s0 = createInitialTreeState();
-    const before = rootPanel(s0).tabs.length;
+    const pid = rootPanel(s0).id;
     const s1 = terminalTreeReducer(s0, {
       type: 'addTab',
-      paneId: rootPanel(s0).id,
+      paneId: pid,
+      opts: { projectId: 'p0', projectPath: '/a/p0' },
+    });
+    const s2 = terminalTreeReducer(s1, {
+      type: 'addTab',
+      paneId: pid,
       opts: { projectId: 'proj1', projectPath: '/a/proj', cliTool: 'claude' },
     });
-    expect(rootPanel(s1).tabs).toHaveLength(before + 1);
-    expect(rootPanel(s1).activeTabId).toBe(rootPanel(s1).tabs[1]!.id);
-    expect(rootPanel(s1).tabs[1]!.cliTool).toBe('claude');
-    // 原状态不被改动
-    expect(rootPanel(s0).tabs).toHaveLength(before);
-    expect(s1).not.toBe(s0);
+    // 追加到末尾并激活第二个
+    expect(rootPanel(s2).tabs).toHaveLength(2);
+    expect(rootPanel(s2).activeTabId).toBe(rootPanel(s2).tabs[1]!.id);
+    expect(rootPanel(s2).tabs[1]!.cliTool).toBe('claude');
+    // 原状态不被改动（s1 仍是 1 个 Tab）
+    expect(rootPanel(s1).tabs).toHaveLength(1);
+    expect(s2).not.toBe(s1);
   });
 
   it('面板不存在时原样返回', () => {
@@ -67,15 +73,21 @@ describe('selectTab / setActivePane', () => {
   it('selectTab 设置 activeTabId 并把面板设为活动面板', () => {
     const s0 = createInitialTreeState();
     const pid = rootPanel(s0).id;
-    const withTab = terminalTreeReducer(s0, {
+    const s1 = terminalTreeReducer(s0, {
       type: 'addTab',
       paneId: pid,
-      opts: { projectId: 'p', projectPath: '/a' },
+      opts: { projectId: 'p1', projectPath: '/a' },
     });
-    const firstTabId = rootPanel(withTab).tabs[0]!.id;
-    const s2 = terminalTreeReducer(withTab, { type: 'selectTab', paneId: pid, tabId: firstTabId });
-    expect(rootPanel(s2).activeTabId).toBe(firstTabId);
-    expect(s2.activePaneId).toBe(pid);
+    const firstTabId = rootPanel(s1).tabs[0]!.id;
+    const s2 = terminalTreeReducer(s1, {
+      type: 'addTab',
+      paneId: pid,
+      opts: { projectId: 'p2', projectPath: '/b' },
+    });
+    // 当前激活第二个，selectTab 切回第一个
+    const s3 = terminalTreeReducer(s2, { type: 'selectTab', paneId: pid, tabId: firstTabId });
+    expect(rootPanel(s3).activeTabId).toBe(firstTabId);
+    expect(s3.activePaneId).toBe(pid);
   });
 
   it('setActivePane 相同 id 返回同一引用（避免无谓重渲染）', () => {
@@ -139,12 +151,13 @@ describe('closePane', () => {
     expect(s2.activePaneId).toBe(orig);
   });
 
-  it('关闭根面板（无父）→ 重置为一个全新空面板', () => {
+  it('关闭根面板（无父）→ 重置为一个全新空面板（无 Tab）', () => {
     const s0 = createInitialTreeState();
     const orig = rootPanel(s0).id;
     const s1 = terminalTreeReducer(s0, { type: 'closePane', paneId: orig });
     expect(s1.rootPane.type).toBe('panel');
     expect(rootPanel(s1).id).not.toBe(orig);
+    expect(rootPanel(s1).tabs).toHaveLength(0);
     expect(s1.activePaneId).toBe(rootPanel(s1).id);
   });
 
@@ -164,12 +177,17 @@ describe('closeTab', () => {
     const s1 = terminalTreeReducer(s0, {
       type: 'addTab',
       paneId: pid,
-      opts: { projectId: 'p', projectPath: '/a' },
+      opts: { projectId: 'p1', projectPath: '/a' },
     });
-    const activeTabId = rootPanel(s1).activeTabId; // 第二个 Tab
-    const s2 = terminalTreeReducer(s1, { type: 'closeTab', paneId: pid, tabId: activeTabId });
-    expect(rootPanel(s2).tabs).toHaveLength(1);
-    expect(rootPanel(s2).activeTabId).toBe(rootPanel(s2).tabs[0]!.id);
+    const s2 = terminalTreeReducer(s1, {
+      type: 'addTab',
+      paneId: pid,
+      opts: { projectId: 'p2', projectPath: '/b' },
+    });
+    const activeTabId = rootPanel(s2).activeTabId; // 第二个 Tab
+    const s3 = terminalTreeReducer(s2, { type: 'closeTab', paneId: pid, tabId: activeTabId });
+    expect(rootPanel(s3).tabs).toHaveLength(1);
+    expect(rootPanel(s3).activeTabId).toBe(rootPanel(s3).tabs[0]!.id);
   });
 
   it('最后一个 Tab → 连带关闭面板（split 内则折叠）', () => {
@@ -203,8 +221,13 @@ describe('resizePanes', () => {
 
 describe('setTabSession', () => {
   it('回填 Tab 级与单 leaf 的 sessionId', () => {
-    const s0 = createInitialTreeState();
-    const pid = rootPanel(s0).id;
+    const base = createInitialTreeState();
+    const pid = rootPanel(base).id;
+    const s0 = terminalTreeReducer(base, {
+      type: 'addTab',
+      paneId: pid,
+      opts: { projectId: 'p', projectPath: '/a' },
+    });
     const tabId = rootPanel(s0).tabs[0]!.id;
     const s1 = terminalTreeReducer(s0, {
       type: 'setTabSession',

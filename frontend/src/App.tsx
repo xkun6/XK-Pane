@@ -5,6 +5,7 @@ import { registerSettingsPageLocales } from '@/pages/SettingsPage/lang';
 import { registerGitPageLocales } from '@/pages/GitPage';
 import { registerHistoryPageLocales } from '@/pages/HistoryPage';
 import { registerWorkspaceTreeLocales } from '@/components/WorkspaceTree';
+import { registerPaneTreeLocales } from '@/components/PaneTree';
 import { PreferencesProvider } from '@/preferences';
 import { ProjectProvider } from '@/project';
 import { WorkspaceProvider } from '@/workspace';
@@ -28,6 +29,7 @@ registerSettingsPageLocales();
 registerGitPageLocales();
 registerHistoryPageLocales();
 registerWorkspaceTreeLocales();
+registerPaneTreeLocales();
 
 // Provider 嵌套顺序（自外向内）：
 //  ① I18nProvider —— 文案是任何子组件都可能用到的最基础上下文

@@ -11,6 +11,10 @@ interface PanelViewSx {
   tabPane: S;
   tabPaneActive: S;
   tabPaneHidden: S;
+  empty: S;
+  emptyIcon: S;
+  emptyTitle: S;
+  emptyHint: S;
 }
 
 export const panelViewStyles = (theme: Theme): PanelViewSx => {
@@ -39,5 +43,20 @@ export const panelViewStyles = (theme: Theme): PanelViewSx => {
     },
     tabPaneActive: { display: 'block' },
     tabPaneHidden: { display: 'none' },
+    // 空面板（无 Tab）占位：居中提示从左侧启动会话。
+    empty: {
+      flex: 1,
+      minHeight: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 1,
+      px: 3,
+      textAlign: 'center',
+    },
+    emptyIcon: { fontSize: 40, color: fp.text.muted, opacity: 0.6 },
+    emptyTitle: { fontSize: 14, fontWeight: 600, color: fp.text.secondary },
+    emptyHint: { fontSize: 12, color: fp.text.muted, maxWidth: 280, lineHeight: 1.6 },
   };
 };
