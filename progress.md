@@ -775,3 +775,10 @@
 - **VM「切 List→Query 数据源」**：无过滤用 Provider 全量 `todos`（不分页）；任一过滤/搜索激活切到服务端 `Query`。防抖 200ms（搜索连打合并）+ `queryReqRef` 丢弃过期响应；`todos` 入 effect 依赖使 mutation 后自动重查（过滤视图与底层保持一致）。**Provider 仍是变更权威**（mutation 走 Provider）。空态分流：过滤无匹配 `noMatch`，否则 `empty`。文案 `todo.filter/status.*`（zh/en）。typecheck + build 通过。commit `e44d11d`。
 - **🎯 现在可真机验证**：`wails3 dev` → 待办页 → 加几条不同状态/优先级 → 用状态/优先级下拉 + 搜索框过滤 → 列表实时收窄；勾选/删除后过滤视图自动同步。**Todo 域核心 + 高级（CRUD/子任务/统计/过滤搜索）surface 完毕**。
 - **下一单元（各为独立切片）**：① 会话恢复前端（`SessionService.ts` + TerminalProvider 布局持久化/还原，**视觉门控**）；② file-watcher 自动捕获（fsnotify 新依赖 → **决策门 AskUserQuestion**）；③ Todo reorder/batch（拖拽 @dnd-kit / 批量状态，后端需补 Reorder/BatchUpdateStatus）；④ 早期子系统起步（Bedrock/MCPE/notify/memory，需先盘 cc-pane 源 + 可能的决策门）。
+
+### ▶ 续：Todo Reorder + BatchUpdateStatus 后端（dep-free 可测，同 /loop 自主续）
+- **补齐 Todo 高级后端最后两块**（候选③的后端半，移植 cc-pane todo_repo.reorder / batch_update_status）。dep-free 可测，延续自验后端动量（其 UI 属视觉单元，分层留后续）。
+- `Reorder(ctx, ids)`：事务逐条把 sort_order 重写为下标，用 **UpdateColumn 不 bump updated_at**（重排非内容变更，对齐 cc-pane）；不存在的 id 静默跳过。`BatchUpdateStatus(ctx, ids, status)`：`WHERE id IN ?` 单语句批量改状态，用 **Update 自动 bump updated_at**（对齐 cc-pane），返回影响行数；空 ids→0、空 status→报错。
+- +2 测：Reorder（[C,A,B] 重排后 List 次序 + sortOrder 0/1/2）；BatchUpdateStatus（2 行影响 + 未改保持 / 含未知 id 仅计存在 / 空 ids→0 / 空 status 报错）。bindings 13 Services/89 Methods(+2)。dev+prod 全绿；前端 typecheck+build 通过（新方法暂无消费方，与 Query 分层同纪律）。commit `23d6bf3`。
+- **进度盘点（自验后端 vs 门控）**：Git / Local History / Todo（CRUD+子任务+统计+过滤搜索+reorder+batch 后端）/ session 脱敏注册——**dep-free 可自验簇基本做完**。**仍有 dep-free 可测 runway**：⑤ **Spec CRUD**（models_ccpane.go 的 Spec 已就位，cc-pane 有 spec repo，per-project 需求文档；dep-free + 可测 + 可 surface）；早期子系统中 **notify/memory** 可能较自包含（待盘）。**门控类**（暂不自主推进）：会话恢复前端 / reorder·batch UI（视觉门控，仅 typecheck+build 验）、file-watcher（fsnotify 新依赖→决策门）、Bedrock（22MB embed + MCP server D5，较重）。
+- **下一单元**：倾向 **Spec CRUD 后端**（续 dep-free 可测自验链，先读 cc-pane spec repo 取准契约）。视觉门控单元（会话恢复 / reorder UI）与决策门（file-watcher）累积到用户回来再推，不空转、不自引新依赖。
