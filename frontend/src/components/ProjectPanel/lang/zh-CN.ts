@@ -12,6 +12,11 @@ export const projectPanelZhCN: Messages = {
       title: '移除项目',
       message: '确定移除项目「{{name}}」吗？这只从列表移除，不会删除磁盘上的文件。',
     },
+    launch: {
+      openTerminal: '打开终端',
+      loading: '检测 CLI 工具中…',
+      notInstalled: '未安装',
+    },
     error: {
       title: '项目操作失败',
     },

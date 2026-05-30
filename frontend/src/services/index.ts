@@ -85,3 +85,8 @@ export {
   type TerminalStatusKind,
   type TerminalExit,
 } from './terminal/TerminalService';
+export {
+  CliToolService,
+  type CliTool,
+  type CliToolCapabilities,
+} from './clitools/CliToolService';

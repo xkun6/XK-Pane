@@ -1,13 +1,16 @@
 // TerminalView 的 ViewModel：把一个后端 PTY 会话（sessionId）渲染成可交互 xterm。
 //
-// MVP 取自 cc-pane `TerminalView.tsx` 的核心 xterm 接线（其全量 1256 行含 provider/resume/
-// SSH/WSL/popout/drag/reconnect/restore，均非 MVP）。本实现只做：
-//   创建 Terminal + FitAddon → open 进 host → layoutScheduler 接 ResizeObserver →
-//   term.onData → TerminalService.write；订阅 onOutput(sessionId)→term.write、onExit→提示+回调；
-//   卸载时彻底回收。
-// 刻意延后（标 TODO）：WebGL 渲染器控制器（性能增强，用 DOM 渲染器）、运行时切主题热更
-//   （现于 mount 捕获主题色）、Windows ConPTY buildNumber 调优、写入流控、reconnect/restore、
-//   wheel→方向键转换、drag fit 节流。
+// 在 cc-pane MVP 接线（创建 Terminal + FitAddon → open → layoutScheduler → onData→write；
+// 订阅 onOutput→write、onExit→提示）基础上，补齐 cc-pane 列为「不可省」的 TUI 兼容层
+// （让 Claude/Codex 这类 agent CLI 握手正确、不渲染错乱）：
+//   - CPR 光标查询应答（CSI 6 n / CSI ? 6 n）
+//   - Primary DA 应答（CSI c）+ Kitty 键盘协议应答（CSI ? u）—— codex 启动握手必需
+//   - OSC 4/10/11 颜色查询应答
+//   - 写入流控（Windows 高吞吐防卡）
+//   - agent CLI 输出剥离 alternate-buffer 切屏序列（输出留 normal buffer，滚轮滚历史）
+//   - Ctrl/Cmd+V 粘贴（读剪贴板写 PTY）/ 有选区时 Ctrl/Cmd+C 复制（无选区透传 SIGINT）
+// 仍刻意延后：WebGL 渲染器、运行时切主题热更、内层分屏、reconnect/restore、wheel→方向键、
+//   剪贴板文件路径/图片粘贴（Tauri 专有，依赖未移植能力）。
 //
 // MVVM：本 hook 不返回 JSX，只创建并返回 hostRef + 管理副作用；经 services/TerminalService
 //   与后端通信，绝不直接 import @bindings（xterm 为第三方库，允许直接 import）。
@@ -16,10 +19,27 @@ import { useTheme } from '@mui/material';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal, type ITheme } from '@xterm/xterm';
 import { TerminalService } from '@/services';
+import { isMac, isWindows } from '@/shared/platform';
 import {
   createTerminalLayoutScheduler,
   type TerminalLayoutScheduler,
 } from '@/terminal/layoutScheduler';
+import { buildCursorPositionReport } from './compat/terminalCpr';
+import {
+  buildPrimaryDeviceAttributesReport,
+  buildKittyKeyboardProtocolReport,
+} from './compat/terminalCapabilityReports';
+import { buildOscColorReply } from './compat/terminalOscColor';
+import { buildTerminalPalette } from './compat/terminalTheme';
+import {
+  shouldKeepCliOutputInNormalBuffer,
+  stripAlternateBufferSequences,
+} from './compat/terminalBufferMode';
+import { isTerminalCopyShortcut, isTerminalPasteShortcut } from './compat/terminalKeyboard';
+import {
+  createTerminalWriteFlowControl,
+  type TerminalWriteFlowControl,
+} from './compat/terminalWriteFlowControl';
 
 const TERMINAL_FONT_FAMILY =
   'Consolas, "Courier New", "Microsoft YaHei Mono", "Noto Sans Mono CJK SC", "PingFang SC", monospace';
@@ -34,6 +54,8 @@ export interface UseTerminalViewArgs {
   sessionId: string | null;
   /** 是否当前活动面板：非活动时延后 fit，切回可见时 flush + 安全聚焦。 */
   active: boolean;
+  /** 该会话的 CLI 工具 id（决定是否对 agent CLI 剥离 alternate-buffer 序列）。 */
+  cliTool?: string;
   /** 会话退出回调（exitCode）。 */
   onExit?: (exitCode: number) => void;
 }
@@ -42,34 +64,63 @@ export interface TerminalViewModel {
   hostRef: React.RefObject<HTMLDivElement | null>;
 }
 
-export function useTerminalView({ sessionId, active, onExit }: UseTerminalViewArgs): TerminalViewModel {
+export function useTerminalView({
+  sessionId,
+  active,
+  cliTool,
+  onExit,
+}: UseTerminalViewArgs): TerminalViewModel {
   const theme = useTheme();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const schedulerRef = useRef<TerminalLayoutScheduler | null>(null);
+  const flowRef = useRef<TerminalWriteFlowControl | null>(null);
 
   // 让 scheduler getter / 异步回调读到最新值（避免过期闭包）。
   const sessionIdRef = useRef<string | null>(sessionId);
   const activeRef = useRef<boolean>(active);
+  const cliToolRef = useRef<string | undefined>(cliTool);
   const onExitRef = useRef<UseTerminalViewArgs['onExit']>(onExit);
   useEffect(() => {
     sessionIdRef.current = sessionId;
     activeRef.current = active;
+    cliToolRef.current = cliTool;
     onExitRef.current = onExit;
   });
 
-  // 仅在 host 就绪后挂载一次：创建 xterm + 调度器 + 输入/尺寸接线。
+  // 仅在 host 就绪后挂载一次：创建 xterm + 调度器 + 输入/尺寸接线 + TUI 兼容层。
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
 
+    // 终端调色板：前景/背景取 foundation 主题，ANSI 16 色取终端域常量（见 terminalTheme.ts）。
+    const palette = buildTerminalPalette(
+      theme.palette.foundation.text.primary,
+      theme.palette.foundation.bg.content,
+    );
     const xtermTheme: ITheme = {
-      background: theme.palette.foundation.bg.content,
-      foreground: theme.palette.foundation.text.primary,
+      background: palette.background,
+      foreground: palette.foreground,
       cursor: theme.palette.foundation.accent,
-      cursorAccent: theme.palette.foundation.bg.content,
+      cursorAccent: palette.background,
       selectionBackground: theme.palette.foundation.bg.active,
+      black: palette.black,
+      red: palette.red,
+      green: palette.green,
+      yellow: palette.yellow,
+      blue: palette.blue,
+      magenta: palette.magenta,
+      cyan: palette.cyan,
+      white: palette.white,
+      brightBlack: palette.brightBlack,
+      brightRed: palette.brightRed,
+      brightGreen: palette.brightGreen,
+      brightYellow: palette.brightYellow,
+      brightBlue: palette.brightBlue,
+      brightMagenta: palette.brightMagenta,
+      brightCyan: palette.brightCyan,
+      brightWhite: palette.brightWhite,
     };
 
     const term = new Terminal({
@@ -85,6 +136,77 @@ export function useTerminalView({ sessionId, active, onExit }: UseTerminalViewAr
     term.open(host);
     termRef.current = term;
     fitRef.current = fit;
+
+    // ── TUI 兼容层：注册 CSI/OSC 应答处理器，回应经 PTY 写回 ──
+    // reply: 有应答则写回 PTY 并返回 true（抑制 xterm 默认处理，避免重复应答）；否则放行。
+    const reply = (payload: string | null): boolean => {
+      if (!payload) return false;
+      const sid = sessionIdRef.current;
+      if (sid) void TerminalService.write(sid, payload).catch(() => {});
+      return true;
+    };
+    const disposables = [
+      term.parser.registerCsiHandler({ final: 'n' }, (params) =>
+        reply(
+          buildCursorPositionReport(
+            params,
+            undefined,
+            term.buffer.active.cursorX,
+            term.buffer.active.cursorY,
+          ),
+        ),
+      ),
+      term.parser.registerCsiHandler({ prefix: '?', final: 'n' }, (params) =>
+        reply(
+          buildCursorPositionReport(
+            params,
+            '?',
+            term.buffer.active.cursorX,
+            term.buffer.active.cursorY,
+          ),
+        ),
+      ),
+      term.parser.registerCsiHandler({ final: 'c' }, (params) =>
+        reply(buildPrimaryDeviceAttributesReport(params, undefined)),
+      ),
+      term.parser.registerCsiHandler({ prefix: '?', final: 'u' }, (params) =>
+        reply(buildKittyKeyboardProtocolReport(params, '?')),
+      ),
+      term.parser.registerOscHandler(4, (data) => reply(buildOscColorReply(4, data, palette))),
+      term.parser.registerOscHandler(10, (data) => reply(buildOscColorReply(10, data, palette))),
+      term.parser.registerOscHandler(11, (data) => reply(buildOscColorReply(11, data, palette))),
+    ];
+
+    // 写入流控：Windows 上启用 watermark（高吞吐输出防卡 webview 主线程）。
+    const flow = createTerminalWriteFlowControl(
+      { write: (data, cb) => termRef.current?.write(data, cb) },
+      { enabled: isWindows },
+    );
+    flowRef.current = flow;
+
+    // 键盘：Ctrl/Cmd+V 粘贴（读剪贴板写 PTY）；有选区时 Ctrl/Cmd+C 复制、无选区放行透传 SIGINT。
+    term.attachCustomKeyEventHandler((event) => {
+      if (isTerminalPasteShortcut(event, isMac)) {
+        if (navigator.clipboard?.readText) {
+          void navigator.clipboard
+            .readText()
+            .then((text) => {
+              const sid = sessionIdRef.current;
+              if (sid && text) void TerminalService.write(sid, text).catch(() => {});
+            })
+            .catch(() => {});
+        }
+        return false;
+      }
+      if (isTerminalCopyShortcut(event, isMac)) {
+        const sel = termRef.current?.getSelection();
+        if (sel && navigator.clipboard?.writeText) {
+          void navigator.clipboard.writeText(sel).catch(() => {});
+          return false;
+        }
+      }
+      return true;
+    });
 
     const scheduler = createTerminalLayoutScheduler({
       getTerminal: () => termRef.current,
@@ -133,12 +255,14 @@ export function useTerminalView({ sessionId, active, onExit }: UseTerminalViewAr
 
     return () => {
       onData.dispose();
+      for (const d of disposables) d.dispose();
       observer.disconnect();
       scheduler.dispose();
       term.dispose();
       termRef.current = null;
       fitRef.current = null;
       schedulerRef.current = null;
+      flowRef.current = null;
     };
     // 只在 mount 接线一次；theme 于此捕获（运行时切主题热更属 TODO）。
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -148,7 +272,15 @@ export function useTerminalView({ sessionId, active, onExit }: UseTerminalViewAr
   useEffect(() => {
     if (!sessionId) return;
     const offOutput = TerminalService.onOutput(sessionId, (data) => {
-      termRef.current?.write(data);
+      // agent CLI（claude/reclaude/codex）：剥离切屏序列，让输出留 normal buffer。
+      const tool = cliToolRef.current;
+      const processed =
+        tool && shouldKeepCliOutputInNormalBuffer(tool)
+          ? stripAlternateBufferSequences(data)
+          : data;
+      const flow = flowRef.current;
+      if (flow) void flow.write(processed);
+      else termRef.current?.write(processed);
     });
     const offExit = TerminalService.onExit(sessionId, ({ exitCode }) => {
       termRef.current?.writeln(`\r\n\x1b[33mProcess exited with code ${exitCode}\x1b[0m`);

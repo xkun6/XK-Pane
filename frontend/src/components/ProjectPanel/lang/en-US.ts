@@ -11,6 +11,11 @@ export const projectPanelEnUS: Messages = {
       title: 'Remove project',
       message: 'Remove project "{{name}}"? This only removes it from the list; files on disk are untouched.',
     },
+    launch: {
+      openTerminal: 'Open terminal',
+      loading: 'Detecting CLI tools…',
+      notInstalled: 'Not installed',
+    },
     error: {
       title: 'Project operation failed',
     },

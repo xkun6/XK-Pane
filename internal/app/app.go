@@ -12,6 +12,7 @@ import (
 	"xkpane/internal/events"
 	"xkpane/internal/services/appsettings"
 	"xkpane/internal/services/cliadapters"
+	"xkpane/internal/services/clitools"
 	"xkpane/internal/services/gitsvc"
 	"xkpane/internal/services/greet"
 	"xkpane/internal/services/launchhistory"
@@ -70,8 +71,11 @@ func Run(assets embed.FS) error {
 	// subprocess / terminal service 需要 *application.App 才能向前端 Emit 事件。
 	// 但 application.New 又需要 services 列表 —— 用预创建 + Bind 模式：
 	//   先 new 一个空 service 占位，然后在 app.New 之后回填 app 引用。
-	subSvc := subprocess.New(nil)             // app 暂为 nil
-	termSvc := terminal.New(cliadapters.Default()) // PTY 会话注册表，app 经 AttachApp 回填
+	subSvc := subprocess.New(nil) // app 暂为 nil
+	// CLI 工具注册表只建一次，terminal（启动拼装）与 clitools（暴露给前端列表）共享同一实例，
+	// 避免两处各自 Default() 导致 DetectAll 重复跑 which + --version 探测。
+	cliRegistry := cliadapters.Default()
+	termSvc := terminal.New(cliRegistry) // PTY 会话注册表，app 经 AttachApp 回填
 	// gitsvc / localhistorysvc 预创建以便互联：gitsvc 在 stash/pull/push 前调 localhistorysvc
 	// 打 Local History 标签（cc-pane auto_label_before_git）。两者皆注册，连接经 SetAutoLabeler。
 	gitSvc := gitsvc.New()
@@ -120,6 +124,7 @@ func Run(assets embed.FS) error {
 			application.NewService(lhSvc),
 			application.NewService(subSvc),
 			application.NewService(termSvc),
+			application.NewService(clitools.New(cliRegistry)),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

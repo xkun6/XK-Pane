@@ -38,7 +38,7 @@ export const PanelView = ({ panel }: { panel: Panel }) => {
               key={tab.id}
               sx={[styles.tabPane, visible ? styles.tabPaneActive : styles.tabPaneHidden]}
             >
-              <TerminalView sessionId={tab.sessionId} active={visible} />
+              <TerminalView sessionId={tab.sessionId} active={visible} cliTool={tab.cliTool} />
             </Box>
           );
         })}
