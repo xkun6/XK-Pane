@@ -3,6 +3,7 @@ import { I18nProvider, registerFoundationLocales } from '@/i18n';
 import { registerHomePageLocales } from '@/pages/HomePage/lang';
 import { registerSettingsPageLocales } from '@/pages/SettingsPage/lang';
 import { registerTodoPageLocales } from '@/pages/TodoPage';
+import { registerGitPageLocales } from '@/pages/GitPage';
 import { registerProjectPanelLocales } from '@/components/ProjectPanel';
 import { PreferencesProvider } from '@/preferences';
 import { ProjectProvider } from '@/project';
@@ -25,6 +26,7 @@ registerFoundationLocales();
 registerHomePageLocales();
 registerSettingsPageLocales();
 registerTodoPageLocales();
+registerGitPageLocales();
 registerProjectPanelLocales();
 
 // Provider 嵌套顺序（自外向内）：

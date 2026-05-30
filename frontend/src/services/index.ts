@@ -6,6 +6,12 @@ export {
 } from './launchhistory/LaunchHistoryService';
 export { ProjectService, type Project } from './project/ProjectService';
 export {
+  GitService,
+  type GitStatus,
+  type GitBranch,
+  type GitCommit,
+} from './git/GitService';
+export {
   TodoService,
   type Todo,
   type TodoSubtask,
