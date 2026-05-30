@@ -744,3 +744,11 @@
 - **Phase 3 后端 + provider 管理 UI 全部完成**：project/launch_history/provider service（含 cryptox + 安全审查 clean）+ provider→启动 env 注入（头条后端通）+ project 侧边栏 + provider 设置子页（11 类全可配）。
 - Phase 3 余项多为**视觉 checkpoint 门控**（启动选 Provider/CLI UI、会话恢复 restore UI、窗口形态）或前端 i18n 梳理。
 - **下一方向倾向 Phase 4 可测后端**（皆 goal 成功判据、不依赖终端渲染）：**Git 集成**（go-git status/branch/log/diff，对临时 repo 可测，D4）/ Local History（file_versions 快照）/ Todo·Spec CRUD。或会话恢复后端（terminal_sessions Save/List）。**已累计大量未真机验证前端（终端栈 + 项目面板）**——视觉验证债持续；继续走可测后端以控风险，启动相关 UI 留 checkpoint。
+
+### ▶ 续：Local History prune/config 暴露 + History 页配置面板（同 /loop 自主续）
+- **Local History 后端最后一块未 surface 的能力接前端**（续「接前端 / 让成果可验」方向）：每项目历史配置（保留期 / 数量 / 大小上限 / 忽略规则）+ 按配置清理 + 存储统计。
+- **后端**：`internal/localhistory/prune.go` 新增导出 `Store.Stats`（版本数 / 文件数 / blob 总字节，让清理可观测）；`localhistorysvc` 新增 `GetConfig` / `SaveConfig` / `Cleanup` / `GetStats`。**Exists 守门分层**：`GetConfig`/`GetStats` 对无历史项目仅返回默认 / 全 0 且**不创建** `.xkpanes/`（仅查看不落地），`SaveConfig` 为显式写按需创建历史存储，`Cleanup` 无历史 no-op。
+- **前端**：`LocalHistoryService` 加 `HistoryConfig`/`HistoryStats` 类型 + 4 包装；`HistoryPage` 选项目后新增「历史配置与清理」面板——存储占用 chip（统计 + 上限）、启用开关、版本数 / 保留天数 / 单文件上限(MB) / 总上限(MB) / 最小保存间隔表单、忽略规则多行编辑、保存配置 + 立即清理（原生确认，清理后刷新统计直观见回收）。配置仅 select 拉一次（不被 refresh 覆盖编辑态），统计随快照 / 回滚 / 清理刷新。文案 `history.config/stats/cleanup.*`（zh/en 对齐），图标 *Rounded。
+- +测：配置往返（无历史返回默认且不落地 / 保存后回读改值）+ 清理按 MaxVersionsPerFile 生效（3→2，最旧删，孤儿 blob 回收使 blob 总字节下降）+ Stats 同步反映。bindings 重生 **12 Services/82 Methods(+4)/56 Models**（+HistoryConfig/HistoryStats）。dev+prod 全绿；前端 typecheck+build 通过。commit `d394f97`。
+- **🎯 现在可真机验证**：`wails3 dev` → 本地历史页 → 选项目 → 快照几个版本 → 看「存储占用」→ 调小「每文件最多版本数」→ 保存配置 → 立即清理 → 统计回收、列表变短。**Local History 域后端全面 surface 完毕**（列表 / 快照 / 回滚 / diff / 标签 / 配置 / 清理 / 统计 + git auto-label 钩子）。
+- **下一单元（方向轮换，各为独立切片）**：① 会话恢复——需先做 session.go sshConfig 脱敏（已记 SECURITY TODO）才能注册 session 服务 + 恢复 UI；② Todo 高级（query/stats/提醒/重复）；③ file-watcher 自动捕获（让 Local History 自动快照，**需引 fsnotify 新依赖 → 决策门，到时 AskUserQuestion**）。
