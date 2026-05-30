@@ -653,6 +653,13 @@
 - **审查另证**：「CRLF↔LF 整块判变更」本身 cc-pane(similar) 也有（继承行为，非移植 bug），但 cc-pane 保留 \r 故 inline 至少高亮 \r；本仓归一化后更优（纯行尾差异 0 diff）。验证者实测复现两条、对照 Rust 源 + deepwiki 确认 similar tokenize_lines 保留 \r\n。
 - **Local History 后端完成（含 diff，28 测，已对抗验证 + 修复）**。下一单元倾向：Wails 服务层（前端消费方/视觉门控）或转其他可测后端 / 早期子系统——属方向选择，近期或再设检查点。
 
+### ▶ 续：会话恢复后端（Phase 4 / 目标判据「会话恢复」，同 /loop 自主续）
+- `internal/services/session/session.go`：移植 cc-pane session_restore_repo。SaveSessions(**整体替换**=清空+批量插入,事务,空切片=清空)/LoadSessions(全量,saved_at 升序)/ClearSessions。会话集合=当前布局快照,每次保存覆盖。
+- **安全**：SshConfig 敏感 → cryptox 落库加密/读出解密(铁律)。**SECURITY TODO**(待 SSH 运行时单元)：sshConfig 是后端重连数据非前端,届时仿 provider 脱敏 DTO + 非绑定解密 helper；当前 SSH 未落地、sshConfig 恒 nil 无明文跨 IPC。**暂不注册 app.go**(恢复 UI 视觉门控)。
+- +4 测（roundtrip + sshConfig 解密 / **sshConfig 落库密文裸行校验** / 整体替换 / 空保存=清空+Clear）。dev+prod 全绿。commit `e379cd1`。
+- **进度盘点**：Git(3 unit/8 测) + Local History(7 unit/28 测,已对抗验证) + 会话恢复(1 unit/4 测) 后端均完成。**清晰无门的核心可测后端渐少**——剩 Todo/Spec CRUD(模型已存,可测无门)、launch_profile(需新模型)、运行时 WSL discovery(平台相关)；之后多为前端消费方/视觉门控的服务层 + UI，或用户强调的早期子系统(Bedrock/MCPE/notify/memory，Phase 5，含 D5 MCP 等较大架构)。
+- **下一单元倾向**：Todo + TodoSubtask CRUD（模型已在 AllModels，Holder 模式，纯可测无门）；做完后若仍无新方向 + 清晰可测后端耗尽，再设检查点建议用户验证/接前端/转早期子系统。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么

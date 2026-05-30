@@ -133,7 +133,7 @@
 | Phase 0 | ✅ complete | 改名 + Dev/Release 隔离，全验证通过 |
 | Phase 1 | ✅ complete | ptyx ✅ / events ✅ / models ✅ / cliadapters ✅（18 守门 ok，MCP/hooks 延后 Phase 5）；subprocess git 白名单改判延后 Phase 4（层次修正） |
 | Phase 2 | 🟡 待视觉验证 | **结构完成、可运行**：后端 service + 状态层(reducer/Context+reconcile) + TerminalView/SplitView/TabBar + PaneTree + App 接线（TerminalProvider/终端页/路由）+ MVP 启动入口（打开文件夹→裸 shell）。全程 typecheck/build/单测(37)/对抗审查全绿，但**前端从未在真 app 跑过**→ **loop 停在此里程碑，待用户首个视觉 checkpoint**（开文件夹→shell 输出→回显→分屏拖拽→关标签回收 PTY）。验证 OK 后转 ✅。侧边栏树/右键启动/CLI 选择/TabBar 拖拽重排 → Phase 3 或另列单元 |
-| Phase 3 | 🔵 in_progress | 后端扁平 `project` service ✅(c8df705，19 测+对抗审查 wf_7bc251b0-c1f)；前端 project Context/侧边栏树 + 会话恢复/设置/i18n/窗口形态待做；**Workspace 持久化模型 = D9 决策门（文件存储 vs SQLite，到该单元停问用户，findings J8）** |
+| Phase 3 | 🔵 in_progress | 后端扁平 `project` service ✅(c8df705，19 测+对抗审查 wf_7bc251b0-c1f)；**会话恢复后端 ✅**（`internal/services/session`，`e379cd1`，SaveSessions 整体替换/LoadSessions/ClearSessions + sshConfig cryptox 落库，4 测，暂未注册 app.go——恢复 UI 视觉门控）；前端 project Context/侧边栏树 + 会话恢复 UI/设置/i18n/窗口形态待做；**Workspace 持久化模型 = D9 决策门（文件存储 vs SQLite，到该单元停问用户，findings J8）** |
 | Phase 4 | 🔵 in_progress | Git: gitx 只读+worktree·stash+network ✅（`bf279a6`/`c8f6d8c`/`4d6f9d4`，8 测）；Local History 存储核心**全部完成**（基座/标签/restore/查询/pruning+config/gzip 压缩，6 unit，19 测，`43d6f80`…`51cb1e5`）。剩 diff(D11 库选型决策门) + Wails 服务层。**已累计 Git+Local History 两大可测后端、无 UI 消费方——会话30 末停下向用户检查方向。****剩**：git 面板(结构化 status/stage/commit/diff，UI 门控) + gitsvc 服务层；Local History diff/标签/restore/最近变更/pruning/压缩 + 服务层。多运行时 / 启动配置 / Todo·Spec 未起 |
 | Phase 5 | ⬜ pending | Bedrock/MCPE/notify/memory |
 | Phase 6 | ⬜ pending | 收尾打包 |
