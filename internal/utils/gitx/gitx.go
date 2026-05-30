@@ -15,12 +15,13 @@
 //   - Branches / Log：本地分支列表 / 最近提交（go-git 原生，常用增强）
 //
 // CLI-only 变更操作（go-git 弱项/无对应，对齐 cc-pane 100% CLI；见 gitx_worktree.go /
-// gitx_stash.go）：
+// gitx_stash.go / gitx_network.go）：
 //   - Worktrees / WorktreeAdd / WorktreeRemove：worktree 增删查
 //   - Stash / StashPop：暂存 / 弹出
+//   - Clone（包级）/ Fetch / Pull / Push：网络操作（鉴权走系统凭据助手 / SSH；显式凭据
+//     与细粒度进度事件延后，见 CloneOptions 文档）
 //
-// 后续 unit：结构化 per-file status + stage/commit/diff（git 面板）、network（fetch/
-// push/pull/clone）。
+// 后续 unit：结构化 per-file status + stage/commit/diff（git 面板）。
 package gitx
 
 import (

@@ -319,3 +319,59 @@ func TestStash(t *testing.T) {
 		t.Fatal("StashPop on empty stash returned nil err, want error")
 	}
 }
+
+// TestNetworkCloneFetchPullPush 用本地 bare 远端跑通 Clone/Push/Fetch/Pull（无真网络/鉴权）：
+// bare origin ← work1(push) ；gitx.Clone origin→work2 ；work1 再 push ；work2 fetch+pull 拿到。
+func TestNetworkCloneFetchPullPush(t *testing.T) {
+	requireGit(t)
+	ctx := context.Background()
+	root := t.TempDir()
+	origin := filepath.Join(root, "origin.git")
+	work1 := filepath.Join(root, "work1")
+	work2 := filepath.Join(root, "work2")
+
+	// bare 远端 + work1 克隆并 seed 首个提交、push -u 建上游（均经真 git 夹具）。
+	gitDo(t, root, "init", "--bare", origin)
+	gitDo(t, root, "clone", origin, work1)
+	gitDo(t, work1, "config", "user.email", "t@t.test")
+	gitDo(t, work1, "config", "user.name", "tester")
+	writeFile(t, work1, "a.txt", "a")
+	gitDo(t, work1, "add", ".")
+	gitDo(t, work1, "commit", "-m", "c1")
+	r1, _ := Open(work1)
+	br, _ := r1.CurrentBranch()
+	gitDo(t, work1, "push", "-u", "origin", br)
+
+	// gitx.Clone origin（已含 c1）→ work2，应带 a.txt。
+	if err := Clone(ctx, origin, work2, CloneOptions{}); err != nil {
+		t.Fatalf("Clone: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(work2, "a.txt")); err != nil {
+		t.Fatalf("cloned work2 missing a.txt: %v", err)
+	}
+
+	// work1 再提交 → gitx.Push（上游已建）。
+	writeFile(t, work1, "b.txt", "b")
+	gitDo(t, work1, "add", ".")
+	gitDo(t, work1, "commit", "-m", "c2")
+	if err := r1.Push(ctx); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+
+	// work2 Fetch + Pull → 拿到 c2 的 b.txt（FF 合并）。
+	r2, _ := Open(work2)
+	if err := r2.Fetch(ctx); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if err := r2.Pull(ctx); err != nil {
+		t.Fatalf("Pull: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(work2, "b.txt")); err != nil {
+		t.Fatalf("after pull work2 missing b.txt: %v", err)
+	}
+
+	// Clone 到已存在目录 → 报错（对齐 cc-pane）。
+	if err := Clone(ctx, origin, work2, CloneOptions{}); err == nil {
+		t.Fatal("Clone into existing dir returned nil err, want error")
+	}
+}

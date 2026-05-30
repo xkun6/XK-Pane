@@ -22,6 +22,10 @@ var allowedSubcmds = map[string]bool{
 	"for-each-ref": true,
 	"worktree":     true,
 	"stash":        true,
+	"clone":        true,
+	"fetch":        true,
+	"pull":         true,
+	"push":         true,
 }
 
 // runGit 经 procx 同步执行 git 子命令（go-git 无对应/弱项时的 CLI 回退）。
