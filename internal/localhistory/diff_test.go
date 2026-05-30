@@ -141,6 +141,25 @@ func itoa(n int) string {
 	return string(b)
 }
 
+func TestComputeDiffNewlineNormalization(t *testing.T) {
+	// 纯行尾风格差异（CRLF vs LF，内容相同）→ 无 diff（修复前会整文件假阳性全爆红）。
+	if r := ComputeDiff("a\r\nb\r\n", "a\nb\n"); len(r.Hunks) != 0 || r.Stats.Additions != 0 || r.Stats.Deletions != 0 {
+		t.Fatalf("CRLF vs LF same content should be no-diff, got hunks=%d stats=%+v", len(r.Hunks), r.Stats)
+	}
+	// 跨风格 + 真实内容变更 → 只报真实变更，content 不带 \r。
+	r := ComputeDiff("a\r\nb\r\n", "a\nB\n")
+	if r.Stats.Additions != 1 || r.Stats.Deletions != 1 {
+		t.Fatalf("cross-style real change stats = %+v, want +1/-1", r.Stats)
+	}
+	if findLine(r, ChangeDelete, "b") == nil || findLine(r, ChangeInsert, "B") == nil {
+		t.Errorf("content should be \\r-free 'b'/'B'")
+	}
+	// 上下文行 'a' 不应因行尾差异被标为变更。
+	if findLine(r, ChangeDelete, "a") != nil || findLine(r, ChangeInsert, "a") != nil {
+		t.Errorf("line 'a' (only newline-style differs) should be context, not a change")
+	}
+}
+
 func TestStoreDiffMethods(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()

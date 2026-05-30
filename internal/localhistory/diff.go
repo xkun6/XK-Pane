@@ -96,7 +96,9 @@ func isBinary(content []byte) bool {
 	return bytes.IndexByte(content[:checkLen], 0) >= 0
 }
 
-// splitLines 按 Rust str::lines() 语义切行：以 \n 分隔、去每行尾 \r、文本以 \n 结尾时不产生末尾空行。
+// splitLines 仅用于 MAX_DIFF_LINES 的**行数统计**（对齐 cc-pane 用 str::lines() 计数做
+// truncated 判断），不参与每行 content 的生成（content 走 splitDiffBlock）。以 \n 分隔、文本
+// 以 \n 结尾时不产生末尾空行；去尾 \r 仅为稳健（ComputeDiff 已先归一化，通常无 \r）。
 func splitLines(s string) []string {
 	if s == "" {
 		return nil
@@ -119,7 +121,7 @@ type lineChange struct {
 }
 
 // splitDiffBlock 把一个 diff 块的文本（若干整行的拼接，每行含 \n，末行可能无）拆成各行内容
-// （去尾 \n 与 \r）。
+// （去尾 \n）。输入已在 ComputeDiff 经 normalizeNewlines 归一为仅 \n，故无需再处理 \r。
 func splitDiffBlock(text string) []string {
 	if text == "" {
 		return nil
@@ -130,11 +132,16 @@ func splitDiffBlock(text string) []string {
 		if seg == "" {
 			continue // 末尾 \n 造成的空段
 		}
-		c := strings.TrimSuffix(seg, "\n")
-		c = strings.TrimSuffix(c, "\r")
-		out = append(out, c)
+		out = append(out, strings.TrimSuffix(seg, "\n"))
 	}
 	return out
+}
+
+// normalizeNewlines 把 \r\n 与孤立 \r 统一为 \n（用于 diff 计算，见 ComputeDiff 注释）。
+func normalizeNewlines(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	return s
 }
 
 // lineChanges 行级 diff：用 diffmatchpatch 行模式（DiffLinesToChars）得到逐行 Equal/Delete/Insert，
@@ -172,6 +179,14 @@ func ComputeDiff(oldText, newText string) DiffResult {
 	if isBinary([]byte(oldText)) || isBinary([]byte(newText)) {
 		return DiffResult{Hunks: []DiffHunk{}, IsBinary: true}
 	}
+	// 换行归一化（仅作用于 diff 计算/显示，绝不影响存储 blob 与 restore 的原始字节）。
+	// **有意改进 cc-pane**：cc-pane（similar from_lines）换行敏感——CRLF↔LF 会把整文件判为
+	// 全行替换（假阳性「全爆红」），而 GetVersionDiff 拿存储版本(可能 CRLF)对比工作树文件
+	// (可能被编辑器/Git 规范化为 LF)极易触发。这里先把 \r\n / 孤立 \r 归一为 \n，使纯行尾
+	// 风格差异不再产生伪 hunk，真实内容变更照常呈现。（对抗审查 workflow w05btokta 确认的修复）
+	oldText = normalizeNewlines(oldText)
+	newText = normalizeNewlines(newText)
+
 	if len(splitLines(oldText)) > maxDiffLines || len(splitLines(newText)) > maxDiffLines {
 		return DiffResult{Hunks: []DiffHunk{}, Truncated: true}
 	}
