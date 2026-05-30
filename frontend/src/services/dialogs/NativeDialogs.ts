@@ -9,6 +9,7 @@
 //   - 把 PascalCase 字段名收口为本地的 camelCase API，对调用方更友好
 //   - 用户取消时统一返回 null（而不是空字符串），避免上层判空写 if (path === '')
 import { Dialogs } from '@wailsio/runtime';
+import { isWindows } from '@/shared/platform';
 
 export interface FileFilter {
   displayName: string;
@@ -107,7 +108,24 @@ export const NativeDialogs = {
   },
 
   // 二选一确认。OK 返回 true，Cancel / 关闭返回 false。
+  //
+  // 平台差异（Wails v3 alpha）：Windows 的 Question 对话框硬编码 MB_YESNO——**忽略**
+  // 自定义按钮 label，只显示系统本地化的「是/否」，且仅当某按钮 Label 字面等于映射回的
+  // "Yes"/"No" 时才触发其回调；否则后端 resp 通道永远收不到值，前端 Promise 永久挂起
+  // （表现为「点是后毫无反应」）。故 Windows 必须用 "Yes"/"No" 作 label（反正不可见），
+  // 并据此判定。macOS（NSAlert）/ Linux（GTK）原生支持自定义 label，回传该 label 本身。
   async confirm(options: ConfirmOptions): Promise<boolean> {
+    if (isWindows) {
+      const choice = await Dialogs.Question({
+        Title: options.title,
+        Message: options.message,
+        Buttons: [
+          { Label: 'Yes', IsDefault: true },
+          { Label: 'No', IsCancel: true },
+        ],
+      });
+      return choice === 'Yes';
+    }
     const okLabel = options.okLabel ?? 'OK';
     const cancelLabel = options.cancelLabel ?? 'Cancel';
     const choice = await Dialogs.Question({
