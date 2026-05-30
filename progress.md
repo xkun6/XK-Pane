@@ -808,3 +808,14 @@
   - **决策门**（需用户定，**不自引依赖**）：file-watcher（fsnotify 新依赖）/ Bedrock（22MB embed + MCP SDK D5，重）/ MCPE（需 MCP 桥）。
   - **待盘**：早期子系统 notify（cc-notify，或可走 Wails 原生通知=dep-free？）/ memory（cc-memory，或可 SQLite 后端=dep-free？）——**下一 tick 先只读盘点 cc-pane 源判断是否 dep-free**：若 dep-free 则实现（续 roadmap），若需新依赖则 AskUserQuestion 陈列决策。
 - **下一单元**：只读调研 cc-notify / cc-memory 的依赖面（判 dep-free vs 决策门）。若两者皆需新依赖 / 皆门控，则本自主轮**收尾**——向用户陈列决策门清单 + 视觉验证清单，停 loop 待用户回来定向（不空转、不自引依赖、不堆视觉债）。
+
+### ▶ 续：只读调研 cc-notify / cc-memory 依赖面（投资调研 tick，同 /loop 自主续）
+- **结论：两者皆 dep-free**，loop 仍有 runway，无需收尾。
+- **cc-notify**（`src-tauri/notification_service.rs`）：核心逻辑（normalize + 10s 去重 + focus 门控 + emit 事件）**纯逻辑可测**；唯一外部面是「弹桌面通知」。**Wails v3 自带 `pkg/services/notifications`**（`SendNotification(NotificationOptions{ID,Title,Body,...})`，跨平台 win/darwin/linux）→ **dep-free**。但：① 多部件（去重 + focus 需 AttachApp + 设置矩阵 enabled/only_when_unfocused/on_exit/on_waiting_input + Wails notifier 装配）；② 主触发器（session 退出 / 等待输入）来自**受门控的终端栈**；③ toast 本身非自动可验（弹没弹要人看）。→ **dep-free 但部分视觉门控 + 触发耦合终端**。
+- **cc-memory**（`cc-memory` crate：db/models/repository/service）：自包含 CRUD-over-SQLite（store/search/list/get/update/delete/stats + format_for_injection + 日报）。search 用 **FTS5 但有 LIKE 降级**（`repository.rs:157` 优先 FTS5 失败降 LIKE）→ MVP 用 LIKE（同 Todo.search）即 **dep-free**，FTS5 留可选增强（modernc 是否支持 FTS5 待验，LIKE 不依赖它）。**不耦合终端栈**，可 surface 成 Memory 页（cc-pane 有 web/components/memory）。→ **dep-free + 自包含 + 可测 + 可 surface**，最干净的下一单元。
+- **Memory 契约**（移植用，来自 `cc-memory/src/models.rs`）：
+  - `Memory{ id, title, content, scope(global|workspace|project|session), category(decision|lesson|preference|pattern|fact|plan|custom), importance u8 1-5, workspaceName?, projectPath?, sessionId?, tags []string, source(user|agent|mcp|hook), createdAt/updatedAt/accessedAt RFC3339, accessCount u32, /*云端预留*/ userId?, syncStatus(local_only|synced|pending_sync), syncVersion u64, isDeleted bool }`。
+  - `MemoryQuery{ search?, scope?, category?, minImportance?, workspaceName?, projectPath?, sessionId?, tags?, fromDate?, toDate?, sortBy(relevance|created_at|updated_at|importance), limit?, offset? }` → `MemoryQueryResult{ items, total, hasMore }`。
+  - `MemoryStats{ total, byScope, byCategory }`。`StoreMemoryRequest{ title, content, scope?, category?, importance?, workspaceName?, projectPath?, sessionId?, tags?, source? }`。`UpdateMemoryRequest{ title?, content?, category?, importance?, tags? }`。
+  - 实现要点：tags JSON 串（同 Todo）；is_deleted 软删（cc-pane 软删，list/search 过滤 is_deleted=0）；新增 `Memory` 模型进 AllModels（app 级单库，按 scope/workspace/project 列查）；search LIKE（title/content）；stats 分组同 Todo.Stats 模式。
+- **下一单元**：实现 **memory 后端**（`internal/services/memorysvc` + `Memory` 模型进 AllModels + store/search(LIKE)/list/get/update/delete/stats + 软删 + tags JSON + 测）。之后 surface 成 Memory 页（同 Todo/Spec 两段式）。notify 留后（部分视觉门控 + 触发耦合终端，价值待终端栈解门）。
