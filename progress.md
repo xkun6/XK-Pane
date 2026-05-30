@@ -759,3 +759,11 @@
 - 改动：`LoadSessions`（绑定）改脱敏返回（SshConfig 置 nil，前端据 RuntimeKind 区分 local/wsl/ssh）；新增包级 `LoadSessionsDecrypted(ctx, db)`（非绑定，供后端 SSH 重连 helper）；共享 `loadSessions(ctx, db, decrypt)`。app.go 注册 session 服务，包注释去「暂不注册」。
 - +测：TestSaveLoadRoundtrip 断言绑定路径 SshConfig 脱敏为 nil + `LoadSessionsDecrypted` 解回明文；at-rest 加密 / replace-all / clear 不变。**bindings 验证安全边界**：session 仅绑 SaveSessions/LoadSessions/ClearSessions 三法，`LoadSessionsDecrypted` 未泄漏（grep 确认）。13 Services/85 Methods/57 Models。dev+prod 全绿；前端 typecheck+build 通过。commit `b0a3529`。
 - **下一单元**：会话恢复前端（`SessionService.ts` 包 SaveSessions/LoadSessions/ClearSessions + 接进 TerminalProvider 做布局持久化 / 重启还原）——**属视觉 checkpoint 门控**（依赖终端栈，自动验证 = typecheck+build，视觉正确性留用户 `wails3 dev` 验）。或 Todo 高级（query/stats，可测+可surface）/ file-watcher（fsnotify 决策门）。
+
+### ▶ 续：Todo Query 动态过滤分页 + Stats 聚合统计 + Todo 页统计条（同 /loop 自主续）
+- **移植 cc-pane todo_repo 的 query / stats**（候选②，dep-free + 可自验 + 可 surface，优于视觉门控的会话恢复前端）。先读 cc-pane `cc-panes-core/src/repository/todo_repo.rs` + `web/types/todo.ts` 取准 TodoQuery/TodoStats 契约，忠实移植（非臆造）。
+- **后端**（todo.go）：`Query(ctx, TodoQuery)` 动态 WHERE（status/priority/scope/scopeRef/search/tag/todoType/myDay）+ 排序（created_at/updated_at/priority/due_date，缺省 sort_order）+ limit/offset 分页 → items+total+hasMore；条件抽闭包，**count 与 data 各起独立查询**避免 GORM 复用 Statement 把 count SELECT 带进 data 查询。`Stats(ctx, scope, scopeRef)` total + byStatus/byScope/byPriority 分组 + overdue（due_date<now 且 status!=done）。+6 测（过滤/搜索/分页 hasMore；分组 + scope 限定 + overdue 边界：未完成过期计入、已完成或未来到期不计）。
+- **前端**：`TodoService` 加 `TodoStats` 类型 + `stats(scope?, scopeRef?)`（map 值 ?? 0 兜底，binding map 类型是 `{[k]?: number}`）。`TodoPage` 顶部加统计条（共/待办/进行中/已完成 chip + 逾期 chip 仅 >0 显示并染 danger）；VM `useEffect([todos])` 重取统计（服务端聚合，含 overdue 日期逻辑）。文案 `todo.stats.*`（zh/en）。
+- **有意分层**：Query 后端已就位+测过，但其**过滤/搜索 UI 留下一 tick**（避免无消费方的前端代码，与 session 前置同纪律）；本 tick surface Stats（统计条可验）。bindings 13 Services/87 Methods(+2)/60 Models(+3)。dev+prod 全绿；前端 typecheck+build 通过。commit `63f9ee2`。
+- **🎯 现在可真机验证**：`wails3 dev` → 待办页 → 加几条不同优先级/状态 → 顶部统计条实时反映（勾选完成 → 已完成 +1 / 待办 −1）。
+- **下一单元（各为独立切片）**：① Todo 过滤/搜索 UI（消费已就位的 `Query` 后端：状态/优先级 filter chips + 搜索框，切 List→Query 数据源）；② 会话恢复前端（视觉门控）；③ file-watcher 自动捕获（fsnotify 新依赖 → 决策门 AskUserQuestion）；④ Todo reorder/batch（拖拽 @dnd-kit / 批量状态）。
