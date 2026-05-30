@@ -577,6 +577,17 @@
 ### 状态
 - 两 commit 在 `rebuild/cc-pane`，未 push。**确认前端 confirm + 后端噪声两类问题已修**。等用户重测删除（应：点「是」即删；删最后一个默认项不再刷红日志）+ 反馈其余验证项（项目面板开目录/点项目/shell 起回显、设置→Provider 其余增改/设默认）。
 
+### ▶ 续：用户确认「删 provider 能正常删了，继续按计划推进」→ Phase 4 Git unit 2（worktree + stash）
+- confirm 修复**真机验证通过**（删除可用）。loop 恢复，按计划走 Phase 4 可测 Git 后端。
+- 查 cc-pane（`cc-panes-core/.../worktree_service.rs` + `commands/git_commands.rs`）取精确语义 → `internal/utils/gitx` 扩 CLI-only 变更原语：
+  - `gitx_worktree.go`：`Worktrees`(list --porcelain 解析,空行分块+末块flush+CRLF容忍) / `WorktreeAdd`(newBranch→`-b`；`GIT_LFS_SKIP_SMUDGE=1`；path 前 `--` 护选项) / `WorktreeRemove`(恒 `--force`)。`WorktreeInfo{path,branch(去 refs/heads/),commit(7位),isMain}`。
+  - `gitx_stash.go`：`Stash`(`git stash`) / `StashPop`(`git stash pop`)。
+  - `cli.go`：allowlist 追加 worktree·stash；`runGit` 拆出 `runGitEnv`(额外 env 给 LFS)。
+- **有意偏离 cc-pane**（已记 commit `c8f6d8c`）：① IsMain = porcelain 首条（git 保证主树列首位；实测 Windows porcelain 路径用正斜杠，cc-pane 的「路径字符串相等」会因分隔符/大小写误判）。② 分组目录策略 `{repo}-worktrees/{name}` + worktree 名校验 + stash 前 Local History auto-label 钩子 → 属上层 UX/历史子系统，留 gitsvc 服务层（本 unit 只出 CLI 原语，同 read-only unit 分层）。
+- **针对性加固（代替泛泛审查；ultracode 下做了实证验证）**：实测 `git worktree add` 支持 `--` 终止选项 → 用它护住 path；实测 detached worktree porcelain 用 `detached` 行（无 branch）→ 解析器忽略→branch="" 正确。
+- 测试：+`TestWorktrees`(真 repo list/add带新分支/remove) +`TestStash`(改→stash→干净→pop→恢复→空 stash 再 pop 报错) +`TestParseWorktreeList`(纯函数边界:主/linked/detached/末块无尾空行/CRLF)。**7 测** go build/vet/test dev+prod 全绿。commit `c8f6d8c`。
+- **下一单元**：network（clone/fetch/push/pull——clone 可对本地源 repo 测；push/pull 需 bare 远端夹具+鉴权，FF/非FF CLI 回退）；或 git 面板后端（结构化 status/stage/commit/diff，net-new 增强，面板 UI 视觉门控）。仍不依赖终端渲染。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么

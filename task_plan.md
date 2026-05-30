@@ -87,7 +87,7 @@
   - [x] **gitx 只读包**（`internal/utils/gitx`：Open/IsRepo/CurrentBranch/IsDirty/Branches/Log；go-git 原生 branch/log + CLI 回退 IsDirty 经 procx `status --porcelain`+只读 allowlist；go-git v5.19.1 indirect→direct，已随 Wails 引入零新依赖）。4 测对真临时 repo（go-git+CLI 双路），dev+prod 全绿，commit `bf279a6`。
   - [ ] git 面板单元：结构化 per-file status（XY porcelain）+ stage/unstage/commit（+ Local History auto-label 钩子）+ diff（go-git Patch 或 CLI worktree-vs-HEAD）→ 需 Wails service 包装 + 前端面板（部分依赖视觉验证）。
   - [ ] network 单元：fetch/push/pull（go-git FF 快路 + 非 FF CLI 回退）/ clone（PlainClone + 进度事件 + http.BasicAuth）。
-  - [ ] worktree 单元（CLI-only：list/add/remove --force，go-git x/worktree 实验性不用）+ stash（CLI-only，go-git 无 stash）。
+  - [x] **worktree + stash 单元**（CLI-only，commit `c8f6d8c`）：`internal/utils/gitx` 扩 Worktrees(list --porcelain 解析)/WorktreeAdd(-b 新分支 + GIT_LFS_SKIP_SMUDGE=1 + `--` 护路径)/WorktreeRemove(恒 --force)/Stash/StashPop。allowlist 加 worktree·stash；runGit 拆 runGitEnv。3 新测(真 repo worktree/stash + 纯函数解析边界)，dev+prod 全绿。**有意偏离**：IsMain 用 porcelain 首条(比 cc-pane 路径相等健壮)；分组目录策略/名校验/stash 前 Local History auto-label 钩子 留 gitsvc 服务层。
   - **git CLI 回退层次**（Phase 1 改判落点）：后端 Git 服务**直接用 procx** 同步执行 + 服务内部 git 子命令 allowlist（gitx cli.go 已落地）+ 同步捕获 stdout/stderr，**不经**前端 `subprocess.Service` 白名单（后者是前端异步事件机制）
 - [ ] Local History：file_versions 表 + 快照/Diff/标签/分支感知（独立 history.db）
 - [ ] 运行时：Local/WSL/SSH（ssh_machine + wsl_discovery）
@@ -122,7 +122,7 @@
 | Phase 1 | ✅ complete | ptyx ✅ / events ✅ / models ✅ / cliadapters ✅（18 守门 ok，MCP/hooks 延后 Phase 5）；subprocess git 白名单改判延后 Phase 4（层次修正） |
 | Phase 2 | 🟡 待视觉验证 | **结构完成、可运行**：后端 service + 状态层(reducer/Context+reconcile) + TerminalView/SplitView/TabBar + PaneTree + App 接线（TerminalProvider/终端页/路由）+ MVP 启动入口（打开文件夹→裸 shell）。全程 typecheck/build/单测(37)/对抗审查全绿，但**前端从未在真 app 跑过**→ **loop 停在此里程碑，待用户首个视觉 checkpoint**（开文件夹→shell 输出→回显→分屏拖拽→关标签回收 PTY）。验证 OK 后转 ✅。侧边栏树/右键启动/CLI 选择/TabBar 拖拽重排 → Phase 3 或另列单元 |
 | Phase 3 | 🔵 in_progress | 后端扁平 `project` service ✅(c8df705，19 测+对抗审查 wf_7bc251b0-c1f)；前端 project Context/侧边栏树 + 会话恢复/设置/i18n/窗口形态待做；**Workspace 持久化模型 = D9 决策门（文件存储 vs SQLite，到该单元停问用户，findings J8）** |
-| Phase 4 | 🔵 in_progress | Git: gitx 只读包 ✅(`bf279a6`，go-git+CLI 回退，4 测)；git 面板/network/worktree·stash 单元待做。Local History / 多运行时 / Todo·Spec 未起 |
+| Phase 4 | 🔵 in_progress | Git: gitx 只读包 ✅(`bf279a6`) + worktree·stash ✅(`c8f6d8c`，CLI-only，go-git+CLI 回退，7 测)；git 面板(结构化 status/stage/commit/diff)·network(clone/fetch/push/pull) 单元待做。Local History / 多运行时 / Todo·Spec 未起 |
 | Phase 5 | ⬜ pending | Bedrock/MCPE/notify/memory |
 | Phase 6 | ⬜ pending | 收尾打包 |
 
