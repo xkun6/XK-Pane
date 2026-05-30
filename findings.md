@@ -214,3 +214,10 @@ React 19.2 / @mui/material 9 / @mui/icons-material 9 / @mui/x-charts 9 / emotion
 - **本仓修复**：`NativeDialogs.confirm` 内 `isWindows` 分支用固定 `"Yes"/"No"` 作 label（Windows 上反正不可见）并以 `choice === "Yes"` 判定；mac/linux 保留自定义 label + `choice === okLabel`。
 - **铁律（写给后续）**：① 任何走 `NativeDialogs.confirm` 的新代码**不要依赖自定义 OK/Cancel 按钮文案在 Windows 上的可见性或语义**——Windows 永远是 native 是/否。② 若将来要在 Windows 上显示真正的自定义按钮文案，需绕开 Wails Question 对话框（自绘 MUI Dialog——但那违反"原生对话框铁律"，须先与用户确认）。③ 这是 alpha.96 行为，升级 Wails 后复验本结论。
 - **同源噪声（commit `97d44f3`）**：GORM 默认 logger 把 `ErrRecordNotFound` 当 error 打日志。本项目把它当「查不到」正常控制流（Get 类 `First`+`errors.Is`→nil；provider.Remove 提升默认项无剩余）。`storage/db.go` 开 `logger.Config{IgnoreRecordNotFoundError:true}` 全局静音；真错误照常记录。
+
+### J11. gitx 网络单元：clone 走 CLI + 凭据/进度延后的理由（2026-05-30 会话28，commit `4d6f9d4`）
+
+- **clone 用 CLI 而非计划里的 go-git PlainClone**（有意偏离 D4/plan）：① 与 gitx 其余变更/网络操作（worktree/stash/fetch/pull/push）的 CLI 路径一致；② **CLI clone 走系统 git 凭据助手（HTTPS）/ SSH key，一条码路同时覆盖公库与私库**，而 go-git PlainClone 需要自己接 `http.BasicAuth`、不会用用户已配置的凭据助手；③ D4 本就规定 credential-helper 场景走 CLI 回退。若将来需要「无 git 二进制也能 clone」再引 go-git PlainClone 作为备用路径。
+- **显式 username/password 延后**（cc-pane 有，本仓暂不做）：cc-pane `inject_credentials` 把 `user:pass` 注入 URL（`https://user:pass@host/...`）。**把明文凭据放进 argv 是已知反模式**——会出现在进程列表（`ps`/任务管理器）、可能落进日志、写进 git reflog/remote 配置。本仓 GUI 子进程铁律已 `GIT_TERMINAL_PROMPT=0`（禁交互弹窗），私库默认走系统凭据助手/SSH。显式凭据待 clone UI 单元时用 **askpass 脚本 / credential-helper / 凭据经 stdin** 等不入 argv 的方式设计（敏感串若要落库仍须 cryptox）。
+- **细粒度 clone 进度延后**：git 进度（`Receiving objects: NN%`）用 **`\r` 回车覆盖同一行、不带 `\n`**。`procx.scan` 用 `bufio.NewScanner`（默认 `ScanLines` 按 `\n` 切，见 procx.go:216）→ 整段进度会被缓冲成一个超长「行」直到最后的 `\n`，**无法增量流出 phase/percent**。cc-pane 正是为此**逐字节读 stderr、按 `\r`/`\n` 切**再 `parse_git_progress`。本仓现无 clone UI 消费方，故 Clone 暂不带进度回调；待 clone UI 单元，需给 procx 增一个 `\r`-aware 的 split/raw-line 模式（或在 gitx 内对该子进程自管字节读），再 emit Wails 进度事件 `{phase,percent,message}`。
+- **Pull/Push 前的 Local History auto-label 钩子**：cc-pane 在 pull/push/stash 前调 `auto_label_before_git` 给 Local History 打标签（便于回滚到操作前）。本仓 Local History 未建，gitx 原语不耦合历史；该钩子由后续 **gitsvc 服务层**在调用 gitx.Pull/Push/Stash 外层补（Local History 落地后）。

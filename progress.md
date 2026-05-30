@@ -588,6 +588,13 @@
 - 测试：+`TestWorktrees`(真 repo list/add带新分支/remove) +`TestStash`(改→stash→干净→pop→恢复→空 stash 再 pop 报错) +`TestParseWorktreeList`(纯函数边界:主/linked/detached/末块无尾空行/CRLF)。**7 测** go build/vet/test dev+prod 全绿。commit `c8f6d8c`。
 - **下一单元**：network（clone/fetch/push/pull——clone 可对本地源 repo 测；push/pull 需 bare 远端夹具+鉴权，FF/非FF CLI 回退）；或 git 面板后端（结构化 status/stage/commit/diff，net-new 增强，面板 UI 视觉门控）。仍不依赖终端渲染。
 
+### ▶ 续 2：Phase 4 Git unit 3（network）—— 同 tick 连做（autonomous /loop）
+- `gitx_network.go`：`Clone`(包级,`git clone [--depth 1] -- url dst`,dst 存在报错,对齐 cc-pane) + `Fetch`(`fetch --all`)/`Pull`/`Push`(*Repo 方法)。allowlist 追加 clone/fetch/pull/push。
+- **偏离计划的 go-git PlainClone → 改 CLI**：与 gitx 其余 CLI 一致 + 走系统 git 凭据助手/SSH **一条码路覆盖公/私库**（go-git PlainClone 需自己接 auth、不用用户凭据助手）；D4 本就规定 credential-helper 场景走 CLI。记 commit `4d6f9d4`。
+- **安全/范围延后（findings J11）**：① 显式 user/pass —— cc-pane 注入 URL（`https://user:pass@host`），但 **argv 带明文凭据会泄漏到进程列表/日志/reflog（反模式）**；优先系统凭据助手/SSH，显式凭据留 clone UI 单元用 **askpass / credential-helper** 设计，不走 argv。② 细粒度进度 —— git 进度用 `\r` 覆盖行，**procx.scan 用 bufio.Scanner 按 `\n` 切分**（实读源码确认）无法增量流出 phase/percent；留 clone UI 单元引入 `\r`-aware reader + Wails 事件。③ Pull/Push 前 Local History auto-label 钩子 → gitsvc 服务层。
+- 测试：+`TestNetworkCloneFetchPullPush`（本地 bare 远端：work1 push→gitx.Clone→work2，work1 再 push→work2 fetch+pull 拿到 b.txt + clone 到已存在目录报错）——无真网络/鉴权，也证实 `git clone` 支持 `--`。**8 测** go build/vet/test dev+prod 全绿。commit `4d6f9d4`。
+- **Git 后端原语阶段性收口**（只读 + worktree/stash + network 三 unit，8 测）。**剩**：git 面板（结构化 per-file status XY + stage/unstage/commit + diff，net-new 增强，**面板 UI 视觉门控**）；gitsvc 服务层（Wails 包装 + bindings + Local History 标签钩子，待 Local History 子系统）。**下一单元倾向**：转 Local History 后端（file_versions 快照，独立 history.db，纯可测，且正好补上 Git 的 auto-label 钩子依赖方），或 git 面板结构化 status 后端（可测，不含 UI）。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
