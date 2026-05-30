@@ -727,6 +727,13 @@
 - **🎯 现在可真机验证**：`wails3 dev` → 本地历史页 → 快照文件 → 编辑 → 再快照 → 点某版本看 diff（绿/红行 + 字符级高亮）→ 回滚。
 - **下一单元（续接前端，方向轮换）**：注册 session 服务（已写未注册）+ 会话恢复 UI / 或 Git 域接 Local History（pull/push/stash 前 auto-label 钩子）/ 或 Todo 高级功能。各为独立切片。
 
+### ▶ 续：stash/pull/push 前 auto-label 钩子（连接 Git ↔ Local History，同 /loop 自主续）
+- **对齐 cc-pane `auto_label_before_git`**：gitsvc 在 stash/pull/push 前给项目 Local History 打 auto 标签（Before Stash/Pull/Push，source=git_stash/pull/push），便于操作后回滚。**首个跨域集成**（连接此前各自独立建好的 Git 域与 Local History 域）。
+- **解耦设计**：gitsvc 加 `AutoLabeler` 函数类型 + `SetAutoLabeler`（注入式，gitsvc **不强依赖** Local History；同 `termSvc.SetProviderResolver`，因含 func 参数不被 Wails 绑定，仅后端装配）。`labelBefore` best-effort —— branch 由已打开 repo 算，**标签失败不阻断 git 操作**。app.go 预创建 `gitSvc`/`lhSvc` 两服务实例并经 SetAutoLabeler 连接（与 subSvc/termSvc 的预创建-回填模式一致）。
+- localhistorysvc 加 `AutoLabel`（绑定，未来前端也可手动打标签）；`localhistory.Exists` 守门：**项目尚无历史存储则跳过，不为纯 git 操作凭空创建 .xkpanes/**（仅对已在用 Local History 的项目生效）。
+- +测：gitsvc 钩子在 stash/push 前触发（含 push 失败仍先触发）+ 无 labeler 不 panic；localhistorysvc AutoLabel 守门（无历史跳过不建目录 / 有历史打标签）。bindings 重生 **12 Services/78 Methods**（gitsvc 现也有 func-type warning，预期）。dev+prod 全绿；前端 typecheck+build 通过。commit `42f3f82`。
+- **下一单元（续接前端）**：会话恢复需先做 sshConfig 脱敏（已记 SECURITY TODO）才能注册 session 服务 / 或 Todo 高级（query/stats）/ 或 file-watcher 自动捕获（让 Local History 自动快照，需引 fsnotify —— 新依赖，到时按决策门 AskUserQuestion）。各为独立切片。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
