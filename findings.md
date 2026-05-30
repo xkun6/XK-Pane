@@ -221,3 +221,23 @@ React 19.2 / @mui/material 9 / @mui/icons-material 9 / @mui/x-charts 9 / emotion
 - **显式 username/password 延后**（cc-pane 有，本仓暂不做）：cc-pane `inject_credentials` 把 `user:pass` 注入 URL（`https://user:pass@host/...`）。**把明文凭据放进 argv 是已知反模式**——会出现在进程列表（`ps`/任务管理器）、可能落进日志、写进 git reflog/remote 配置。本仓 GUI 子进程铁律已 `GIT_TERMINAL_PROMPT=0`（禁交互弹窗），私库默认走系统凭据助手/SSH。显式凭据待 clone UI 单元时用 **askpass 脚本 / credential-helper / 凭据经 stdin** 等不入 argv 的方式设计（敏感串若要落库仍须 cryptox）。
 - **细粒度 clone 进度延后**：git 进度（`Receiving objects: NN%`）用 **`\r` 回车覆盖同一行、不带 `\n`**。`procx.scan` 用 `bufio.NewScanner`（默认 `ScanLines` 按 `\n` 切，见 procx.go:216）→ 整段进度会被缓冲成一个超长「行」直到最后的 `\n`，**无法增量流出 phase/percent**。cc-pane 正是为此**逐字节读 stderr、按 `\r`/`\n` 切**再 `parse_git_progress`。本仓现无 clone UI 消费方，故 Clone 暂不带进度回调；待 clone UI 单元，需给 procx 增一个 `\r`-aware 的 split/raw-line 模式（或在 gitx 内对该子进程自管字节读），再 emit Wails 进度事件 `{phase,percent,message}`。
 - **Pull/Push 前的 Local History auto-label 钩子**：cc-pane 在 pull/push/stash 前调 `auto_label_before_git` 给 Local History 打标签（便于回滚到操作前）。本仓 Local History 未建，gitx 原语不耦合历史；该钩子由后续 **gitsvc 服务层**在调用 gitx.Pull/Push/Stash 外层补（Local History 落地后）。
+
+### J12. Local History 架构盘点（cc-pane `history_file_repo.rs`）+ ⚠️ 决策门 D10（2026-05-30 会话28）
+
+**cc-pane 存储架构（每项目独立，非 app 全局）**：
+- 位置：`<project_path>/.ccpanes/history/`，内含 `history.db`(SQLite) + `blobs/`(内容寻址 blob 文件) + `config.toml`(HistoryConfig)。**每个项目一个独立 history.db + 一套 blobs**，**写进用户项目目录**（不是 app 数据目录）。`open_readonly` 支持只读打开别的 worktree 的 history.db（跨 worktree 最近变更）。
+- 表：`file_versions(id PK时间戳ms+4位计数, file_path, hash SHA256, size, created_at RFC3339, is_deleted, branch)` + `labels(id,name,label_type auto|manual,source,timestamp,branch)` + `label_snapshots(label_id,file_path,version_id)`。索引：path/created/hash/branch。
+- **内容寻址 blob**：blob 文件名=SHA256(content)，**跨版本去重**（同 hash 只存一份）；可选 gzip 压缩（魔数 0x1f8b，`get_version_content` 自动解压；`compress_blobs` 对 ≥512B 未压缩 blob 压缩）。**内容存磁盘文件，不进 SQLite**（避免 db 膨胀）。
+- `save_version`：算 hash → 去重（同 file_path+branch 最新版 hash 相同则跳过）+ 间隔节流（`min_save_interval_secs` 默认 300s）+ is_deleted 版本不去重 → 写 blob（不存在才写）+ 插 file_versions。
+- 清理：`cleanup_old_versions`(按 max_age_days + max_versions_per_file=50) / `cleanup_by_total_size`(LRU 到 max_total_size=500MB，共享 blob 不重复计释放量) / `cleanup_orphan_blobs`(删无引用 blob)。
+- Diff：用 Rust `similar` crate 做**行级 + 字符级 inline diff**（`compute_diff`→DiffResult{hunks,stats,is_binary,truncated}；CONTEXT_LINES 上下文 + MAX_DIFF_LINES 大文件保护 + 二进制检测 BOM/\0）。
+- Labels：put/list(单 JOIN 避 N+1)/delete；`get_all_latest_snapshots` 给「创建标签时快照全部已跟踪文件最新版」。
+- 还有：list_versions(_by_branch)、get_file_branches、list_directory_changes(LIKE+ESCAPE)、get_recent_changes、list_deleted_files。
+
+**⚠️ 决策门 D10（待用户定，已 AskUserQuestion）**：Local History 与 foundation 存储模型（D8：app 级状态走单一 xkpane.db + Holder + AllModels）**根本不同**——它是**每项目独立 db + 磁盘 blob**。落地前须定：
+1. **存储位置**：(a) 忠实 cc-pane：每项目 `<proj>/.ccpanes/history/`（写进用户项目目录，需提醒用户 .gitignore；可移植、隔离、天然分支感知）；(b) 集中式：app 数据目录下按项目（路径 hash）隔离子目录（不污染用户项目目录，但失去「随项目走」）；(c) 全塞主 xkpane.db（违背内容寻址 + db 膨胀，**不推荐**）。
+2. **db 栈**：每项目 db 用 GORM(glebarez+AutoMigrate，复用栈但 Holder 是单 app db、需新建「按项目缓存 *gorm.DB」多 db 模式) vs 直接 modernc/sqlite 裸 SQL（近 cc-pane）。
+3. **blob**：磁盘内容寻址文件（推荐，含 gzip）vs 进 db（不推荐）。
+4. **Diff 引擎依赖**（diff 单元才需，可后定）：Go 侧候选 `github.com/sergi/go-diff`(diffmatchpatch) / `github.com/hexops/gotextdiff` / 自实现行级——需行级 hunk + 字符级 inline，匹配 cc-pane similar 的能力。
+- **首个有界单元建议**（定了 1-3 后）：存储基座 = 打开 per-project history store + FileVersion 模型 + SaveVersion(hash/去重/节流/blob) + ListVersions + GetVersionContent，**不含 diff**（diff/labels/restore/recent/pruning 各为后续 unit）。
+- **无门替代单元**（若用户想先放 Local History）：会话恢复后端（terminal_sessions Save/List，模型已在 AllModels，纯可测、贴合 Holder、无门）。
