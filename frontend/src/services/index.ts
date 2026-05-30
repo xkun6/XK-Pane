@@ -11,6 +11,7 @@ export {
   type GitBranch,
   type GitCommit,
   type GitWorktree,
+  type GitFileStatus,
 } from './git/GitService';
 export {
   LocalHistoryService,

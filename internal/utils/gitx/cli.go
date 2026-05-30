@@ -13,7 +13,8 @@ import (
 // allowedSubcmds 是 runGit 允许的 git 子命令白名单。仍走此单一入口（不放开任意
 // 子命令）；引入新操作时显式追加。当前含：只读核心（status/rev-parse/branch/log/
 // for-each-ref）+ CLI-only 变更操作（worktree/stash —— go-git 弱项/无对应，对齐
-// cc-pane 100% CLI）。
+// cc-pane 100% CLI）+ VSCode SCM 面板（diff/add/restore/commit —— go-git 做不了
+// 工作区↔暂存区 diff / staging / commit hooks，必须 git CLI）。
 var allowedSubcmds = map[string]bool{
 	"status":       true,
 	"rev-parse":    true,
@@ -26,6 +27,10 @@ var allowedSubcmds = map[string]bool{
 	"fetch":        true,
 	"pull":         true,
 	"push":         true,
+	"diff":         true,
+	"add":          true,
+	"restore":      true,
+	"commit":       true,
 }
 
 // runGit 经 procx 同步执行 git 子命令（go-git 无对应/弱项时的 CLI 回退）。

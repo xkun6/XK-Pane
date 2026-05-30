@@ -9,7 +9,23 @@ import type {
   BranchInfo as RawBranch,
   CommitInfo as RawCommit,
   WorktreeInfo as RawWorktree,
+  FileStatus as RawFileStatus,
 } from '@bindings/xkpane/internal/utils/gitx/models';
+import type {
+  DiffResult as RawDiff,
+  DiffHunk as RawHunk,
+  DiffLine as RawLine,
+  InlineChange as RawInline,
+} from '@bindings/xkpane/internal/localhistory/models';
+// diff 复用 Local History 的 DiffResult 类型 + DiffView（后端 gitsvc.DiffFile 返回同一
+// localhistory.DiffResult）。从具体模块直接 import 类型，避免经 @/services 桶导致自引循环。
+import type {
+  DiffResult,
+  DiffHunk,
+  DiffLine,
+  InlineChange,
+  DiffChangeType,
+} from '../localhistory/LocalHistoryService';
 
 // 仓库概要状态。isRepo=false 时 branch/isDirty 无意义（前端据此隐藏 Git 详情）。
 export interface GitStatus {
@@ -38,6 +54,19 @@ export interface GitWorktree {
   branch: string;
   commit: string;
   isMain: boolean;
+}
+
+// 一个变更文件（VSCode SCM）。index/worktree 为 git porcelain 的 XY 状态码（' ' = 该侧无变更）。
+// 一个文件可同时 staged 且 unstaged（如先暂存修改后又改了）。
+export interface GitFileStatus {
+  path: string;
+  origPath: string; // 重命名/复制来源（否则空）
+  index: string; // 暂存区相对 HEAD：M/A/D/R/C/' '
+  worktree: string; // 工作树相对暂存区：M/D/' '/'?'
+  staged: boolean;
+  unstaged: boolean;
+  untracked: boolean;
+  conflicted: boolean;
 }
 
 function toStatus(s: RawStatus): GitStatus {
@@ -71,6 +100,63 @@ function toWorktree(w: RawWorktree): GitWorktree {
     branch: w.branch ?? '',
     commit: w.commit ?? '',
     isMain: w.isMain ?? false,
+  };
+}
+
+function toFileStatus(f: RawFileStatus): GitFileStatus {
+  return {
+    path: f.path ?? '',
+    origPath: f.origPath ?? '',
+    index: f.index ?? ' ',
+    worktree: f.worktree ?? ' ',
+    staged: f.staged ?? false,
+    unstaged: f.unstaged ?? false,
+    untracked: f.untracked ?? false,
+    conflicted: f.conflicted ?? false,
+  };
+}
+
+// —— diff 映射（后端 localhistory.DiffResult → 前端 DiffResult；与 LocalHistoryService 同形，
+// 自包含以保持服务解耦）——
+function toInline(c: RawInline): InlineChange {
+  return {
+    start: c.start ?? 0,
+    end: c.end ?? 0,
+    changeType: (c.changeType ?? 'equal') as DiffChangeType,
+  };
+}
+
+function toLine(l: RawLine): DiffLine {
+  const inlines = l.inlineChanges?.map(toInline);
+  return {
+    changeType: (l.changeType ?? 'equal') as DiffChangeType,
+    content: l.content ?? '',
+    oldLineNo: typeof l.oldLineNo === 'number' ? l.oldLineNo : null,
+    newLineNo: typeof l.newLineNo === 'number' ? l.newLineNo : null,
+    ...(inlines && inlines.length > 0 ? { inlineChanges: inlines } : {}),
+  };
+}
+
+function toHunk(h: RawHunk): DiffHunk {
+  return {
+    oldStart: h.oldStart ?? 0,
+    oldCount: h.oldCount ?? 0,
+    newStart: h.newStart ?? 0,
+    newCount: h.newCount ?? 0,
+    lines: (h.lines ?? []).map(toLine),
+  };
+}
+
+function toDiff(d: RawDiff): DiffResult {
+  return {
+    hunks: (d.hunks ?? []).map(toHunk),
+    stats: {
+      additions: d.stats?.additions ?? 0,
+      deletions: d.stats?.deletions ?? 0,
+      changes: d.stats?.changes ?? 0,
+    },
+    isBinary: d.isBinary ?? false,
+    truncated: d.truncated ?? false,
   };
 }
 
@@ -141,5 +227,38 @@ export const GitService = {
   // 删除 worktreePath 处的 worktree（恒带 --force）。
   async worktreeRemove(repoPath: string, worktreePath: string): Promise<void> {
     await Binding.WorktreeRemove(repoPath, worktreePath);
+  },
+
+  // —— VSCode 源代码管理（SCM）——
+
+  // 结构化变更文件列表（按 staged / unstaged / untracked flags 分组）。非仓库会抛 ErrNotARepo。
+  async statusFiles(path: string): Promise<GitFileStatus[]> {
+    const rows = await Binding.StatusFiles(path);
+    return (rows ?? []).map(toFileStatus);
+  },
+
+  // 单文件 diff（staged=true 暂存区相对 HEAD / false 工作树相对暂存区）；复用 DiffView 渲染。
+  async diffFile(path: string, file: string, staged: boolean): Promise<DiffResult> {
+    return toDiff(await Binding.DiffFile(path, file, staged));
+  },
+
+  // 暂存指定文件（git add）。
+  async stage(path: string, files: string[]): Promise<void> {
+    await Binding.Stage(path, files);
+  },
+
+  // 撤销暂存（git restore --staged）。
+  async unstage(path: string, files: string[]): Promise<void> {
+    await Binding.Unstage(path, files);
+  },
+
+  // 丢弃改动（已跟踪 restore / 未跟踪删文件）；破坏性，调用方须先 NativeDialogs.confirm。
+  async discard(path: string, files: string[]): Promise<void> {
+    await Binding.Discard(path, files);
+  },
+
+  // 提交暂存区内容（git commit -m），返回 git 摘要文本；无暂存内容/空消息会失败。
+  async commit(path: string, message: string): Promise<string> {
+    return Binding.Commit(path, message);
   },
 } as const;

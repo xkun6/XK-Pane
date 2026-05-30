@@ -906,6 +906,17 @@
 - **保留**：`TaskBinding`（用户只点名 T/S/M；它无 service 无 UI，`TodoID`/`SessionID` 只是可空文本列，删 Todo 不破坏编译）——记一笔，未来若做编排再说。
 - **验证**：go build 主程序 ✅ / go vet ./internal/... ✅ / go test storage+cliadapters ✅；`wails3 generate bindings` → **13 Services / 79 Methods**（从 16/106）；前端 pnpm typecheck ✅ / pnpm build ✅。
 
-### P2b/P2c 待办（本会话继续）
-- **P2b Git → VSCode SCM**：`StatusFiles`(porcelain v2) + `DiffFile`(file/staged) + `Stage/Unstage/Discard/Commit`（全 git CLI，扩 gitx/cli.go allowlist + subprocess 白名单）；前端 GitPage 三段式（commit 框 + 变更分组 + 复用 DiffView），绑活动项目。per-file 先做，per-hunk 留 P2.1。可能引 notistack（已预授权）。
-- **P2c Home 仪表盘**：HomePage 重做（问候 + 快捷动作 + 最近项目 + 活跃会话 + 环境检测）。
+### P2b Git → VSCode 源代码管理 ✅ complete
+**关键决策**：
+- diff 走**解析 `git diff` 行式输出**（非取两侧 blob 喂 ComputeDiff）——runGit 是 bufio.Scanner 行回调、对行式输出保真，而 `git show` 原始内容会被行回调补 `\n`/剥 `\r` 污染；git 自带处理重命名/模式/二进制/CRLF，是 index↔worktree 权威（VSCode 本身即展示 git diff，行级足够）。解析在 **gitsvc**（service→domain import 合法）产出 `localhistory.DiffResult`，前端复用同一 DiffResult/DiffView，**零新 diff 模型**。
+- status 用 `git status --porcelain --untracked-files=all`（换行分隔，适配 runGit）而非 `--porcelain=v2 -z`（NUL 流会被行扫描吞成一条）。
+- **绑定方式仍用项目下拉**（非"活动项目"——该概念属 P3 workspace 树，现无）。
+- **不引 notistack**：stage/unstage/discard 成功静默（列表刷新即反馈，对齐 VSCode），仅失败/确认走 NativeDialogs——零新依赖。
+
+**后端**：`gitx/cli.go` allowlist +diff/add/restore/commit；新 `gitx_scm.go`（`FileStatus` DTO + `parsePorcelainStatus` 纯解析 + `StatusFiles`/`DiffFileRaw`/`Stage`/`Unstage`/`RestoreWorktree`/`Commit`）；新 `gitsvc_scm.go`（6 个 service 方法 + `parseUnifiedDiff`→localhistory.DiffResult；`Discard` 按 status 区分已跟踪 restore / 未跟踪 os.Remove；`Commit` 前打 Local History 标签）。守门测试：parsePorcelainStatus（暂存/未暂存/兼有/未跟踪/重命名/冲突）、parseUnifiedDiff（改/增删/二进制/空/hunk 头）。
+**前端**：`GitService` +6 方法 + `GitFileStatus` + 自包含 diff mapper；`useGitPage` 加 SCM 态（stagedFiles/changedFiles 派生、commitMessage、selectedDiff/diff、stage/unstage/discard/commit/openDiff，含请求令牌防竞态）；`GitPage` 加 SCM 段（commit 框 + Staged/Changes 分组 + per-file +/−/丢弃 + 选中复用 DiffView）；GitPage lang 加 git.scm.* + git.diff.*（zh/en 对齐）。
+**P0 限制（记一笔）**：unborn HEAD（全新无提交仓库）撤销暂存不支持；重命名 diff 以新路径 vs HEAD 呈现（非相似度）；per-hunk 暂存留 P2.1。
+**验证**：go build/vet/test（gitx+gitsvc，含新解析器测试）✅；bindings 13 Services/**85 Methods**/56 Models；前端 typecheck ✅ / build ✅。
+
+### P2c Home 仪表盘 — 待办（本会话继续）
+HomePage 重做（问候 + 快捷动作 + 最近项目 + 活跃会话 + 环境检测，复用 launchhistory/session/cliadapters）。

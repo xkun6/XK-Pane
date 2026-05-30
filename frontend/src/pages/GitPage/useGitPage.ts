@@ -1,22 +1,24 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   GitService,
   NativeDialogs,
   type GitBranch,
   type GitCommit,
+  type GitFileStatus,
   type GitStatus,
   type GitWorktree,
+  type DiffResult,
   type Project,
 } from '@/services';
 import { useProjects } from '@/project';
 
-// GitPage ViewModel：消费全局 ProjectProvider 选项目 + 按 path 查询只读 Git 状态。
+// GitPage ViewModel：消费全局 ProjectProvider 选项目 + 按 path 查询 Git 状态 / 工具条 /
+// VSCode 式源代码管理（变更文件分组 + per-file diff + stage/unstage/discard/commit）。
 //
-// 为何不建全局 GitProvider：Git 状态是**按 path 即查**的视图态（非跨页面共享的全局登记表），
-// 与 project/provider/todo 那类「全局列表」性质不同 —— 建 Provider 是投机抽象（违反简洁优先）。
+// 为何不建全局 GitProvider：Git 状态是**按 path 即查**的视图态（非跨页面共享的全局登记表）。
 // 故状态留在本 VM；若将来侧边栏需 per-project Git 角标等多消费方，再提升为 Provider。
 //
-// 不返回 JSX、不持翻译串（错误标题由 View 经 t() 传入，MVVM 铁律）。
+// 不返回 JSX、不持翻译串（错误/确认标题由 View 经 t() 传入，MVVM 铁律）。
 
 const LOG_LIMIT = 20;
 
@@ -54,6 +56,21 @@ export interface RemoveWorktreeStrings {
   errorTitle: string;
 }
 
+// 丢弃改动：破坏性操作，需确认文案 + 失败文案（成功静默，列表刷新即反馈）。
+export interface DiscardStrings {
+  confirmTitle: string;
+  confirmMessage: string; // 含 {{path}} / {{count}} 由 View 预先插值
+  okLabel: string;
+  cancelLabel: string;
+  errorTitle: string;
+}
+
+// 当前查看的 diff 选中项（哪个文件 + 看暂存区侧还是工作树侧）。
+export interface SelectedDiff {
+  file: string;
+  staged: boolean;
+}
+
 export interface UseGitPageResult {
   projects: Project[];
   selectedPath: string;
@@ -65,6 +82,15 @@ export interface UseGitPageResult {
   worktrees: GitWorktree[];
   newWorktreeName: string;
   setNewWorktreeName: (v: string) => void;
+  // —— SCM ——
+  stagedFiles: GitFileStatus[];
+  changedFiles: GitFileStatus[]; // 未暂存 + 未跟踪
+  hasStaged: boolean;
+  commitMessage: string;
+  setCommitMessage: (v: string) => void;
+  selectedDiff: SelectedDiff | null;
+  diff: DiffResult | null;
+  diffLoading: boolean;
   select: (path: string, errorTitle: string) => Promise<void>;
   refresh: (errorTitle: string) => Promise<void>;
   fetch: (s: OpStrings) => Promise<void>;
@@ -74,6 +100,15 @@ export interface UseGitPageResult {
   stashPop: (s: OpStrings) => Promise<void>;
   addWorktree: (s: AddWorktreeStrings) => Promise<void>;
   removeWorktree: (wt: GitWorktree, s: RemoveWorktreeStrings) => Promise<void>;
+  openDiff: (file: string, staged: boolean, errorTitle: string) => Promise<void>;
+  closeDiff: () => void;
+  stageFile: (file: string, errorTitle: string) => Promise<void>;
+  unstageFile: (file: string, errorTitle: string) => Promise<void>;
+  discardFile: (file: string, s: DiscardStrings) => Promise<void>;
+  stageAll: (errorTitle: string) => Promise<void>;
+  unstageAll: (errorTitle: string) => Promise<void>;
+  discardAll: (s: DiscardStrings) => Promise<void>;
+  commit: (errorTitle: string) => Promise<void>;
 }
 
 function messageOf(e: unknown): string {
@@ -91,15 +126,30 @@ export const useGitPage = (): UseGitPageResult => {
   const [commits, setCommits] = useState<GitCommit[]>([]);
   const [worktrees, setWorktrees] = useState<GitWorktree[]>([]);
   const [newWorktreeName, setNewWorktreeName] = useState('');
+  const [files, setFiles] = useState<GitFileStatus[]>([]);
+  const [commitMessage, setCommitMessage] = useState('');
+  const [selectedDiff, setSelectedDiff] = useState<SelectedDiff | null>(null);
+  const [diff, setDiff] = useState<DiffResult | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
 
-  // 请求令牌：快速切换项目时丢弃过期响应，只采纳最新一次。
+  // 请求令牌：快速切换项目 / 文件时丢弃过期响应，只采纳最新一次。
   const reqIdRef = useRef(0);
+  const diffReqRef = useRef(0);
+  // selectedDiff 的镜像 ref：供 SCM 操作后重拉当前 diff（避免把 selectedDiff 塞进 callback deps）。
+  const selectedDiffRef = useRef<SelectedDiff | null>(null);
+  selectedDiffRef.current = selectedDiff;
+
+  const stagedFiles = useMemo(() => files.filter((f) => f.staged), [files]);
+  const changedFiles = useMemo(() => files.filter((f) => f.unstaged), [files]);
 
   const clearDetails = useCallback((): void => {
     setStatus(null);
     setBranches([]);
     setCommits([]);
     setWorktrees([]);
+    setFiles([]);
+    setSelectedDiff(null);
+    setDiff(null);
   }, []);
 
   const load = useCallback(
@@ -111,19 +161,22 @@ export const useGitPage = (): UseGitPageResult => {
         if (myReq !== reqIdRef.current) return; // 已被更新的请求取代
         setStatus(st);
         if (st.isRepo) {
-          const [brs, logs, wts] = await Promise.all([
+          const [brs, logs, wts, fls] = await Promise.all([
             GitService.branches(path),
             GitService.log(path, LOG_LIMIT),
             GitService.worktrees(path),
+            GitService.statusFiles(path),
           ]);
           if (myReq !== reqIdRef.current) return;
           setBranches(brs);
           setCommits(logs);
           setWorktrees(wts);
+          setFiles(fls);
         } else {
           setBranches([]);
           setCommits([]);
           setWorktrees([]);
+          setFiles([]);
         }
       } catch (e) {
         if (myReq === reqIdRef.current) clearDetails();
@@ -138,6 +191,9 @@ export const useGitPage = (): UseGitPageResult => {
   const select = useCallback(
     async (path: string, errorTitle: string): Promise<void> => {
       setSelectedPath(path);
+      setSelectedDiff(null);
+      setDiff(null);
+      setCommitMessage('');
       if (!path) {
         reqIdRef.current++; // 取消在途请求
         clearDetails();
@@ -156,14 +212,45 @@ export const useGitPage = (): UseGitPageResult => {
     [selectedPath, load],
   );
 
-  // 工具条操作统一编排：互斥（busy 守门）→ 调后端 → 成功 info（stash/pop 用 git 返回文本）
-  // → 重新拉取状态/分支/提交（变更可能改动它们）→ 失败 error。
+  // —— diff 查看 ——
+
+  const fetchDiff = useCallback(
+    async (path: string, file: string, staged: boolean, errorTitle: string): Promise<void> => {
+      const myReq = ++diffReqRef.current;
+      setDiffLoading(true);
+      try {
+        const d = await GitService.diffFile(path, file, staged);
+        if (myReq !== diffReqRef.current) return;
+        setDiff(d);
+      } catch (e) {
+        if (myReq === diffReqRef.current) setDiff(null);
+        await NativeDialogs.error(errorTitle, messageOf(e));
+      } finally {
+        if (myReq === diffReqRef.current) setDiffLoading(false);
+      }
+    },
+    [],
+  );
+
+  const openDiff = useCallback(
+    async (file: string, staged: boolean, errorTitle: string): Promise<void> => {
+      if (!selectedPath) return;
+      setSelectedDiff({ file, staged });
+      await fetchDiff(selectedPath, file, staged, errorTitle);
+    },
+    [selectedPath, fetchDiff],
+  );
+
+  const closeDiff = useCallback((): void => {
+    diffReqRef.current++; // 取消在途 diff 请求
+    setSelectedDiff(null);
+    setDiff(null);
+  }, []);
+
+  // —— 工具条操作（fetch/pull/push/stash/stashPop）——
+
   const runOp = useCallback(
-    async (
-      fn: (path: string) => Promise<string | void>,
-      s: OpStrings,
-      showResult: boolean,
-    ): Promise<void> => {
+    async (fn: (path: string) => Promise<string | void>, s: OpStrings, showResult: boolean): Promise<void> => {
       if (!selectedPath || busy) return;
       setBusy(true);
       try {
@@ -198,6 +285,85 @@ export const useGitPage = (): UseGitPageResult => {
       await runOp(GitService.push, s, false);
     },
     [selectedPath, busy, runOp],
+  );
+
+  // —— SCM 变更操作：成功静默（列表刷新即反馈，对齐 VSCode），仅失败弹错。操作后重拉状态，
+  // 并刷新当前打开的 diff（其内容可能因 stage/unstage 改变）。——
+
+  const runScm = useCallback(
+    async (fn: () => Promise<void>, errorTitle: string): Promise<void> => {
+      if (!selectedPath || busy) return;
+      setBusy(true);
+      try {
+        await fn();
+        await load(selectedPath, errorTitle);
+        const sel = selectedDiffRef.current;
+        if (sel) await fetchDiff(selectedPath, sel.file, sel.staged, errorTitle);
+      } catch (e) {
+        await NativeDialogs.error(errorTitle, messageOf(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [selectedPath, busy, load, fetchDiff],
+  );
+
+  const stageFile = useCallback(
+    (file: string, errorTitle: string) => runScm(() => GitService.stage(selectedPath, [file]), errorTitle),
+    [runScm, selectedPath],
+  );
+  const unstageFile = useCallback(
+    (file: string, errorTitle: string) => runScm(() => GitService.unstage(selectedPath, [file]), errorTitle),
+    [runScm, selectedPath],
+  );
+  const stageAll = useCallback(
+    (errorTitle: string) => runScm(() => GitService.stage(selectedPath, changedFiles.map((f) => f.path)), errorTitle),
+    [runScm, selectedPath, changedFiles],
+  );
+  const unstageAll = useCallback(
+    (errorTitle: string) => runScm(() => GitService.unstage(selectedPath, stagedFiles.map((f) => f.path)), errorTitle),
+    [runScm, selectedPath, stagedFiles],
+  );
+
+  const discardWith = useCallback(
+    async (paths: string[], s: DiscardStrings): Promise<void> => {
+      if (!selectedPath || busy || paths.length === 0) return;
+      const ok = await NativeDialogs.confirm({
+        title: s.confirmTitle,
+        message: s.confirmMessage,
+        okLabel: s.okLabel,
+        cancelLabel: s.cancelLabel,
+      });
+      if (!ok) return;
+      await runScm(() => GitService.discard(selectedPath, paths), s.errorTitle);
+    },
+    [selectedPath, busy, runScm],
+  );
+
+  const discardFile = useCallback((file: string, s: DiscardStrings) => discardWith([file], s), [discardWith]);
+  const discardAll = useCallback(
+    (s: DiscardStrings) => discardWith(changedFiles.map((f) => f.path), s),
+    [discardWith, changedFiles],
+  );
+
+  const commit = useCallback(
+    async (errorTitle: string): Promise<void> => {
+      const msg = commitMessage.trim();
+      if (!selectedPath || busy || !msg) return;
+      setBusy(true);
+      try {
+        await GitService.commit(selectedPath, msg);
+        setCommitMessage('');
+        setSelectedDiff(null);
+        setDiff(null);
+        await load(selectedPath, errorTitle);
+      } catch (e) {
+        await NativeDialogs.error(errorTitle, messageOf(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [selectedPath, busy, commitMessage, load],
   );
 
   // 新建 worktree：名取 newWorktreeName（同时作子目录名与新分支名）→ 选父目录 →
@@ -258,6 +424,14 @@ export const useGitPage = (): UseGitPageResult => {
     worktrees,
     newWorktreeName,
     setNewWorktreeName,
+    stagedFiles,
+    changedFiles,
+    hasStaged: stagedFiles.length > 0,
+    commitMessage,
+    setCommitMessage,
+    selectedDiff,
+    diff,
+    diffLoading,
     select,
     refresh,
     fetch,
@@ -267,5 +441,14 @@ export const useGitPage = (): UseGitPageResult => {
     stashPop,
     addWorktree,
     removeWorktree,
+    openDiff,
+    closeDiff,
+    stageFile,
+    unstageFile,
+    discardFile,
+    stageAll,
+    unstageAll,
+    discardAll,
+    commit,
   };
 };

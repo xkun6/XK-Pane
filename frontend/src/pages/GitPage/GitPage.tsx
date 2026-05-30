@@ -17,14 +17,18 @@ import NorthRoundedIcon from '@mui/icons-material/NorthRounded';
 import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
 import UnarchiveRoundedIcon from '@mui/icons-material/UnarchiveRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import RemoveRoundedIcon from '@mui/icons-material/RemoveRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import { useT } from '@/i18n';
-import type { GitWorktree } from '@/services';
+import { DiffView } from '@/components/DiffView';
+import type { GitFileStatus, GitWorktree } from '@/services';
 import { gitPageStyles } from './GitPage.styles';
 import { useGitPage } from './useGitPage';
 
-// GitPage：选一个已登记项目 → 只读展示其 Git 状态（分支 + 脏标 + 本地分支 + 最近提交）。
-// 端到端验证 gitsvc 往返（GetStatus / Branches / Log）。变更操作（worktree/stash/网络）留后续单元。
+// GitPage：选一个已登记项目 → Git 状态 + 工具条（fetch/pull/push/stash）+ VSCode 式源代码管理
+// （变更文件分组 staged/changes + per-file diff + stage/unstage/discard/commit）+ 分支/提交/worktree。
 
 export const GitPage = () => {
   const theme = useTheme();
@@ -74,6 +78,113 @@ export const GitPage = () => {
       successMessage: t('git.worktree.removedMessage'),
       errorTitle,
     });
+
+  // —— SCM handlers ——
+  const onCommit = (): void => void vm.commit(errorTitle);
+  const onStageAll = (): void => void vm.stageAll(errorTitle);
+  const onUnstageAll = (): void => void vm.unstageAll(errorTitle);
+  const discardStrings = (message: string) => ({
+    confirmTitle: t('git.scm.discardConfirm.title'),
+    confirmMessage: message,
+    okLabel: t('git.scm.discardConfirm.ok'),
+    cancelLabel: t('git.scm.discardConfirm.cancel'),
+    errorTitle,
+  });
+  const onDiscardFile = (f: GitFileStatus): void =>
+    void vm.discardFile(f.path, discardStrings(t('git.scm.discardConfirm.fileMessage', { path: f.path })));
+  const onDiscardAll = (): void =>
+    void vm.discardAll(discardStrings(t('git.scm.discardConfirm.allMessage', { count: String(vm.changedFiles.length) })));
+
+  const diffLabels = {
+    binary: t('git.diff.binary'),
+    truncated: t('git.diff.truncated'),
+    identical: t('git.diff.identical'),
+    added: t('git.diff.added'),
+    removed: t('git.diff.removed'),
+  };
+
+  const statusColor = (code: string): string => {
+    switch (code) {
+      case 'M':
+        return theme.palette.foundation.status.warning;
+      case 'A':
+      case '?':
+        return theme.palette.foundation.status.success;
+      case 'D':
+        return theme.palette.foundation.status.danger;
+      case 'R':
+      case 'C':
+        return theme.palette.foundation.accent;
+      default:
+        return theme.palette.foundation.text.secondary;
+    }
+  };
+
+  const renderFileRow = (f: GitFileStatus, staged: boolean) => {
+    const selected = vm.selectedDiff?.file === f.path && vm.selectedDiff?.staged === staged;
+    const code = (staged ? f.index : f.worktree).trim() || '?';
+    return (
+      <Box
+        key={`${staged ? 's' : 'c'}-${f.path}`}
+        sx={{ ...styles.fileRow, ...(selected ? styles.fileRowSelected : {}) }}
+        onClick={() => void vm.openDiff(f.path, staged, errorTitle)}
+      >
+        <Box component="span" sx={{ ...styles.fileBadge, color: statusColor(code) }}>
+          {code}
+        </Box>
+        <Typography
+          component="span"
+          sx={styles.filePath}
+          title={f.origPath ? `${f.origPath} → ${f.path}` : f.path}
+        >
+          {f.path}
+        </Typography>
+        <Box sx={styles.fileActions} onClick={(e) => e.stopPropagation()}>
+          {staged ? (
+            <Tooltip title={t('git.scm.unstage')}>
+              <span>
+                <IconButton
+                  size="small"
+                  aria-label={t('git.scm.unstage')}
+                  onClick={() => void vm.unstageFile(f.path, errorTitle)}
+                  disabled={toolbarDisabled}
+                >
+                  <RemoveRoundedIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          ) : (
+            <>
+              <Tooltip title={t('git.scm.discard')}>
+                <span>
+                  <IconButton
+                    size="small"
+                    aria-label={t('git.scm.discard')}
+                    onClick={() => onDiscardFile(f)}
+                    disabled={toolbarDisabled}
+                  >
+                    <DeleteOutlineRoundedIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title={t('git.scm.stage')}>
+                <span>
+                  <IconButton
+                    size="small"
+                    aria-label={t('git.scm.stage')}
+                    onClick={() => void vm.stageFile(f.path, errorTitle)}
+                    disabled={toolbarDisabled}
+                  >
+                    <AddRoundedIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </>
+          )}
+        </Box>
+      </Box>
+    );
+  };
 
   return (
     <Box sx={styles.root}>
@@ -199,6 +310,127 @@ export const GitPage = () => {
                     </Button>
                   </Box>
 
+                  {/* —— VSCode 式源代码管理 —— */}
+                  <Box sx={styles.scmBlock}>
+                    <Box sx={styles.commitBox}>
+                      <TextField
+                        multiline
+                        minRows={2}
+                        maxRows={6}
+                        size="small"
+                        fullWidth
+                        placeholder={t('git.scm.commitPlaceholder', {
+                          branch: vm.status.branch || t('git.detached'),
+                        })}
+                        value={vm.commitMessage}
+                        onChange={(e) => vm.setCommitMessage(e.target.value)}
+                        disabled={toolbarDisabled}
+                      />
+                      <Box sx={styles.commitButtonRow}>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          startIcon={<CheckRoundedIcon />}
+                          onClick={onCommit}
+                          disabled={toolbarDisabled || !vm.hasStaged || !vm.commitMessage.trim()}
+                          sx={{ textTransform: 'none' }}
+                        >
+                          {t('git.scm.commit')}
+                        </Button>
+                      </Box>
+                    </Box>
+
+                    {vm.stagedFiles.length > 0 && (
+                      <Box sx={styles.fileGroup}>
+                        <Box sx={styles.fileGroupHeader}>
+                          <Typography sx={styles.fileGroupTitle}>
+                            {t('git.scm.stagedTitle', { count: String(vm.stagedFiles.length) })}
+                          </Typography>
+                          <Tooltip title={t('git.scm.unstageAll')}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                aria-label={t('git.scm.unstageAll')}
+                                onClick={onUnstageAll}
+                                disabled={toolbarDisabled}
+                              >
+                                <RemoveRoundedIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </Box>
+                        {vm.stagedFiles.map((f) => renderFileRow(f, true))}
+                      </Box>
+                    )}
+
+                    <Box sx={styles.fileGroup}>
+                      <Box sx={styles.fileGroupHeader}>
+                        <Typography sx={styles.fileGroupTitle}>
+                          {t('git.scm.changesTitle', { count: String(vm.changedFiles.length) })}
+                        </Typography>
+                        {vm.changedFiles.length > 0 && (
+                          <>
+                            <Tooltip title={t('git.scm.stageAll')}>
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  aria-label={t('git.scm.stageAll')}
+                                  onClick={onStageAll}
+                                  disabled={toolbarDisabled}
+                                >
+                                  <AddRoundedIcon fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                            <Tooltip title={t('git.scm.discardAll')}>
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  aria-label={t('git.scm.discardAll')}
+                                  onClick={onDiscardAll}
+                                  disabled={toolbarDisabled}
+                                >
+                                  <DeleteOutlineRoundedIcon fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </>
+                        )}
+                      </Box>
+                      {vm.changedFiles.length === 0 ? (
+                        <Box sx={styles.emptyScm}>{t('git.scm.noChanges')}</Box>
+                      ) : (
+                        vm.changedFiles.map((f) => renderFileRow(f, false))
+                      )}
+                    </Box>
+
+                    {vm.selectedDiff && (
+                      <Box sx={styles.diffPanel}>
+                        <Box sx={styles.diffPanelHeader}>
+                          <Typography sx={styles.diffPanelPath} title={vm.selectedDiff.file}>
+                            {vm.selectedDiff.file}
+                          </Typography>
+                          <Tooltip title={t('git.scm.closeDiff')}>
+                            <IconButton
+                              size="small"
+                              aria-label={t('git.scm.closeDiff')}
+                              onClick={vm.closeDiff}
+                            >
+                              <CloseRoundedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                        <Box sx={styles.diffPanelBody}>
+                          {vm.diffLoading ? (
+                            <Box sx={styles.emptyScm}>{t('git.loading')}</Box>
+                          ) : vm.diff ? (
+                            <DiffView diff={vm.diff} labels={diffLabels} />
+                          ) : null}
+                        </Box>
+                      </Box>
+                    )}
+                  </Box>
+
                   <Box sx={styles.section}>
                     <Typography sx={styles.sectionTitle}>
                       {t('git.branches', { count: String(vm.branches.length) })}
@@ -282,12 +514,7 @@ export const GitPage = () => {
                             {wt.commit}
                           </Typography>
                           {wt.isMain ? (
-                            <Chip
-                              label={t('git.worktree.main')}
-                              size="small"
-                              color="primary"
-                              sx={{ borderRadius: 6 }}
-                            />
+                            <Chip label={t('git.worktree.main')} size="small" color="primary" sx={{ borderRadius: 6 }} />
                           ) : (
                             <Tooltip title={t('git.worktree.remove')}>
                               <span>
