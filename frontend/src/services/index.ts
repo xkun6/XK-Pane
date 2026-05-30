@@ -37,6 +37,15 @@ export {
 } from './todo/TodoService';
 export { SpecService, type Spec } from './spec/SpecService';
 export {
+  MemoryService,
+  type Memory,
+  type MemoryStats,
+  type MemoryQuery,
+  type MemoryQueryResult,
+  type StoreMemoryInput,
+  type UpdateMemoryInput,
+} from './memory/MemoryService';
+export {
   ProviderService,
   type Provider,
   type ProviderInput,

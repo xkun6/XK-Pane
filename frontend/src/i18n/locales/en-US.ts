@@ -28,6 +28,7 @@ export const enUS: Locale = {
       git: 'Git',
       history: 'Local History',
       specs: 'Specs',
+      memory: 'Memory',
       settings: 'Settings',
     },
     terminal: {
