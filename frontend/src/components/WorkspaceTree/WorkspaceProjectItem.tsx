@@ -1,5 +1,7 @@
 import { Box } from '@mui/material';
 import FolderRoundedIcon from '@mui/icons-material/FolderRounded';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { WorkspaceProject } from '@/services';
 import type { WorkspaceTreeSx } from './WorkspaceTree.styles';
 import type { MenuAnchor } from './WorkspaceContextMenu';
@@ -19,17 +21,31 @@ export interface WorkspaceProjectItemProps {
   onOpenMenu: (anchor: MenuAnchor) => void;
 }
 
-// 树第二层：工作空间下的项目节点。左键 / 右键 / Enter 均弹菜单（启动 + 编辑入口）。
+// 树第二层：工作空间下的项目节点。左键 / 右键 / Enter 弹菜单（启动 + 编辑入口）；
+// 整行可拖拽（@dnd-kit，限同一工作空间内排序，靠 activationConstraint 距离区分点击与拖拽）。
 export const WorkspaceProjectItem = ({ project, styles, onOpenMenu }: WorkspaceProjectItemProps) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: project.id,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : undefined,
+  };
+
   const open = (e: { clientX: number; clientY: number }): void =>
     onOpenMenu({ top: e.clientY, left: e.clientX });
 
   return (
     <Box
-      role="button"
-      tabIndex={0}
+      ref={setNodeRef}
+      style={style}
       sx={styles.projectRow}
       title={project.path}
+      {...attributes}
+      {...listeners}
+      role="button"
+      tabIndex={0}
       onClick={open}
       onContextMenu={(e) => {
         e.preventDefault();

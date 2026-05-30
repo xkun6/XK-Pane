@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Box, useTheme } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useT } from '@/i18n';
 import { useCliTools } from '@/shared/hooks/useCliTools';
 import { TextInputDialog } from '@/components/TextInputDialog';
@@ -53,6 +55,40 @@ export const WorkspaceTree = () => {
     setTextOpen(true);
   };
   const closeMenu = (): void => setMenu(null);
+
+  // 拖拽：距离 6px 才激活，避免与点击展开 / 弹菜单冲突。
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  // 拖拽结束：工作空间限同组（pinned/normal）排序；项目限同一工作空间内排序。跨组 / 跨空间忽略。
+  const onDragEnd = (event: DragEndEvent): void => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+
+    const inPinned = vm.pinned.some((w) => w.id === activeId);
+    const inNormal = vm.normal.some((w) => w.id === activeId);
+    if (inPinned || inNormal) {
+      const group = inPinned ? vm.pinned : vm.normal;
+      const ids = group.map((w) => w.id);
+      const from = ids.indexOf(activeId);
+      const to = ids.indexOf(overId);
+      if (from === -1 || to === -1) return; // over 在另一组 → 忽略（跨组靠星标，不靠拖拽）
+      void vm.reorderWorkspaces(arrayMove(ids, from, to), errTitle());
+      return;
+    }
+
+    // 项目：找归属工作空间，限同空间内排序。
+    const all = [...vm.pinned, ...vm.normal];
+    const owner = all.find((w) => w.projects.some((p) => p.id === activeId));
+    const overOwner = all.find((w) => w.projects.some((p) => p.id === overId));
+    if (!owner || !overOwner || owner.id !== overOwner.id) return;
+    const ids = owner.projects.map((p) => p.id);
+    const from = ids.indexOf(activeId);
+    const to = ids.indexOf(overId);
+    if (from === -1 || to === -1) return;
+    void vm.reorderProjects(owner.id, arrayMove(ids, from, to), errTitle());
+  };
 
   const itemStrings: WorkspaceItemStrings = {
     pin: t('workspaceTree.pin'),
@@ -207,16 +243,22 @@ export const WorkspaceTree = () => {
         </Box>
       </Box>
 
-      <Box sx={styles.list}>
-        {isEmpty && (
-          <Box sx={styles.empty}>
-            <Box sx={styles.emptyText}>{t('workspaceTree.empty')}</Box>
-            <Box sx={styles.emptyHint}>{t('workspaceTree.emptyHint')}</Box>
-          </Box>
-        )}
-        {vm.pinned.map(renderItem)}
-        {vm.normal.map(renderItem)}
-      </Box>
+      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+        <Box sx={styles.list}>
+          {isEmpty && (
+            <Box sx={styles.empty}>
+              <Box sx={styles.emptyText}>{t('workspaceTree.empty')}</Box>
+              <Box sx={styles.emptyHint}>{t('workspaceTree.emptyHint')}</Box>
+            </Box>
+          )}
+          <SortableContext items={vm.pinned.map((w) => w.id)} strategy={verticalListSortingStrategy}>
+            {vm.pinned.map(renderItem)}
+          </SortableContext>
+          <SortableContext items={vm.normal.map((w) => w.id)} strategy={verticalListSortingStrategy}>
+            {vm.normal.map(renderItem)}
+          </SortableContext>
+        </Box>
+      </DndContext>
 
       <Box
         role="button"

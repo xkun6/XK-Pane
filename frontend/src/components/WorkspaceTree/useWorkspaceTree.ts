@@ -44,6 +44,8 @@ export interface WorkspaceTreeModel {
   submitProjectAlias: (projectId: string, alias: string, errorTitle: string) => Promise<void>;
   removeProject: (projectId: string, s: ConfirmStrings) => Promise<void>;
   copyPath: (path: string) => void;
+  reorderWorkspaces: (ids: string[], errorTitle: string) => Promise<void>;
+  reorderProjects: (workspaceId: string, projectIds: string[], errorTitle: string) => Promise<void>;
 }
 
 function messageOf(e: unknown): string {
@@ -161,6 +163,26 @@ export function useWorkspaceTree(): WorkspaceTreeModel {
     void navigator.clipboard?.writeText(path).catch(() => {});
   };
 
+  // 拖拽排序：前端传该组/该工作空间的完整有序 id 列表，后端逐个写 sort_order=位置。
+  const reorderWorkspaces = async (ids: string[], errorTitle: string): Promise<void> => {
+    try {
+      await ctx.reorder(ids);
+    } catch (e) {
+      await NativeDialogs.error(errorTitle, messageOf(e));
+    }
+  };
+  const reorderProjects = async (
+    workspaceId: string,
+    projectIds: string[],
+    errorTitle: string,
+  ): Promise<void> => {
+    try {
+      await ctx.reorderProjects(workspaceId, projectIds);
+    } catch (e) {
+      await NativeDialogs.error(errorTitle, messageOf(e));
+    }
+  };
+
   return {
     loading: ctx.loading,
     pinned: ctx.workspaces.filter((w) => w.pinned),
@@ -178,5 +200,7 @@ export function useWorkspaceTree(): WorkspaceTreeModel {
     submitProjectAlias,
     removeProject,
     copyPath,
+    reorderWorkspaces,
+    reorderProjects,
   };
 }
