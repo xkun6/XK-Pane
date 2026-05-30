@@ -3,6 +3,8 @@ package storage
 import (
 	"errors"
 	"fmt"
+	"log"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -44,8 +46,17 @@ func Open(path string) (*DB, error) {
 	}
 
 	gdb, err := gorm.Open(sqlite.Open(path), &gorm.Config{
-		// 静音 GORM 默认日志（debug 时改 logger.Info）
-		Logger: logger.Default.LogMode(logger.Warn),
+		// GORM 日志：写 stdout（与 logger.Default 一致），级别 Warn（debug 时改 logger.Info）。
+		// IgnoreRecordNotFoundError=true —— ErrRecordNotFound 是业务用来表达「查不到」的
+		// 正常控制流（Get 类方法 First+errors.Is 判定后返回 nil；Remove 提升默认项时无剩余
+		// 也命中它）。默认 logger 会把它当 error 打出来制造噪声，这里静音；真正的错误仍照常记录。
+		Logger: logger.New(
+			log.New(os.Stdout, "\r\n", log.LstdFlags),
+			logger.Config{
+				LogLevel:                  logger.Warn,
+				IgnoreRecordNotFoundError: true,
+			},
+		),
 		// 禁用默认事务提交：单写场景用不到外层事务包裹
 		SkipDefaultTransaction: true,
 		// 时间戳一律以 UTC 写入。glebarez 把 time.Time 按其自身时区序列化为
