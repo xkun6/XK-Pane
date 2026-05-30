@@ -46,7 +46,7 @@ export const routes: RouteDefinition[] = [
     element: <HomePage />,
     fallback: <HomePageSkeleton />,
     slot: 'primary',
-    keepAlive: true, // 演示：离开后再回来，Greet 输入框保留上次内容
+    // 仪表盘不保活：每次进入重新拉取最近启动 / 重算时段问候，保证数据新鲜。
   },
   {
     id: 'terminal',

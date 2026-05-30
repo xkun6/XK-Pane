@@ -4,20 +4,32 @@ import type { Messages } from '@/i18n';
 // 由 src/pages/HomePage/lang/index.ts 通过 localeRegistry.extend('zh-CN', ...) 注入。
 export const homePageZhCN: Messages = {
   home: {
-    eyebrow: 'XK-Pane',
-    hero: '欢迎使用 XK-Pane',
-    subtitle: '一个干净的 Wails 3 + React 19 + MUI 基座。把这个页面替换为你的第一个功能，或者从修改 {{file}} 开始。',
-    backendCard: {
-      title: '后端往返调用',
-      defaultResult: '请输入你的名字，然后点击「问候」👇',
-      placeholder: '你的名字',
-      submit: '问候',
-      submitting: '问候中…',
-      errorPrefix: '错误：',
+    greeting: {
+      morning: '上午好',
+      afternoon: '下午好',
+      evening: '晚上好',
     },
-    footer: {
-      backendTick: '后端心跳：{{time}}',
-      poweredBy: '由 Wails 3 · React 19 · MUI 9 提供支持',
+    tagline: '管理你的项目、终端会话与 Git 改动，一切尽在一处。',
+    projects: {
+      stat: '{{count}} 个项目',
+    },
+    actions: {
+      title: '快捷操作',
+      terminal: '打开终端',
+      git: '源代码管理',
+      history: '本地历史',
+      settings: '设置',
+    },
+    recent: {
+      title: '最近启动',
+      empty: '还没有启动记录。打开终端、选择项目并启动一个 CLI 即可开始。',
+      shell: '终端',
+    },
+    env: {
+      title: '环境检测',
+      detecting: '检测中…',
+      installed: '已安装',
+      notInstalled: '未安装',
     },
   },
 };

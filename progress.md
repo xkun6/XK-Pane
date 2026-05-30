@@ -918,5 +918,15 @@
 **P0 限制（记一笔）**：unborn HEAD（全新无提交仓库）撤销暂存不支持；重命名 diff 以新路径 vs HEAD 呈现（非相似度）；per-hunk 暂存留 P2.1。
 **验证**：go build/vet/test（gitx+gitsvc，含新解析器测试）✅；bindings 13 Services/**85 Methods**/56 Models；前端 typecheck ✅ / build ✅。
 
-### P2c Home 仪表盘 — 待办（本会话继续）
-HomePage 重做（问候 + 快捷动作 + 最近项目 + 活跃会话 + 环境检测，复用 launchhistory/session/cliadapters）。
+### P2c Home 仪表盘 ✅ complete
+HomePage 从脚手架 demo（greet + time 心跳）重做为仪表盘，**纯前端、复用既有数据源、无后端改动**：
+- **时段问候**（按本地小时 morning/afternoon/evening，VM 暴露 greetingKey、View 调 t()）+ 项目数 stat（useProjects）。
+- **快捷操作**网格（打开终端 / 源代码管理 / 本地历史 / 设置，经 useRouter().navigate）。
+- **最近启动**（LaunchHistoryService.list(6)，项目名 · CLI 名 · 本地时间；点击跳终端页；空态提示）。
+- **环境检测**（useCliTools 检测 claude/reclaude/codex 安装状态 + 版本，状态点 success/muted）。
+- 配套：HomePage.skeleton 改版式对齐；home.* 文案重写（zh/en，去 backendCard/footer，加 greeting/tagline/actions/recent/env）；routes.tsx 去掉 home 的 keepAlive（仪表盘每次进入重拉，保数据新鲜）。
+- **遗留孤儿（记一笔，未删）**：`GreetService` / `useTimeEvent` / 后端 greet service + emitTimeLoop 现无消费方（原仅 HomePage demo 用）。按「不擅删既有」保留，后续可作脚手架清理单独处理。
+- **验证**：pnpm typecheck ✅ / pnpm build ✅（无后端/bindings 变更）。
+
+### ✅ P2 完成（清场 + Git SCM + Home 仪表盘）
+三个单元独立提交：P2a 清场 `dc11388`、P2b Git SCM `e6d107a`、P2c Home（本次）。**待用户 `wails3 dev` 目检**：Git 页变更分组/diff/stage/commit、Home 仪表盘。验证 OK → 进 P3（Workspace 树 + 会话视图 + 恢复）。

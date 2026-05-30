@@ -1,41 +1,66 @@
-import { useCallback, useState } from 'react';
-import { GreetService } from '@/services';
-import { useTimeEvent } from '@/shared/hooks/useTimeEvent';
+import { useEffect, useState } from 'react';
+import { LaunchHistoryService, type CliTool, type LaunchRecord } from '@/services';
+import { useProjects } from '@/project';
+import { useCliTools } from '@/shared/hooks/useCliTools';
+import { useRouter } from '@/router';
 
-export interface UseHomePageResult {
-  name: string;
-  setName: (value: string) => void;
-  // 后端返回的字符串；初始为 null（View 在 null 时显示默认占位文案，由 i18n 提供）
-  result: string | null;
-  time: string;
-  loading: boolean;
-  error: string | null;
-  greet: () => Promise<void>;
+// HomePage ViewModel：仪表盘数据装配 —— 时段问候 + 项目数 + 最近启动 + CLI 环境检测 + 导航。
+// 复用既有数据源（LaunchHistoryService / ProjectProvider / useCliTools / Router），不新建后端。
+// 不返回 JSX、不持翻译串（问候按 key 暴露，由 View 调 t()）。
+
+export type GreetingKey = 'morning' | 'afternoon' | 'evening';
+
+const RECENT_LIMIT = 6;
+
+function greetingForHour(hour: number): GreetingKey {
+  if (hour < 12) return 'morning';
+  if (hour < 18) return 'afternoon';
+  return 'evening';
 }
 
-// HomePage ViewModel：
-// - 不在这里持有"显示文案"，文案是 View 的责任（避免 hook 依赖 i18n context）
-// - result 用 null 表示"还没调过后端"，View 据此选用本地化的默认提示
+export interface UseHomePageResult {
+  greetingKey: GreetingKey;
+  projectCount: number;
+  recentLaunches: LaunchRecord[];
+  launchesLoading: boolean;
+  tools: CliTool[];
+  toolsLoading: boolean;
+  navigate: (id: string) => void;
+}
+
 export const useHomePage = (): UseHomePageResult => {
-  const [name, setName] = useState<string>('');
-  const [result, setResult] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const time = useTimeEvent();
+  const { projects } = useProjects();
+  const { tools, loading: toolsLoading } = useCliTools();
+  const { navigate } = useRouter();
+  const [recentLaunches, setRecentLaunches] = useState<LaunchRecord[]>([]);
+  const [launchesLoading, setLaunchesLoading] = useState(true);
+  // 问候按首次挂载的本地小时定（home 非保活，每次进入重算；见 routes.tsx）。
+  const [greetingKey] = useState<GreetingKey>(() => greetingForHour(new Date().getHours()));
 
-  const greet = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    try {
-      const value = await GreetService.greet(name.trim());
-      setResult(value);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Unknown error';
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, [name]);
+  useEffect(() => {
+    let alive = true;
+    LaunchHistoryService.list(RECENT_LIMIT)
+      .then((rows) => {
+        if (alive) {
+          setRecentLaunches(rows);
+          setLaunchesLoading(false);
+        }
+      })
+      .catch(() => {
+        if (alive) setLaunchesLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
-  return { name, setName, result, time, loading, error, greet };
+  return {
+    greetingKey,
+    projectCount: projects.length,
+    recentLaunches,
+    launchesLoading,
+    tools,
+    toolsLoading,
+    navigate,
+  };
 };

@@ -15,80 +15,153 @@ export const homePageStyles = (theme: Theme): Record<string, SxProps<Theme>> => 
       flex: 1,
       overflowY: 'auto',
       px: 6,
-      py: 6,
+      py: 5,
       display: 'flex',
       flexDirection: 'column',
       gap: 4,
-      alignItems: 'flex-start',
-      maxWidth: 720,
+      maxWidth: 920,
+      width: '100%',
     },
-    eyebrow: {
-      fontSize: 12,
-      fontWeight: 600,
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
-      color: fp.text.muted,
+    // —— 问候头 ——
+    greetingRow: {
+      display: 'flex',
+      alignItems: 'baseline',
+      flexWrap: 'wrap',
+      gap: 1.5,
     },
-    hero: {
-      fontSize: 32,
+    greeting: {
+      fontSize: 30,
       fontWeight: 700,
       color: fp.text.primary,
       lineHeight: 1.2,
       m: 0,
     },
-    subtitle: {
+    statChip: {
+      fontSize: 13,
+      color: fp.text.secondary,
+      px: 1,
+      py: 0.25,
+      borderRadius: 6,
+      border: `1px solid ${fp.divider}`,
+      backgroundColor: fp.bg.elevated,
+    },
+    tagline: {
       color: fp.text.secondary,
       fontSize: 15,
       lineHeight: 1.6,
     },
-    card: {
-      width: '100%',
-      p: 3,
-      backgroundColor: fp.bg.surface,
-      border: `1px solid ${fp.divider}`,
-      borderRadius: 1,
+    // —— 分区 ——
+    section: {
       display: 'flex',
       flexDirection: 'column',
-      gap: 2,
+      gap: 1.25,
     },
-    cardTitle: {
-      fontSize: 13,
+    sectionTitle: {
+      fontSize: 12,
       fontWeight: 600,
+      letterSpacing: 1,
+      textTransform: 'uppercase',
       color: fp.text.secondary,
     },
-    result: {
-      color: fp.text.primary,
-      fontSize: 14,
-    },
-    form: {
-      display: 'flex',
+    // —— 快捷操作 ——
+    actionsGrid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
       gap: 1.5,
+    },
+    actionCard: {
+      display: 'flex',
       alignItems: 'center',
-      width: '100%',
+      gap: 1.5,
+      p: 2,
+      borderRadius: 8,
+      border: `1px solid ${fp.divider}`,
+      backgroundColor: fp.bg.surface,
+      cursor: 'pointer',
+      transition: 'background-color 120ms, border-color 120ms',
+      '&:hover': { backgroundColor: fp.bg.hover, borderColor: fp.accent },
     },
-    input: {
-      flex: 1,
+    actionIcon: {
+      display: 'flex',
+      color: fp.accent,
     },
-    error: {
-      color: fp.status.danger,
-      fontSize: 13,
+    actionLabel: {
+      fontSize: 14,
+      fontWeight: 600,
+      color: fp.text.primary,
     },
-    footer: {
-      pt: 1,
-      color: fp.text.muted,
-      fontSize: 12,
+    // —— 最近启动 ——
+    recentList: {
       display: 'flex',
       flexDirection: 'column',
       gap: 0.5,
     },
-    code: {
-      fontFamily: '"JetBrains Mono", "Fira Code", Consolas, monospace',
-      backgroundColor: fp.bg.elevated,
+    recentRow: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 1.5,
+      padding: '10px 14px',
+      borderRadius: 8,
       border: `1px solid ${fp.divider}`,
-      borderRadius: 1,
-      px: 0.75,
-      py: 0.25,
+      backgroundColor: fp.bg.elevated,
+      cursor: 'pointer',
+      '&:hover': { backgroundColor: fp.bg.hover },
+    },
+    recentIcon: {
+      display: 'flex',
+      color: fp.text.secondary,
+      flexShrink: 0,
+    },
+    recentName: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: 500,
+      color: fp.text.primary,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+    },
+    recentTime: {
       fontSize: 12,
+      color: fp.text.muted,
+      whiteSpace: 'nowrap',
+    },
+    // —— 环境检测 ——
+    envList: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 0.5,
+    },
+    envRow: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 1.5,
+      padding: '10px 14px',
+      borderRadius: 8,
+      border: `1px solid ${fp.divider}`,
+      backgroundColor: fp.bg.elevated,
+    },
+    envDot: {
+      width: 8,
+      height: 8,
+      borderRadius: '50%',
+      flexShrink: 0,
+    },
+    envName: {
+      flex: 1,
+      fontSize: 14,
+      color: fp.text.primary,
+    },
+    envVersion: {
+      fontSize: 12,
+      fontFamily: 'monospace',
+      color: fp.text.secondary,
+      whiteSpace: 'nowrap',
+    },
+    emptyHint: {
+      padding: '16px 4px',
+      fontSize: 13,
+      color: fp.text.secondary,
     },
   };
 };

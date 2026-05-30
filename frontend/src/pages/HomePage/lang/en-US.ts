@@ -3,20 +3,32 @@ import type { Messages } from '@/i18n';
 // HomePage English copy. Mounted under the `home.*` namespace.
 export const homePageEnUS: Messages = {
   home: {
-    eyebrow: 'XK-Pane',
-    hero: 'Welcome to XK-Pane',
-    subtitle: 'A clean Wails 3 + React 19 + MUI base. Replace this page with your own first feature, or start by editing {{file}}.',
-    backendCard: {
-      title: 'Backend round-trip',
-      defaultResult: 'Please enter your name and tap Greet 👇',
-      placeholder: 'Your name',
-      submit: 'Greet',
-      submitting: 'Greeting…',
-      errorPrefix: 'Error: ',
+    greeting: {
+      morning: 'Good morning',
+      afternoon: 'Good afternoon',
+      evening: 'Good evening',
     },
-    footer: {
-      backendTick: 'Backend tick: {{time}}',
-      poweredBy: 'Powered by Wails 3 · React 19 · MUI 9',
+    tagline: 'Your projects, terminal sessions, and Git changes — all in one place.',
+    projects: {
+      stat: '{{count}} projects',
+    },
+    actions: {
+      title: 'Quick actions',
+      terminal: 'Open Terminal',
+      git: 'Source Control',
+      history: 'Local History',
+      settings: 'Settings',
+    },
+    recent: {
+      title: 'Recent launches',
+      empty: 'No launches yet. Open a terminal, pick a project, and start a CLI to begin.',
+      shell: 'Shell',
+    },
+    env: {
+      title: 'Environment',
+      detecting: 'Detecting…',
+      installed: 'Installed',
+      notInstalled: 'Not installed',
     },
   },
 };
