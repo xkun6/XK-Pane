@@ -671,6 +671,14 @@
 - **🎯 现在可真机验证**：`wails3 dev` → 侧边栏「待办」页 → 新建/勾选/删除待办 + 子任务,端到端验证 Wails 服务往返 + Provider + MVVM + confirm 修复。**这是「接前端/让成果可验」方向的首个落地,也顺带验证 app 能启动。** 终端页 + 设置→Provider 仍待你一并验。
 - **下一单元（续接前端）**：gitsvc（Wails 包装 gitx + 注册 + bindings，让 Git 后端可达，可测）；之后 Git 面板 UI / localhistorysvc + 历史面板 / 注册 session。各为独立切片。
 
+### ▶ 续：gitsvc — Wails 包装 gitx，Git 后端可达前端（同 /loop 自主续）
+- `internal/services/gitsvc/gitsvc.go`：**薄无状态** service 包装 gitx 全部只读/工具原语（不持 Holder——gitx 按路径操作）。每调用按 path 现开仓库（gitx.Open 廉价）。方法：IsRepo / GetStatus / Branches / Log / Worktrees / WorktreeAdd / WorktreeRemove / Stash / StashPop / Clone / Fetch / Pull / Push。
+- **错误语义有意分层**：`GetStatus` 对非仓库**友好降级**为 `{IsRepo:false}` 不报错（对齐 cc-pane null-status，前端据此隐藏 Git 面板）；明细/变更方法对非仓库**透传 ErrNotARepo**（UI 仅在 IsRepo 时调）。返回 gitx 自身 DTO（BranchInfo/CommitInfo/WorktreeInfo，与 project 返回 storage.Project 一致，落 bindings/.../utils/gitx/models）。`StatusDTO{isRepo,branch,isDirty}` 为 service 本地组合类型。
+- 注册到 app.go（`gitsvc.New()`，无依赖）。`wails3 generate bindings` → **11 Services/64 Methods/44 Models**（gitsvc +1 svc/+13 方法/+4 模型；terminal 函数类型 warning 为既有无关项）。
+- `gitsvc_test.go` +5 测，**只覆盖 service 在 gitx 之上新增的逻辑**（gitx 自身 24 测已覆盖原语）：GetStatus 干净/脏组合、非仓库降级（不报错）、明细方法非仓库透传 ErrNotARepo、Branches/Log 委托链。go build/vet/test dev+prod 全绿；pnpm typecheck + build 通过（bindings 不破坏既有前端）。commit `be059d7`。
+- **层次边界**（留后续）：worktree 分组目录策略 / 名称安全校验 / pull·push·stash 前 Local History 自动打标签钩子——属上层 UX / 历史子系统，本 service 只做原语 1:1 暴露。
+- **下一单元（续接前端）**：Git 面板 UI（GitService.ts 收口 + src/git Provider + 面板组件，消费 gitsvc）/ 或 localhistorysvc + 历史面板 / 或注册 session 服务。各为独立切片。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
