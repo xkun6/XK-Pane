@@ -7,6 +7,7 @@ require (
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-git/go-git/v5 v5.19.1
 	github.com/google/uuid v1.6.0
+	github.com/sergi/go-diff v1.4.0
 	github.com/wailsapp/wails/v3 v3.0.0-alpha.96
 	golang.org/x/sys v0.44.0
 	gorm.io/gorm v1.31.1
@@ -48,7 +49,6 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/samber/lo v1.52.0 // indirect
-	github.com/sergi/go-diff v1.4.0 // indirect
 	github.com/skeema/knownhosts v1.3.2 // indirect
 	github.com/u-root/u-root v0.16.0 // indirect
 	github.com/wailsapp/wails/webview2 v1.0.24 // indirect
