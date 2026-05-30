@@ -42,6 +42,7 @@ func TestSaveLoadRoundtrip(t *testing.T) {
 	if err := svc.SaveSessions(ctx, []storage.TerminalSession{s1, s2}); err != nil {
 		t.Fatalf("SaveSessions: %v", err)
 	}
+	// 绑定路径（前端可达）：会话还原，但 SshConfig **一律脱敏为 nil**。
 	loaded, err := svc.LoadSessions(ctx)
 	if err != nil {
 		t.Fatalf("LoadSessions: %v", err)
@@ -56,12 +57,28 @@ func TestSaveLoadRoundtrip(t *testing.T) {
 	if byID["s2"].CliTool != "claude" {
 		t.Errorf("s2 cliTool = %q, want claude", byID["s2"].CliTool)
 	}
-	// sshConfig 解密回明文。
-	if byID["s2"].SshConfig == nil || *byID["s2"].SshConfig != "host=example.com user=bob" {
-		t.Errorf("s2 sshConfig roundtrip wrong: %v", byID["s2"].SshConfig)
+	// 安全：绑定路径绝不把 SSH 配置交给前端 —— 两条都应为 nil。
+	if byID["s2"].SshConfig != nil {
+		t.Errorf("s2 sshConfig leaked to bound LoadSessions: %v (want nil/masked)", byID["s2"].SshConfig)
 	}
 	if byID["s1"].SshConfig != nil {
 		t.Errorf("s1 sshConfig should be nil, got %v", byID["s1"].SshConfig)
+	}
+
+	// 非绑定后端出口：LoadSessionsDecrypted 解密回明文（供 SSH 重连 helper 用）。
+	dec, err := LoadSessionsDecrypted(ctx, svc.db())
+	if err != nil {
+		t.Fatalf("LoadSessionsDecrypted: %v", err)
+	}
+	decByID := map[string]storage.TerminalSession{}
+	for _, s := range dec {
+		decByID[s.SessionID] = s
+	}
+	if decByID["s2"].SshConfig == nil || *decByID["s2"].SshConfig != "host=example.com user=bob" {
+		t.Errorf("s2 sshConfig decrypt roundtrip wrong: %v", decByID["s2"].SshConfig)
+	}
+	if decByID["s1"].SshConfig != nil {
+		t.Errorf("s1 sshConfig should be nil in decrypted load too, got %v", decByID["s1"].SshConfig)
 	}
 }
 
