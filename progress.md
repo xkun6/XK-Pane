@@ -767,3 +767,11 @@
 - **有意分层**：Query 后端已就位+测过，但其**过滤/搜索 UI 留下一 tick**（避免无消费方的前端代码，与 session 前置同纪律）；本 tick surface Stats（统计条可验）。bindings 13 Services/87 Methods(+2)/60 Models(+3)。dev+prod 全绿；前端 typecheck+build 通过。commit `63f9ee2`。
 - **🎯 现在可真机验证**：`wails3 dev` → 待办页 → 加几条不同优先级/状态 → 顶部统计条实时反映（勾选完成 → 已完成 +1 / 待办 −1）。
 - **下一单元（各为独立切片）**：① Todo 过滤/搜索 UI（消费已就位的 `Query` 后端：状态/优先级 filter chips + 搜索框，切 List→Query 数据源）；② 会话恢复前端（视觉门控）；③ file-watcher 自动捕获（fsnotify 新依赖 → 决策门 AskUserQuestion）；④ Todo reorder/batch（拖拽 @dnd-kit / 批量状态）。
+
+### ▶ 续：Todo 过滤/搜索 UI（消费已就位的 Query 后端，同 /loop 自主续）
+- **续上一 tick 暂存的 `Query` 后端**（候选①），surface 过滤/搜索让 Query 可真机验证（兑现「Query 后端已就位，UI 留下一 tick」的分层承诺）。纯前端，无 Go 改动 / 无需重生 bindings（Query/Stats binding 上一 tick 已生成）。
+- `TodoService`：加 `TodoQuery`/`TodoQueryResult` 类型 + `query(q)`（用生成的 `RawQuery` 构造，省略字段序列化丢弃 → Go nil 不约束）。
+- `TodoPage` 加过滤行：搜索框（标题/描述 LIKE）+ 状态下拉 + 优先级下拉。
+- **VM「切 List→Query 数据源」**：无过滤用 Provider 全量 `todos`（不分页）；任一过滤/搜索激活切到服务端 `Query`。防抖 200ms（搜索连打合并）+ `queryReqRef` 丢弃过期响应；`todos` 入 effect 依赖使 mutation 后自动重查（过滤视图与底层保持一致）。**Provider 仍是变更权威**（mutation 走 Provider）。空态分流：过滤无匹配 `noMatch`，否则 `empty`。文案 `todo.filter/status.*`（zh/en）。typecheck + build 通过。commit `e44d11d`。
+- **🎯 现在可真机验证**：`wails3 dev` → 待办页 → 加几条不同状态/优先级 → 用状态/优先级下拉 + 搜索框过滤 → 列表实时收窄；勾选/删除后过滤视图自动同步。**Todo 域核心 + 高级（CRUD/子任务/统计/过滤搜索）surface 完毕**。
+- **下一单元（各为独立切片）**：① 会话恢复前端（`SessionService.ts` + TerminalProvider 布局持久化/还原，**视觉门控**）；② file-watcher 自动捕获（fsnotify 新依赖 → **决策门 AskUserQuestion**）；③ Todo reorder/batch（拖拽 @dnd-kit / 批量状态，后端需补 Reorder/BatchUpdateStatus）；④ 早期子系统起步（Bedrock/MCPE/notify/memory，需先盘 cc-pane 源 + 可能的决策门）。
