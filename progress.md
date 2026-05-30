@@ -703,6 +703,14 @@
 - **Git 功能已对齐 cc-pane git 范围**：状态查看（分支/脏标/提交）+ 工具条（fetch/pull/push/stash/pop）+ worktree 管理（增删查）。**第二个完整端到端功能域**（继 Todo）。
 - **下一单元（续接前端，方向轮换）**：localhistorysvc（Wails 包装 internal/localhistory + 注册 + bindings）+ 历史面板 / 或注册 session 服务 + 会话恢复 UI。各为独立切片。
 
+### ▶ 续：localhistorysvc — Wails 包装 Local History 子系统，后端可达前端（同 /loop 自主续）
+- **每项目独立 db（D10）的服务层缓存**：`internal/services/localhistorysvc` 维护 `projectPath → *Store` 缓存（`sync.Mutex` 保护，首访 `localhistory.Open` 建库 + AutoMigrate，后续命中复用连接池）——localhistory 包注释明确把「服务层按项目缓存 Store」留给本层。`closeAll()`（未导出，不绑前端）供应用退出 / 测试清理关所有库。
+- **暴露历史面板所需面**（11 方法）：`SnapshotFile`（读工作树文件 → SaveVersion，手动快照；未来 file-watcher 走同一 SaveVersion）/ GetRecentChanges / ListVersions / ListDeletedFiles / GetVersionContent（→string）/ GetVersionDiff（vs 工作树）/ GetVersionsDiff（版本间）/ ListLabels / RestoreVersion / RestoreToLabel / DeleteLabel。注册 app.go。
+- bindings 重生 **12 Services/76 Methods/53 Models/1 Enum**（DiffChangeType）。+2 测端到端走 service 层（快照→去重→最近变更→列版本→取内容→版本间 diff→回滚+Before-Restore 标签；Store 缓存计数；多项目独立 db 互不可见）。
+- **测中修 cleanup 时序**：`t.Cleanup(closeAll)` 必须在 `t.TempDir()` **之后**注册（cleanup LIFO，后注册先跑），否则 Windows 下 WAL 句柄占用致 TempDir 删除失败。go build/vet/test dev+prod 全绿；前端 typecheck+build 通过。commit `834e96e`。
+- **层次边界**（留后续）：file-watcher 自动捕获 / gitsvc Pull·Push·Stash 前 auto-label 钩子 / 清理压缩维护 —— 非面板交互面，留专门单元。
+- **下一单元（续接前端）**：Local History 历史面板 UI（消费 localhistorysvc：最近变更列表 + 版本 diff 查看 + 回滚，同 gitsvc→Git UI 两段式）/ 或注册 session 服务 + 会话恢复 UI。各为独立切片。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
