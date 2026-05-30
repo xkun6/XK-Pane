@@ -21,6 +21,18 @@ export const todoPageEnUS: Messages = {
       done: 'Done {{count}}',
       overdue: 'Overdue {{count}}',
     },
+    status: {
+      todo: 'To do',
+      inProgress: 'In progress',
+      done: 'Done',
+    },
+    filter: {
+      searchPlaceholder: 'Search title / description…',
+      status: 'Status',
+      priority: 'Priority',
+      all: 'All',
+      noMatch: 'No todos match the filter.',
+    },
     actions: {
       markDone: 'Mark done',
       markUndone: 'Mark not done',

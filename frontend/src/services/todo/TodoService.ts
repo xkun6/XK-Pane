@@ -4,8 +4,13 @@ import {
   Service as Binding,
   CreateTodoInput as RawCreateInput,
   UpdateTodoInput as RawUpdateInput,
+  TodoQuery as RawQuery,
 } from '@bindings/xkpane/internal/services/todo';
-import type { TodoDTO as RawTodo, TodoStats as RawStats } from '@bindings/xkpane/internal/services/todo/models';
+import type {
+  TodoDTO as RawTodo,
+  TodoStats as RawStats,
+  TodoQueryResult as RawQueryResult,
+} from '@bindings/xkpane/internal/services/todo/models';
 import type { TodoSubtask as RawSubtask } from '@bindings/xkpane/internal/storage/models';
 
 export interface TodoSubtask {
@@ -47,6 +52,28 @@ export interface UpdateTodoInput {
   status?: string;
   priority?: string;
   tags?: string[];
+}
+
+// 查询过滤条件（全部可选，省略 = 不约束）。对齐后端 todo.TodoQuery。
+export interface TodoQuery {
+  status?: string;
+  priority?: string;
+  scope?: string;
+  scopeRef?: string;
+  search?: string;
+  tag?: string;
+  sortBy?: string; // created_at|updated_at|priority|due_date
+  limit?: number;
+  offset?: number;
+  myDay?: boolean;
+  todoType?: string;
+}
+
+// 分页查询结果。
+export interface TodoQueryResult {
+  items: Todo[];
+  total: number;
+  hasMore: boolean;
 }
 
 // 待办统计（按维度计数 + 过期数，服务端聚合）。
@@ -95,6 +122,30 @@ export const TodoService = {
   async list(): Promise<Todo[]> {
     const rows = await Binding.List();
     return (rows ?? []).map(toTodo);
+  },
+
+  // 服务端动态过滤 + 排序 + 分页查询。省略字段不约束（binding 序列化丢弃 undefined → Go nil）。
+  async query(q: TodoQuery): Promise<TodoQueryResult> {
+    const res: RawQueryResult = await Binding.Query(
+      new RawQuery({
+        status: q.status,
+        priority: q.priority,
+        scope: q.scope,
+        scopeRef: q.scopeRef,
+        search: q.search,
+        tag: q.tag,
+        sortBy: q.sortBy,
+        limit: q.limit,
+        offset: q.offset,
+        myDay: q.myDay,
+        todoType: q.todoType,
+      }),
+    );
+    return {
+      items: (res.items ?? []).map(toTodo),
+      total: res.total ?? 0,
+      hasMore: res.hasMore ?? false,
+    };
   },
 
   async get(id: string): Promise<Todo | null> {

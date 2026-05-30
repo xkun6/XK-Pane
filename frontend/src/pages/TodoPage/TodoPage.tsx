@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Button, Chip, IconButton, TextField, Tooltip, Typography, useTheme } from '@mui/material';
+import { Box, Button, Chip, IconButton, MenuItem, TextField, Tooltip, Typography, useTheme } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import RadioButtonUncheckedRoundedIcon from '@mui/icons-material/RadioButtonUncheckedRounded';
@@ -99,8 +99,46 @@ export const TodoPage = () => {
         </Button>
       </Box>
 
+      <Box sx={styles.filterRow}>
+        <TextField
+          size="small"
+          fullWidth
+          placeholder={t('todo.filter.searchPlaceholder')}
+          value={vm.search}
+          onChange={(e) => vm.setSearch(e.target.value)}
+        />
+        <TextField
+          select
+          size="small"
+          label={t('todo.filter.status')}
+          value={vm.statusFilter}
+          onChange={(e) => vm.setStatusFilter(e.target.value)}
+          sx={{ minWidth: 130 }}
+        >
+          <MenuItem value="">{t('todo.filter.all')}</MenuItem>
+          <MenuItem value="todo">{t('todo.status.todo')}</MenuItem>
+          <MenuItem value="in_progress">{t('todo.status.inProgress')}</MenuItem>
+          <MenuItem value="done">{t('todo.status.done')}</MenuItem>
+        </TextField>
+        <TextField
+          select
+          size="small"
+          label={t('todo.filter.priority')}
+          value={vm.priorityFilter}
+          onChange={(e) => vm.setPriorityFilter(e.target.value)}
+          sx={{ minWidth: 120 }}
+        >
+          <MenuItem value="">{t('todo.filter.all')}</MenuItem>
+          <MenuItem value="high">{t('todo.priority.high')}</MenuItem>
+          <MenuItem value="medium">{t('todo.priority.medium')}</MenuItem>
+          <MenuItem value="low">{t('todo.priority.low')}</MenuItem>
+        </TextField>
+      </Box>
+
       <Box sx={styles.list}>
-        {!vm.loading && vm.todos.length === 0 && <Box sx={styles.empty}>{t('todo.empty')}</Box>}
+        {!vm.loading && !vm.querying && vm.todos.length === 0 && (
+          <Box sx={styles.empty}>{vm.hasActiveFilter ? t('todo.filter.noMatch') : t('todo.empty')}</Box>
+        )}
         {vm.todos.map((todo) => (
           <TodoRow
             key={todo.id}

@@ -40,6 +40,12 @@ export const todoPageStyles = (theme: Theme): Styles => ({
     gap: 1,
     alignItems: 'center',
   },
+  filterRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 1,
+    alignItems: 'center',
+  },
   list: {
     display: 'flex',
     flexDirection: 'column',

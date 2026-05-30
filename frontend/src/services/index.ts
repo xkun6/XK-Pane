@@ -32,6 +32,8 @@ export {
   type CreateTodoInput,
   type UpdateTodoInput,
   type TodoStats,
+  type TodoQuery,
+  type TodoQueryResult,
 } from './todo/TodoService';
 export {
   ProviderService,

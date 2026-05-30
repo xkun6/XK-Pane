@@ -21,6 +21,18 @@ export const todoPageZhCN: Messages = {
       done: '已完成 {{count}}',
       overdue: '已逾期 {{count}}',
     },
+    status: {
+      todo: '待办',
+      inProgress: '进行中',
+      done: '已完成',
+    },
+    filter: {
+      searchPlaceholder: '搜索标题 / 描述…',
+      status: '状态',
+      priority: '优先级',
+      all: '全部',
+      noMatch: '没有符合条件的待办。',
+    },
     actions: {
       markDone: '标记完成',
       markUndone: '标记未完成',
