@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"xkpane/internal/localhistory"
 )
 
 func writeFile(t *testing.T, dir, rel, content string) {
@@ -100,6 +102,46 @@ func TestServiceEndToEnd(t *testing.T) {
 	// Store 缓存：多次操作同一项目只 Open 一次。
 	if n := len(svc.stores); n != 1 {
 		t.Errorf("cached stores = %d, want 1", n)
+	}
+}
+
+// AutoLabel 守门：项目无历史 → 跳过且不创建 .xkpanes；有历史 → 打 auto 标签。
+func TestAutoLabelGuardedByExists(t *testing.T) {
+	ctx := context.Background()
+	svc := New()
+	proj := t.TempDir()
+	t.Cleanup(svc.closeAll)
+
+	// 无历史 → 返回 ("", nil)，且不凭空创建历史目录。
+	id, err := svc.AutoLabel(ctx, proj, "Before Pull", "git_pull", "main")
+	if err != nil || id != "" {
+		t.Fatalf("AutoLabel(no history) = (%q, %v), want (\"\", nil)", id, err)
+	}
+	if localhistory.Exists(proj) {
+		t.Error(".xkpanes created by AutoLabel on a history-less project, want skip")
+	}
+
+	// 有历史后（快照过一次）→ AutoLabel 打出标签。
+	writeFile(t, proj, "a.txt", "x")
+	if _, err := svc.SnapshotFile(ctx, proj, "a.txt", ""); err != nil {
+		t.Fatalf("SnapshotFile: %v", err)
+	}
+	id, err = svc.AutoLabel(ctx, proj, "Before Pull", "git_pull", "main")
+	if err != nil || id == "" {
+		t.Fatalf("AutoLabel(with history) = (%q, %v), want a label id", id, err)
+	}
+	labels, err := svc.ListLabels(ctx, proj)
+	if err != nil {
+		t.Fatalf("ListLabels: %v", err)
+	}
+	found := false
+	for _, l := range labels {
+		if l.Name == "Before Pull" && l.Source == "git_pull" && l.LabelType == "auto" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("auto label not found in %+v", labels)
 	}
 }
 

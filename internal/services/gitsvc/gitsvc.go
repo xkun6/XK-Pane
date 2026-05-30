@@ -22,12 +22,33 @@ import (
 	"xkpane/internal/utils/gitx"
 )
 
-// Service 是无状态的 Git 门面。
-type Service struct{}
+// AutoLabeler 在 git 变更操作（stash/pull/push）前被调用，给 repoPath 的 Local History 打一个
+// auto 标签（便于操作后回滚）。由 app 层注入（连接 localhistorysvc），未注入则为 nil（跳过）——
+// gitsvc **不强依赖** Local History 子系统（解耦，对齐 termSvc.SetProviderResolver 的注入式协作）。
+type AutoLabeler func(ctx context.Context, repoPath, name, source, branch string) error
+
+// Service 是（近乎）无状态的 Git 门面；仅持一个可选的 auto-label 回调。
+type Service struct {
+	autoLabel AutoLabeler
+}
 
 // New 创建 gitsvc。无依赖（gitx 按路径操作，不碰 SQLite Holder）。
 func New() *Service {
 	return &Service{}
+}
+
+// SetAutoLabeler 注入「变更前打 Local History 标签」回调（app 层连接 localhistorysvc 时调用）。
+// 该方法因含函数类型参数不会被 Wails 绑定（与 termSvc.SetProviderResolver 同），仅供后端装配。
+func (s *Service) SetAutoLabeler(fn AutoLabeler) { s.autoLabel = fn }
+
+// labelBefore 在 git 变更前 best-effort 打标签：未注入 labeler 则跳过；branch 由已打开的 repo
+// 计算。**失败不阻断 git 操作**（Local History 是辅助，标签失败不应让 stash/pull/push 失败）。
+func (s *Service) labelBefore(ctx context.Context, repo *gitx.Repo, repoPath, name, source string) {
+	if s.autoLabel == nil {
+		return
+	}
+	branch, _ := repo.CurrentBranch() // 取不到分支（detached/空仓）→ 空串，照常打标签
+	_ = s.autoLabel(ctx, repoPath, name, source, branch)
 }
 
 // StatusDTO 是仓库的概要状态（gitx 无此组合类型，故 service 本地定义）。
@@ -157,11 +178,13 @@ func validateWorktreeName(name string) error {
 }
 
 // Stash 暂存当前工作区改动，返回 git 提示信息。非仓库透传 ErrNotARepo。
+// 暂存前自动打 Local History 标签（cc-pane auto_label_before_git）。
 func (s *Service) Stash(ctx context.Context, path string) (string, error) {
 	repo, err := gitx.Open(path)
 	if err != nil {
 		return "", err
 	}
+	s.labelBefore(ctx, repo, path, "Before Stash", "git_stash")
 	return repo.Stash(ctx)
 }
 
@@ -190,19 +213,23 @@ func (s *Service) Fetch(ctx context.Context, path string) error {
 }
 
 // Pull 合并远端改动（git pull）。非仓库透传 ErrNotARepo。
+// 合并前自动打 Local History 标签（pull 会改动工作树，标签便于回滚）。
 func (s *Service) Pull(ctx context.Context, path string) error {
 	repo, err := gitx.Open(path)
 	if err != nil {
 		return err
 	}
+	s.labelBefore(ctx, repo, path, "Before Pull", "git_pull")
 	return repo.Pull(ctx)
 }
 
 // Push 推送当前分支（git push）。无上游分支 / 非仓库透传错误。
+// 推送前自动打 Local History 标签（对齐 cc-pane；push 不改工作树，标签仅作时点 restore 锚）。
 func (s *Service) Push(ctx context.Context, path string) error {
 	repo, err := gitx.Open(path)
 	if err != nil {
 		return err
 	}
+	s.labelBefore(ctx, repo, path, "Before Push", "git_push")
 	return repo.Push(ctx)
 }

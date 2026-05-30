@@ -163,6 +163,21 @@ func (s *Service) RestoreToLabel(ctx context.Context, projectPath, labelID, bran
 	return st.RestoreToLabel(ctx, labelID, branch)
 }
 
+// AutoLabel 为 projectPath 打一个 auto 标签（快照当前所有已跟踪文件的最新版本），返回标签 id。
+// 供 gitsvc 在 git stash/pull/push 前注入调用（连接 Git 域与 Local History，对齐 cc-pane
+// auto_label_before_git）。**守门**：若该项目尚无历史存储（localhistory.Exists==false），直接
+// 跳过返回 ("", nil) —— 不为一次纯 git 操作凭空创建 .xkpanes/（仅对已在用 Local History 的项目生效）。
+func (s *Service) AutoLabel(ctx context.Context, projectPath, name, source, branch string) (string, error) {
+	if !localhistory.Exists(projectPath) {
+		return "", nil
+	}
+	st, err := s.store(projectPath)
+	if err != nil {
+		return "", err
+	}
+	return st.CreateAutoLabel(ctx, name, source, branch)
+}
+
 // DeleteLabel 删除标签及其快照。
 func (s *Service) DeleteLabel(ctx context.Context, projectPath, labelID string) error {
 	st, err := s.store(projectPath)

@@ -114,6 +114,56 @@ func TestDetailMethodsNonRepoPropagate(t *testing.T) {
 	}
 }
 
+// auto-label 钩子：stash/pull/push 前调注入的 labeler（带正确 name/source/branch），
+// **即使 git 操作本身失败**（如 push 无上游）钩子也应已先触发。
+func TestAutoLabelerInvokedBeforeMutations(t *testing.T) {
+	requireGit(t)
+	ctx := context.Background()
+	svc := New()
+	dir := initRepoCommit(t)
+
+	type call struct{ repoPath, name, source, branch string }
+	var calls []call
+	svc.SetAutoLabeler(func(_ context.Context, repoPath, name, source, branch string) error {
+		calls = append(calls, call{repoPath, name, source, branch})
+		return nil
+	})
+
+	// 改动文件使 stash 有内容（非必需，仅更真实）。
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("changed"), 0o600); err != nil {
+		t.Fatalf("rewrite: %v", err)
+	}
+	if _, err := svc.Stash(ctx, dir); err != nil {
+		t.Fatalf("Stash: %v", err)
+	}
+	// Push 无上游会失败，但 labelBefore 应已在失败前触发。
+	_ = svc.Push(ctx, dir)
+
+	if len(calls) != 2 {
+		t.Fatalf("labeler calls = %d, want 2 (stash + push)", len(calls))
+	}
+	if calls[0].name != "Before Stash" || calls[0].source != "git_stash" || calls[0].repoPath != dir {
+		t.Errorf("stash label call = %+v, want Before Stash/git_stash/%s", calls[0], dir)
+	}
+	if calls[0].branch == "" {
+		t.Error("stash label branch empty, want default branch")
+	}
+	if calls[1].name != "Before Push" || calls[1].source != "git_push" {
+		t.Errorf("push label call = %+v, want Before Push/git_push", calls[1])
+	}
+}
+
+// 未注入 labeler：变更操作不因缺少钩子而 panic。
+func TestNoLabelerNoPanic(t *testing.T) {
+	requireGit(t)
+	ctx := context.Background()
+	svc := New() // 无 SetAutoLabeler
+	dir := initRepoCommit(t)
+	if _, err := svc.Stash(ctx, dir); err != nil {
+		t.Fatalf("Stash without labeler: %v", err)
+	}
+}
+
 // validateWorktreeName：纯校验逻辑（service 在原语之上新增），不需 git 二进制。
 func TestValidateWorktreeName(t *testing.T) {
 	bad := []string{"", "   ", "feat/x", `feat\x`, "..", "a..b", "-rf", "-"}

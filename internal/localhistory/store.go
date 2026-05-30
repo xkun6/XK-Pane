@@ -70,6 +70,17 @@ type Store struct {
 // versionCounter 给同毫秒内的多次保存补 4 位序号，避免主键 (file_path,id) 撞。
 var versionCounter uint32
 
+// Exists 报告 projectPath 是否**已有**历史存储（history.db 存在）。用于「不为纯操作凭空创建
+// 历史目录」的守门 —— 例如 gitsvc 在 git stash/pull/push 前打 auto-label，但若该项目从未使用过
+// Local History，则不应仅因一次 git 操作就创建 .xkpanes/。不打开 db，仅 Stat。
+func Exists(projectPath string) bool {
+	if projectPath == "" {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(projectPath, dirName, historyDir, dbFile))
+	return err == nil
+}
+
 // Open 打开 / 创建 projectPath 的历史存储（建 .xkpanes/history/blobs + history.db + AutoMigrate）。
 func Open(projectPath string) (*Store, error) {
 	if projectPath == "" {

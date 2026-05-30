@@ -69,6 +69,10 @@ func Run(assets embed.FS) error {
 	//   先 new 一个空 service 占位，然后在 app.New 之后回填 app 引用。
 	subSvc := subprocess.New(nil)             // app 暂为 nil
 	termSvc := terminal.New(cliadapters.Default()) // PTY 会话注册表，app 经 AttachApp 回填
+	// gitsvc / localhistorysvc 预创建以便互联：gitsvc 在 stash/pull/push 前调 localhistorysvc
+	// 打 Local History 标签（cc-pane auto_label_before_git）。两者皆注册，连接经 SetAutoLabeler。
+	gitSvc := gitsvc.New()
+	lhSvc := localhistorysvc.New()
 
 	app := application.New(application.Options{
 		Name:        "XK-Pane",
@@ -82,8 +86,8 @@ func Run(assets embed.FS) error {
 			application.NewService(launchhistory.New(holder)),
 			application.NewService(provider.New(holder)),
 			application.NewService(todo.New(holder)),
-			application.NewService(gitsvc.New()),
-			application.NewService(localhistorysvc.New()),
+			application.NewService(gitSvc),
+			application.NewService(lhSvc),
 			application.NewService(subSvc),
 			application.NewService(termSvc),
 		},
@@ -96,6 +100,12 @@ func Run(assets embed.FS) error {
 	})
 	subSvc.AttachApp(app)
 	termSvc.AttachApp(app)
+	// 连接 Git → Local History：stash/pull/push 前给项目历史打 auto 标签（localhistorysvc 内
+	// 已守门：仅对已在用 Local History 的项目生效，不会为纯 git 操作凭空创建 .xkpanes/）。
+	gitSvc.SetAutoLabeler(func(ctx context.Context, repoPath, name, source, branch string) error {
+		_, err := lhSvc.AutoLabel(ctx, repoPath, name, source, branch)
+		return err
+	})
 	// 注入 provider 解析器：启动时据 spec.ProviderID 解析 Tier-A 启动 env +
 	// Tier-B adapter Provider 上下文（含解密明文 key）。闭包从 holder 取活跃 DB，
 	// 故切换数据路径后仍解析到正确库。provider.ResolveLaunchEnv 非绑定（不暴露明文给前端）。
