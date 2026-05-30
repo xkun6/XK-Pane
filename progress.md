@@ -885,3 +885,10 @@
 **待用户**：`wails3 dev` → 加项目 → 点它 → 选 Claude Code → 确认真跑且不渲染错乱。验证 OK 后进 P2（删 T/S/M + Git VSCode SCM + Home 仪表盘）。
 
 **P1 小修正（用户截图反馈）**：CLI 启动列表**只保留 claude / reclaude / codex**，删除其余 5 个（gemini/kimi/glm/opencode/cursor）——删 5 个适配器 .go + glm_test.go、`registry.Default()` 只注册 3 个、adapter_test 断言改 3 个、前端 `KnownCliTool` 收窄。**Provider 类型（glm/gemini/… API 接入层）正交保留不动。** bindings 无需重生（clitools 签名/ToolInfo 模型未变）。go build/vet/test + typecheck 全绿。
+
+**P1 运行验证暴露 bug → 已修（codex 启动崩溃 `invalid transport in mcp_servers.ccpanes`）**：
+- 用户 `wails3 dev` 实跑 codex 报 `Error loading config.toml: invalid transport in mcp_servers.ccpanes` → 退出 1。
+- 真因：`codex.go` 的 `BuildCommand` 在 `SkipMCP=true`（P1 恒为真，无 orchestrator）时注入 `-c mcp_servers.ccpanes.enabled=false`，让 codex 0.134.0 凭空造出一个**只有 enabled、无 type/command/url** 的 `[mcp_servers.ccpanes]` 表 → 强制 transport 校验失败。**实测复现**：`codex -c mcp_servers.ccpanes.enabled=false mcp list` 原样报错。
+- 这是**忠实移植了 cc-pane `codex.rs:512` 的同一隐患**：cc-pane 正常带 orchestrator（走 `else` 注入合法 `url`），从不进 skip_mcp 那条；现代 cc-pane 用 per-launch `-c`、从不往全局写 ccpanes（用户 config 里确无 ccpanes），故该 `enabled=false` 是无收益的遗留防御。codex 字段实为 `disabled`（用户 exa 配置佐证），`enabled` 它根本不认。
+- 修：`SkipMCP` 时**零注入**（claude/reclaude 本就如此——`generateMCPConfig` P1 恒 `""`，不受影响）。真正「禁用已存在的全局 ccpanes」需解析 `~/.codex/config.toml` 仅对存在项 disabled → 归 Phase 5。
+- 加守门测试 `TestBuildCommandSkipMCPOmitsCcpanesOverride`（codex 在 PATH 时实跑断言无 ccpanes 覆盖，否则 skip）。验证：`go test ./internal/services/cliadapters/` ✅ + `codex mcp list` 干净 exit 0 + go vet + go build 主程序全绿。**未提交**（待用户继续验证）。

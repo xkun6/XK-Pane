@@ -2,6 +2,7 @@ package cliadapters
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -42,5 +43,23 @@ func TestMcpIsolationDisablesConfiguredServersOutsideAllowlist(t *testing.T) {
 	}
 	if !slices.Equal(args, want) {
 		t.Fatalf("args =\n%v\nwant\n%v", args, want)
+	}
+}
+
+// 守门（回归）：SkipMCP 时 BuildCommand 不得产出任何 ccpanes 覆盖。
+// 历史 bug：注入 `-c mcp_servers.ccpanes.enabled=false` 会让 codex 0.134.0 凭空造出无 transport 的表，
+// 启动即 "invalid transport in mcp_servers.ccpanes"。P1 恒 SkipMCP，必须保证零注入。
+func TestBuildCommandSkipMCPOmitsCcpanesOverride(t *testing.T) {
+	if _, err := resolveSimple("codex"); err != nil {
+		t.Skip("codex 不在 PATH，跳过（BuildCommand 需解析可执行文件）")
+	}
+	res, err := NewCodex().BuildCommand(&Context{SkipMCP: true, ProjectPath: "/proj"})
+	if err != nil {
+		t.Fatalf("BuildCommand error: %v", err)
+	}
+	for _, a := range res.Args {
+		if strings.Contains(a, "ccpanes") {
+			t.Fatalf("SkipMCP 时不应出现 ccpanes 覆盖，args = %v", res.Args)
+		}
 	}
 }

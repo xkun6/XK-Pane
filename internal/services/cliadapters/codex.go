@@ -42,12 +42,15 @@ func (a *CodexAdapter) BuildCommand(ctx *Context) (CommandResult, error) {
 	}
 
 	var args []string
-	if ctx.SkipMCP {
-		// skip_mcp 时显式禁用 ccpanes，避免继承用户全局 config.toml 里的同名项。
-		args = pushMcpEnabledOverride(args, "ccpanes", false)
-	} else {
+	if !ctx.SkipMCP {
 		args = pushMcpOverrides(args, ctx)
 	}
+	// SkipMCP 时不注入任何 ccpanes 覆盖。codex 0.134.0 对每个 mcp_servers.<name> 强制校验 transport，
+	// 而 `-c mcp_servers.ccpanes.enabled=false` 会凭空造出一个只有 enabled、无 type/command/url 的表，
+	// 触发启动失败 "invalid transport in `mcp_servers.ccpanes`"（已实测复现）。P1 无 orchestrator、恒 SkipMCP，
+	// 必中此坑；且用户全局 config.toml 本就无 ccpanes，注入无任何收益。真正「禁用已存在的全局 ccpanes」
+	// 需先解析 ~/.codex/config.toml、仅对存在项 disabled —— 归 Phase 5（对齐 cc-pane
+	// configured_mcp_server_names，见 pushMcpIsolationOverrides 的 TODO）。
 	if ctx.AppendSystemPrompt != "" {
 		args = pushDeveloperInstructionsOverride(args, ctx.AppendSystemPrompt)
 	}
