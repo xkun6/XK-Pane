@@ -752,3 +752,10 @@
 - +测：配置往返（无历史返回默认且不落地 / 保存后回读改值）+ 清理按 MaxVersionsPerFile 生效（3→2，最旧删，孤儿 blob 回收使 blob 总字节下降）+ Stats 同步反映。bindings 重生 **12 Services/82 Methods(+4)/56 Models**（+HistoryConfig/HistoryStats）。dev+prod 全绿；前端 typecheck+build 通过。commit `d394f97`。
 - **🎯 现在可真机验证**：`wails3 dev` → 本地历史页 → 选项目 → 快照几个版本 → 看「存储占用」→ 调小「每文件最多版本数」→ 保存配置 → 立即清理 → 统计回收、列表变短。**Local History 域后端全面 surface 完毕**（列表 / 快照 / 回滚 / diff / 标签 / 配置 / 清理 / 统计 + git auto-label 钩子）。
 - **下一单元（方向轮换，各为独立切片）**：① 会话恢复——需先做 session.go sshConfig 脱敏（已记 SECURITY TODO）才能注册 session 服务 + 恢复 UI；② Todo 高级（query/stats/提醒/重复）；③ file-watcher 自动捕获（让 Local History 自动快照，**需引 fsnotify 新依赖 → 决策门，到时 AskUserQuestion**）。
+
+### ▶ 续：sshConfig 脱敏分层 + 注册 session 服务（解除 SECURITY 阻塞，同 /loop 自主续）
+- **解除会话恢复 SECURITY 阻塞**（候选①的前置）：session 服务此前「已写未注册」，正因 `LoadSessions` 解密返回明文 sshConfig 会跨 IPC 泄漏给前端。本单元仿 `provider.ResolveLaunchEnv` 的**安全分层**修复并注册。
+- **关键约束**：Wails **绑定已注册 service 的全部导出方法**——无法在同一 service 上既导出脱敏 `LoadSessions` 又导出明文版（都会被绑定）。故明文出口必须是**包级函数**（非 method）。
+- 改动：`LoadSessions`（绑定）改脱敏返回（SshConfig 置 nil，前端据 RuntimeKind 区分 local/wsl/ssh）；新增包级 `LoadSessionsDecrypted(ctx, db)`（非绑定，供后端 SSH 重连 helper）；共享 `loadSessions(ctx, db, decrypt)`。app.go 注册 session 服务，包注释去「暂不注册」。
+- +测：TestSaveLoadRoundtrip 断言绑定路径 SshConfig 脱敏为 nil + `LoadSessionsDecrypted` 解回明文；at-rest 加密 / replace-all / clear 不变。**bindings 验证安全边界**：session 仅绑 SaveSessions/LoadSessions/ClearSessions 三法，`LoadSessionsDecrypted` 未泄漏（grep 确认）。13 Services/85 Methods/57 Models。dev+prod 全绿；前端 typecheck+build 通过。commit `b0a3529`。
+- **下一单元**：会话恢复前端（`SessionService.ts` 包 SaveSessions/LoadSessions/ClearSessions + 接进 TerminalProvider 做布局持久化 / 重启还原）——**属视觉 checkpoint 门控**（依赖终端栈，自动验证 = typecheck+build，视觉正确性留用户 `wails3 dev` 验）。或 Todo 高级（query/stats，可测+可surface）/ file-watcher（fsnotify 决策门）。
