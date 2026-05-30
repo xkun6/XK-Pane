@@ -13,6 +13,15 @@ createRoot(container).render(
   </StrictMode>,
 );
 
+// 禁用 webview 默认右键菜单（桌面应用不该出现「返回 / 刷新 / 另存为 / 检查」等浏览器菜单）。
+// 例外：可编辑元素（input / textarea / contenteditable）保留系统复制 / 粘贴菜单。
+// 应用内自定义右键菜单由各组件 onContextMenu + preventDefault 弹出，不受此影响。
+document.addEventListener('contextmenu', (e) => {
+  const target = e.target as HTMLElement | null;
+  if (target?.closest('input, textarea, [contenteditable="true"]')) return;
+  e.preventDefault();
+});
+
 // 启动骨架淡出与移除：
 // 在 React 完成首次提交、首帧绘制完成之后再淡出，避免"骨架消失 → 真实 UI 出现"之间的白闪。
 //
