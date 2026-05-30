@@ -12,17 +12,8 @@
 //   - 非终端 Tab：contentType 的 editor / mcp-config / skill-manager / ... 变体（Phase 4/5）
 //   - UI 细节：pinned / minimized / dirty / filePath / reclaimKey（后续）
 
-/** CLI 工具 id（已知值自动补全 + 允许任意字符串，对齐后端 cliadapters 的 8 适配器）。 */
-export type KnownCliTool =
-  | 'none'
-  | 'claude'
-  | 'reclaude'
-  | 'codex'
-  | 'gemini'
-  | 'kimi'
-  | 'glm'
-  | 'opencode'
-  | 'cursor';
+/** CLI 工具 id（已知值自动补全 + 允许任意字符串，对齐后端 cliadapters 保留的 3 适配器）。 */
+export type KnownCliTool = 'none' | 'claude' | 'reclaude' | 'codex';
 export type CliTool = KnownCliTool | (string & {});
 
 // ---- 内层：单个 Tab 内的终端分屏树 ----

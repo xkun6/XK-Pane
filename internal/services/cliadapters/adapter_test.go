@@ -36,48 +36,41 @@ func TestAddDirSkippedWhenWorkspaceAbsent(t *testing.T) {
 
 // ── 注册表 ──
 
-// 守门：Default() 注册全部 8 个适配器，顺序对齐 cc-pane 生产注册点（Reclaude 紧跟 Claude）。
-func TestDefaultRegistersAllEightInOrder(t *testing.T) {
-	want := []string{"claude", "reclaude", "codex", "gemini", "kimi", "glm", "opencode", "cursor"}
+// 守门：Default() 仅注册 Claude / Reclaude / Codex（用户 2026-05-30 移除其余 5 个 CLI），
+// 顺序对齐 cc-pane 生产注册点（Reclaude 紧跟 Claude）。
+func TestDefaultRegistersClaudeReclaudeCodex(t *testing.T) {
+	want := []string{"claude", "reclaude", "codex"}
 	got := Default().IDs()
 	if !slices.Equal(got, want) {
 		t.Fatalf("Default().IDs() = %v, want %v", got, want)
 	}
 }
 
-// 守门：关键元信息/能力正确（易错点：GLM 可执行=crush；reclaude 版本子命令=version；多目录能力）。
+// 守门：保留的三个适配器关键元信息/能力正确（reclaude 版本子命令=version；codex 可执行=codex；
+// 三者均支持多目录 --add-dir/cwd 能力）。
 func TestAdapterMetadataAndCapabilities(t *testing.T) {
 	r := Default()
 
-	glm, ok := r.Get("glm")
+	reclaude, ok := r.Get("reclaude")
 	if !ok {
-		t.Fatal("glm not registered")
+		t.Fatal("reclaude not registered")
 	}
-	if glm.Info().Executable != "crush" {
-		t.Fatalf("glm executable = %q, want crush", glm.Info().Executable)
-	}
-
-	reclaude, _ := r.Get("reclaude")
 	if !slices.Equal(reclaude.Info().VersionArgs, []string{"version"}) {
 		t.Fatalf("reclaude versionArgs = %v, want [version]", reclaude.Info().VersionArgs)
 	}
 
-	cursor, _ := r.Get("cursor")
-	if cursor.Info().Executable != "cursor-agent" {
-		t.Fatalf("cursor executable = %q, want cursor-agent", cursor.Info().Executable)
+	codex, ok := r.Get("codex")
+	if !ok {
+		t.Fatal("codex not registered")
+	}
+	if codex.Info().Executable != "codex" {
+		t.Fatalf("codex executable = %q, want codex", codex.Info().Executable)
 	}
 
-	// 多目录能力：claude/reclaude/kimi 支持 workspace；cursor/gemini/opencode 不支持。
-	for _, id := range []string{"claude", "reclaude", "kimi"} {
+	for _, id := range []string{"claude", "reclaude", "codex"} {
 		a, _ := r.Get(id)
 		if !a.Capabilities().SupportsWorkspace {
 			t.Errorf("%s should support workspace", id)
-		}
-	}
-	for _, id := range []string{"cursor", "gemini", "opencode"} {
-		a, _ := r.Get(id)
-		if a.Capabilities().SupportsWorkspace {
-			t.Errorf("%s should NOT support workspace", id)
 		}
 	}
 }

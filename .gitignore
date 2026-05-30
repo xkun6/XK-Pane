@@ -20,6 +20,9 @@ build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 /foundation
 /*.exe
 
+# 应用运行时数据：把本仓作为项目打开时生成的 Local History 存储（D10：<proj>/.xkpanes/）
+.xkpanes/
+
 # 日志
 *.log
 

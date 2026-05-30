@@ -155,3 +155,18 @@
 - [x] 应用名称与窗口标题：**XK-Pane**（D1 改名目标即 `XK-Pane`）
 - [x] **所有特性都要**：弹出终端窗口 / 迷你模式 / 无边框浮动按钮全部纳入（移入 Phase 3 正式范围，非可选）
 - [x] Bedrock 22MB 内嵌数据：**直接从 cc-pane 现有 `resources/` 拷贝复用**（Phase 5）
+
+---
+
+## 重建蓝图重定向（2026-05-30，用户带截图复核后）
+
+用户复核确认自主轮跑偏（配角 Todo/Spec/Memory 变顶栏大页、主角启动菜单/会话视图成空壳、Git 太抽象）。新方向见 `REBUILD_BLUEPRINT.md`，分 P1–P5（取代原 Phase 2–5 的推进次序；原 Phase 表保留为底层模块完成度记录）：
+
+- **P1 让终端真跑 Claude/Codex** —— ✅ **代码完成**（`clitools` service + 共享 registry + 启动菜单 + `useTerminalPage` un-hardcode + TUI 兼容层 `TerminalView/compat/*`；typecheck/build/go test/主程序 build 全绿）。**待用户 `wails3 dev` 运行验证**（点项目→选 Claude Code→真跑且不渲染错乱）。
+- **P2** 删 Todo/Spec/Memory（前后端，清单见 REBUILD_BLUEPRINT.md §4）+ Git→VSCode SCM（变更文件/diff/per-file stage/commit 先行）+ Home 仪表盘。
+- **P3** Workspace 工作空间树 + 会话视图/最近启动/恢复（resumeId 透传 + 扫 ~/.claude·~/.codex + backfill）。
+- **P4** Local History 忠实化（版本时间线/4 tab/标签/分支）+ 自动捕获（fsnotify）。
+- **P5** 终端进阶（内层分屏 / Tab 拖拽 @dnd-kit / 回放恢复）。
+
+**已定决策**：删 T/S/M；蓝图先行；Git 对标 VSCode；P1 优先；新依赖 @dnd-kit/fsnotify/notistack 预授权。
+**待拍板（到相再问）**：Workspace 存储（SQLite vs 文件 projects.csv）、Git 是否做 per-hunk、Workspace 引入时机。

@@ -860,3 +860,28 @@
 - **Spec Tasks-checkbox/Log 同步**（耦合终端/AI 工作流）。
 
 **→ 用户回来后建议**：① 若要继续自主推进，可greenlight **Todo batch-status UI**（dep-free 可验）或 **notify 后端**（dep-free，接受其价值待终端解门）；② 决策门项请明确授权依赖（fsnotify / go-sdk / MCP 桥）；③ 视觉门控项（终端/会话恢复/reorder）建议 `wails3 dev` 实跑验证后再迭代。**本轮自主 /loop 到此停**。
+
+---
+
+## 会话（2026-05-30）— 用户复核 → 重建蓝图 → P1 完成
+
+**用户复核（4 张截图对比 cc-pane）暴露重大跑偏**：自主轮把配角（Todo/Spec/Memory）做成顶栏大页（其中 memory 实为 cc-memory **MCP 服务**、非用户页），却把主角（项目启动菜单 / 会话视图）做成空壳；Git 太抽象。
+
+**用户决策（本会话锁定）**：① Todo/Spec/Memory **前后端一起删干净**（P2）；② **先出忠实重建蓝图再动手**；③ Git 保留但**重做对标 VSCode 源代码管理**；④ 阶段顺序 **P1 先（让终端真跑 Claude/Codex）**；⑤ 新依赖**预授权** @dnd-kit / fsnotify / notistack（到相再引）。
+
+**蓝图研究**：6-agent 并行通读 cc-pane web/ + Rust + XK 现状（workflow `wxatfvlq3`，~93 万 token）→ `REBUILD_BLUEPRINT.md`。核心认知更正：
+- 「功能不对」真因 = 终端缺 TUI 兼容层（CPR/DA/Kitty/OSC/alt-buffer/写入流控），**非终端没建**。
+- 「启动空壳」真因 = 前端 `launchProject` 写死 `cliTool='none'` + 无菜单 + 无 CLI 列表 service；后端 `CreateSession` 全字段已就绪。
+- Git「VSCode SCM」**超出 cc-pane**（cc-pane 无 SCM 面板）；`go-git/v5` 做不了 staging/hunk/file-diff，必须 git CLI。
+- cliTool 其实已全程透传（types/reducer/paneTree/sessionReconcile/TerminalContext），缺口仅 UI + un-hardcode；providerId 属 P3 不做投机铺线。
+
+**P1 完成（代码层，全绿；待用户 wails3 dev 运行验证）**：
+- P1.1 后端 `internal/services/clitools`（ListTools/DetectAll，与 terminal **共享单一** cliadapters registry）+ app.go 注册；bindings 重生 16 Services / 106 Methods。
+- P1.2 前端 `services/clitools/CliToolService` + `shared/hooks/useCliTools`（模块级缓存 DetectAll）+ 桶导出。
+- P1.4 ProjectPanel 启动菜单（点项目 / 右键 → 打开终端 + 8 CLI，未装置灰 + 显版本）；`useTerminalPage.launchProject(project, cliTool)` 去掉写死 'none'，tab 标题带 CLI 名。
+- P1.5 终端 TUI 兼容层 `components/TerminalView/compat/`（esc/Cpr/CapabilityReports/OscColor/Theme/BufferMode/Keyboard/WriteFlowControl）；`useTerminalView` 注册 CSI(6n/?6n/c/?u)+OSC(4/10/11) 应答、写入流控(Win)、agent CLI alt-buffer 剥离、Ctrl/Cmd+V 粘贴 / 有选区 Ctrl/Cmd+C 复制；PanelView 透传 cliTool。
+- **验证**：pnpm typecheck ✅ / pnpm build ✅ / go test(terminal,cliadapters) ✅ / go build 主程序 ✅。（`build/ios` 报错 = 脚手架预存噪声，无关。）**未提交**（待用户确认）。
+
+**待用户**：`wails3 dev` → 加项目 → 点它 → 选 Claude Code → 确认真跑且不渲染错乱。验证 OK 后进 P2（删 T/S/M + Git VSCode SCM + Home 仪表盘）。
+
+**P1 小修正（用户截图反馈）**：CLI 启动列表**只保留 claude / reclaude / codex**，删除其余 5 个（gemini/kimi/glm/opencode/cursor）——删 5 个适配器 .go + glm_test.go、`registry.Default()` 只注册 3 个、adapter_test 断言改 3 个、前端 `KnownCliTool` 收窄。**Provider 类型（glm/gemini/… API 接入层）正交保留不动。** bindings 无需重生（clitools 签名/ToolInfo 模型未变）。go build/vet/test + typecheck 全绿。

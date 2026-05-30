@@ -51,20 +51,14 @@ func (r *Registry) DetectAll() []ToolInfo {
 	return out
 }
 
-// Default 返回注册了全部 8 个适配器的注册表。
+// Default 返回注册表，仅含 Claude / Reclaude / Codex 三个适配器（用户决策 2026-05-30：
+// 其余 5 个 CLI——Gemini/Kimi/GLM/OpenCode/Cursor——已完全移除）。
 //
-// 注册顺序严格对齐 cc-pane 生产注册点（src-tauri/src/lib.rs:920-927）：
-// Claude → Reclaude → Codex → Gemini → Kimi → Glm → OpenCode → Cursor。
-// 该顺序即前端工具列表 / DetectAll / 能力列表的展示顺序（Reclaude 紧跟 Claude）。
+// 注册顺序 = 前端启动菜单 / DetectAll 的展示顺序（Reclaude 紧跟 Claude）。
 func Default() *Registry {
 	r := NewRegistry()
 	r.Register(NewClaude())
 	r.Register(NewReclaude())
 	r.Register(NewCodex())
-	r.Register(NewGemini())
-	r.Register(NewKimi())
-	r.Register(NewGlm())
-	r.Register(NewOpenCode())
-	r.Register(NewCursor())
 	return r
 }
