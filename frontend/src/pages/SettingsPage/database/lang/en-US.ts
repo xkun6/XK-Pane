@@ -70,6 +70,14 @@ export const databaseEnUS: Messages = {
           label: 'App settings',
           description: 'Theme choice / custom palette / locale. Affects visual identity, not eligible for bulk clear.',
         },
+        workspaces: {
+          label: 'Workspaces',
+          description: 'Organizational containers for projects (tier 1 of the two-level tree). Holds membership / order, not eligible for bulk clear.',
+        },
+        workspaceProjects: {
+          label: 'Workspace projects',
+          description: 'Project nodes under a workspace (tier 2 of the two-level tree).',
+        },
       },
     },
   },

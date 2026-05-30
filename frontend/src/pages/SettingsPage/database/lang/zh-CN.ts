@@ -75,6 +75,14 @@ export const databaseZhCN: Messages = {
           label: '应用设置',
           description: '主题选择 / 自定义主题 / 语言。涉及视觉一致性，不允许一键清空。',
         },
+        workspaces: {
+          label: '工作空间',
+          description: '项目的组织容器（两层树第一层）。含归属 / 排序，不允许一键清空。',
+        },
+        workspaceProjects: {
+          label: '工作空间项目',
+          description: '工作空间下的项目节点（两层树第二层）。',
+        },
       },
     },
   },
