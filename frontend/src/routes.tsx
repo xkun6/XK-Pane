@@ -4,11 +4,13 @@ import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
 import ChecklistRoundedIcon from '@mui/icons-material/ChecklistRounded';
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
+import DescriptionRoundedIcon from '@mui/icons-material/DescriptionRounded';
 import { lazy } from 'react';
 import { HomePage } from '@/pages/HomePage/HomePage';
 import { TodoPage } from '@/pages/TodoPage';
 import { GitPage } from '@/pages/GitPage';
 import { HistoryPage } from '@/pages/HistoryPage';
+import { SpecsPage } from '@/pages/SpecsPage';
 import { HomePageSkeleton } from '@/pages/HomePage/HomePage.skeleton';
 import { SettingsPageSkeleton } from '@/pages/SettingsPage/SettingsPage.skeleton';
 import { TerminalPageSkeleton } from '@/pages/TerminalPage/TerminalPage.skeleton';
@@ -82,6 +84,14 @@ export const routes: RouteDefinition[] = [
     label: 'History',
     icon: HistoryRoundedIcon,
     element: <HistoryPage />,
+    slot: 'primary',
+  },
+  {
+    id: 'specs',
+    labelKey: 'route.specs',
+    label: 'Specs',
+    icon: DescriptionRoundedIcon,
+    element: <SpecsPage />,
     slot: 'primary',
   },
   {

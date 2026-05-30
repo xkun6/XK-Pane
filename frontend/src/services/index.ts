@@ -35,6 +35,7 @@ export {
   type TodoQuery,
   type TodoQueryResult,
 } from './todo/TodoService';
+export { SpecService, type Spec } from './spec/SpecService';
 export {
   ProviderService,
   type Provider,

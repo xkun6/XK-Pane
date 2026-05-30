@@ -27,6 +27,7 @@ export const enUS: Locale = {
       todo: 'Todos',
       git: 'Git',
       history: 'Local History',
+      specs: 'Specs',
       settings: 'Settings',
     },
     terminal: {
