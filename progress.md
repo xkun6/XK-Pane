@@ -622,6 +622,12 @@
 - **Local History 已具备**：存储基座 + 标签 + restore/auto-label。**剩**：diff 引擎（先定 Go diff 库 = 决策点）/ 最近变更 + 目录变更 + 已删文件列表（纯查询，可测）/ pruning（可测）/ gzip 压缩 / HistoryConfig（config.toml）/ Wails 服务层（按项目缓存 Store）。
 - **下一单元倾向**：最近变更/目录变更/已删文件（get_recent_changes + list_directory_changes + list_deleted_files，纯 SQL 查询、可测、无门）或 pruning（可测）；diff 引擎到该单元再定 Go diff 库。
 
+### ▶ 续：Local History unit 4 — 查询（同 /loop 自主续）
+- `query.go`：GetRecentChanges(跨文件最新在前 + label_name 相关子查询 COALESCE 避 NULL + limit) / ListDirectoryChanges(LIKE+ESCAPE '\\'，dirPath 空=全部，since 过滤) / ListDeletedFiles(最新版本=删除标记的文件,MAX(id) 判定) + escapeLikePattern(\\ % _)。排序 created_at DESC, id DESC（id 作同秒 tiebreak）。
+- +4 测（escape 6 例 / 最近变更顺序+label_name 回填+limit / 目录 src 含嵌套不含 root+空=全部+since 远古远未来 / 已删 MAX(id) 判定+复活排除）。localhistory **14 测** dev+prod 全绿。commit `ff04e53`。
+- **Local History 剩**：pruning（cleanup_old_versions max_age/max_versions + cleanup_by_total_size LRU + cleanup_orphan_blobs，可测）/ gzip 压缩 compress_blobs / HistoryConfig(config.toml) / diff 引擎（**Go diff 库选型=决策点**）/ Wails 服务层（按项目缓存 Store + gitx auto-label 钩子接线）。
+- **下一单元倾向**：pruning（可测、防无限增长、收口存储核心）；之后 diff（先定 Go diff 库）或转 gitsvc 服务层把 Local History + gitx 接进 Wails。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
