@@ -687,6 +687,15 @@
 - **🎯 现在可真机验证**：`wails3 dev` → 侧边栏「Git」页 → 选项目 → 看分支/脏标/提交历史。**第二个端到端可验功能**（Todo 之后），打通 gitsvc 全链路。
 - **下一单元（续接前端）**：Git 变更操作 UI（worktree 增删 / stash±/ fetch·pull·push，带原生确认 + 错误提示）/ 或 localhistorysvc + 历史面板 / 或注册 session 服务。各为独立切片。
 
+### ▶ 续：Git 工具条变更操作 — fetch/pull/push/stash/pop（同 /loop 自主续）
+- **沿 cc-pane 工具条边界拆分**：本 tick 做单按钮型操作（fetch/pull/push/stash/stash-pop），worktree 管理（需目录选择 + 分支输入 + 列表面板）留独立后续单元。
+- `GitService.ts` 收口 5 个变更方法（fetch/pull/push→void，stash/stashPop→git 返回文本）。
+- `useGitPage` 加 `busy` 态 + `runOp` 统一编排：**busy 互斥守门** → 调后端 → 成功 `NativeDialogs.info`（stash/pop 用 git 返回文本，其余用文案）→ **重新拉取状态/分支/提交**（变更可能改动它们）→ 失败 `NativeDialogs.error`。OpStrings / PushStrings 文案束由 View 经 t() 填入（VM 不持翻译串）。
+- `push` 带**原生确认**（推送对外不可逆，遵全局「对外/不可逆操作先确认」准则）；其余直接执行。
+- GitPage 工具条（仅 `status.isRepo` 显示，5 个 outlined 按钮 + *Rounded 图标，`busy||loading` 时禁用）。文案 `git.actions.*` / `git.ops.<op>.{title,done}` / `git.pushConfirm.*`（zh/en 对齐）。本 tick 无 Go 改动。typecheck + build 通过。commit `133b951`。
+- **🎯 现在可真机验证**：`wails3 dev` → Git 页选项目 → 工具条 fetch/pull/push/stash/pop（push 弹确认；结果/错误走原生对话框；操作后状态自动刷新）。
+- **下一单元（续接前端）**：Git worktree 管理 UI（列表 + 新建[目录选择+分支名] + 删除[确认]）/ 或 localhistorysvc + 历史面板 / 或注册 session 服务。各为独立切片。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
