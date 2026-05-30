@@ -150,6 +150,9 @@ type CreateSpec struct {
 	Rows uint16 `json:"rows"`
 	// InitialPrompt 初始用户 prompt（作为 CLI 位置参数）；"" = 无。
 	InitialPrompt string `json:"initialPrompt"`
+	// ResumeID 恢复已有会话的 id；"" = 新会话。明文透传给 adapter（claude --resume /
+	// codex resume / reclaude --resume）。CLI resume 必需明文，不加密（拍板点 5）。
+	ResumeID string `json:"resumeId"`
 }
 
 // SessionInfo 是 List 返回的会话快照。
@@ -315,7 +318,8 @@ func (s *Service) resolveLaunch(ctx context.Context, id string, spec CreateSpec)
 		ProjectPath:   spec.ProjectPath,
 		WorkspacePath: spec.WorkspacePath,
 		InitialPrompt: spec.InitialPrompt,
-		Provider:      cli, // Tier-B：glm/cursor/kimi 据此自注入
+		ResumeID:      spec.ResumeID, // 透传给 adapter → claude/codex/reclaude resume
+		Provider:      cli,           // Tier-B：glm/cursor/kimi 据此自注入
 		// TODO(phase5): orchestrator port·token / MCP 注入。
 		// 当前无 orchestrator，强制 SkipMCP 避免 adapter 生成依赖未落地端口的 MCP 配置。
 		SkipMCP: true,

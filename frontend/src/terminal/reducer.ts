@@ -34,6 +34,8 @@ export interface NewTabOptions {
   cliTool?: CliTool;
   workspacePath?: string;
   title?: string;
+  /** 恢复已有会话 id（明文 → CLI resume）；缺省 = 新会话。 */
+  resumeId?: string;
 }
 
 export type TerminalAction =
@@ -167,6 +169,7 @@ export function terminalTreeReducer(
         cliTool: action.opts.cliTool,
         workspacePath: action.opts.workspacePath,
         title: action.opts.title,
+        resumeId: action.opts.resumeId,
       });
       pane.tabs.push(newTab);
       pane.activeTabId = newTab.id;

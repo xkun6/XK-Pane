@@ -22,6 +22,7 @@ export interface CreateSpec {
   cols?: number;          // 0 取 ptyx 默认；拿到真实尺寸后应立即 resize
   rows?: number;
   initialPrompt?: string; // 初始 prompt（CLI 位置参数）；缺省 ''
+  resumeId?: string;      // 恢复会话 id（明文 → CLI resume）；缺省 '' = 新会话
 }
 
 export interface SessionInfo {
@@ -83,6 +84,7 @@ export const TerminalService = {
       cols: spec.cols ?? 0,
       rows: spec.rows ?? 0,
       initialPrompt: spec.initialPrompt ?? '',
+      resumeId: spec.resumeId ?? '',
     });
   },
 

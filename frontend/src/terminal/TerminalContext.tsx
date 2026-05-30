@@ -41,6 +41,8 @@ export interface LaunchProjectInput {
   projectPath: string;
   alias?: string | null;
   cliTool: string;
+  /** 恢复已有会话 id（明文 → CLI resume）；缺省 = 新会话。 */
+  resumeId?: string;
 }
 
 export interface TerminalContextValue {
@@ -92,19 +94,32 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
   );
   const launchProject = useCallback(
     (input: LaunchProjectInput): void => {
+      // resume 必须带会话引擎对应 CLI —— 'none'/空会走裸 shell 丢掉 --resume。
+      // 调用方（SessionsView）总按会话来源传正确 tool；此处仅兜底为 claude（最常见）。
+      const effectiveCliTool =
+        input.resumeId && (!input.cliTool || input.cliTool === 'none')
+          ? 'claude'
+          : input.cliTool;
       const base = input.alias ?? input.projectName;
-      const title = input.cliTool && input.cliTool !== 'none' ? `${base} (${input.cliTool})` : base;
+      const title =
+        effectiveCliTool && effectiveCliTool !== 'none' ? `${base} (${effectiveCliTool})` : base;
       dispatch({
         type: 'addTab',
         paneId: state.activePaneId,
-        opts: { projectId: input.projectId, projectPath: input.projectPath, cliTool: input.cliTool, title },
+        opts: {
+          projectId: input.projectId,
+          projectPath: input.projectPath,
+          cliTool: effectiveCliTool,
+          resumeId: input.resumeId,
+          title,
+        },
       });
       // 记录启动历史（fire-and-forget：记录失败绝不阻断终端启动）。
       void LaunchHistoryService.record({
         projectId: input.projectId,
         projectName: input.projectName,
         projectPath: input.projectPath,
-        cliTool: input.cliTool,
+        cliTool: effectiveCliTool,
         runtimeKind: 'local',
       }).catch(() => {});
     },
@@ -167,6 +182,7 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
         projectPath: t.projectPath,
         workspacePath: t.workspacePath,
         cliTool: t.cliTool,
+        resumeId: t.resumeId,
       })
         .then((sessionId) => {
           // 创建途中 Tab 可能已被关闭 → 二次校验，避免把 session 回填到不存在的 Tab（泄漏）。

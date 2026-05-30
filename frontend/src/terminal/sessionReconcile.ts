@@ -9,6 +9,7 @@ export interface TabWithPane {
   projectPath: string;
   workspacePath?: string;
   cliTool?: string;
+  resumeId?: string;
   sessionId: string | null;
 }
 
@@ -21,6 +22,7 @@ export function collectTabsWithPane(root: PaneNode): TabWithPane[] {
       projectPath: tab.projectPath,
       workspacePath: tab.workspacePath,
       cliTool: tab.cliTool,
+      resumeId: tab.resumeId,
       sessionId: tab.sessionId,
     })),
   );

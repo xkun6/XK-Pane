@@ -45,7 +45,7 @@ export function createEmptyPanel(): Panel {
 export function createTab(
   projectId: string,
   projectPath: string,
-  opts: { cliTool?: CliTool; workspacePath?: string; title?: string } = {},
+  opts: { cliTool?: CliTool; workspacePath?: string; title?: string; resumeId?: string } = {},
 ): Tab {
   const name = projectPath.split(/[/\\]/).pop() || 'Terminal';
   let title = opts.title ?? name;
@@ -59,6 +59,7 @@ export function createTab(
     sessionId: null,
     cliTool: opts.cliTool,
     workspacePath: opts.workspacePath,
+    resumeId: opts.resumeId,
   };
   return {
     id: generateId('tab'),
@@ -69,6 +70,7 @@ export function createTab(
     sessionId: null,
     cliTool: opts.cliTool,
     workspacePath: opts.workspacePath,
+    resumeId: opts.resumeId,
     terminalRootPane: leaf,
     activeTerminalPaneId: leaf.id,
   };

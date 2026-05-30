@@ -26,7 +26,9 @@ export interface TerminalPaneLeaf {
   cliTool?: CliTool;
   /** 多目录 CLI 的 --add-dir（铁律 D7）；仅 ≠projectPath 时生效。 */
   workspacePath?: string;
-  // TODO(phase3/4): resumeId / providerId / providerSelection / launchProfileId /
+  /** 恢复已有会话的 id（明文透传后端 → CLI resume）；undefined = 新会话。 */
+  resumeId?: string;
+  // TODO(phase3/4): providerId / providerSelection / launchProfileId /
   //   workspaceSnapshotId / ssh / wsl / machineName / disconnected / restoring / savedSessionId
 }
 
@@ -53,10 +55,12 @@ export interface Tab {
   sessionId: string | null;
   cliTool?: CliTool;
   workspacePath?: string;
+  /** 恢复已有会话的 id（明文透传后端 → CLI resume）；undefined = 新会话。 */
+  resumeId?: string;
   /** 该 Tab 内的终端分屏树根；单终端时即一个 leaf。 */
   terminalRootPane?: TerminalPaneNode;
   activeTerminalPaneId?: string;
-  // TODO(phase3/4): resumeId / provider* / launchProfileId / workspaceSnapshotId /
+  // TODO(phase3/4): provider* / launchProfileId / workspaceSnapshotId /
   //   ssh / wsl / machineName / pinned / minimized / ... 见文件头
 }
 
