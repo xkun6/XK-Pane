@@ -12,6 +12,7 @@ import (
 	"xkpane/internal/events"
 	"xkpane/internal/services/appsettings"
 	"xkpane/internal/services/cliadapters"
+	"xkpane/internal/services/gitsvc"
 	"xkpane/internal/services/greet"
 	"xkpane/internal/services/launchhistory"
 	"xkpane/internal/services/preferences"
@@ -80,6 +81,7 @@ func Run(assets embed.FS) error {
 			application.NewService(launchhistory.New(holder)),
 			application.NewService(provider.New(holder)),
 			application.NewService(todo.New(holder)),
+			application.NewService(gitsvc.New()),
 			application.NewService(subSvc),
 			application.NewService(termSvc),
 		},
