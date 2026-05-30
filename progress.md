@@ -628,6 +628,13 @@
 - **Local History 剩**：pruning（cleanup_old_versions max_age/max_versions + cleanup_by_total_size LRU + cleanup_orphan_blobs，可测）/ gzip 压缩 compress_blobs / HistoryConfig(config.toml) / diff 引擎（**Go diff 库选型=决策点**）/ Wails 服务层（按项目缓存 Store + gitx auto-label 钩子接线）。
 - **下一单元倾向**：pruning（可测、防无限增长、收口存储核心）；之后 diff（先定 Go diff 库）或转 gitsvc 服务层把 Local History + gitx 接进 Wails。
 
+### ▶ 续：Local History unit 5 — pruning + HistoryConfig（同 /loop 自主续）
+- `prune.go`：CleanupOldVersions(max_age_days 删过期 + max_versions_per_file 每文件留最新 N)/CleanupByTotalSize(超上限按 id 旧→新删,共享 blob 仅最后引用删时计释放,LRU)/cleanupOrphanBlobs(回收无引用 blob)/Cleanup(读 config 跑全套) + blobsDirSize。
+- `config.go`：HistoryConfig(默认与 cc-pane 一致,ignore 把 .ccpanes 换 .xkpanes) + DefaultHistoryConfig + ReadConfig(缺失字段保留默认,在默认值上反序列化)/SaveConfig。**偏离 cc-pane：config 用 JSON(.xkpanes/config.json)+filex 原子写，非 TOML**——与 XK-Pane storage.json 一致、免引 TOML 依赖。
+- +4 测（config 默认/roundtrip/部分 JSON 合并 / 按数量删留最新2+孤儿回收 / 按 age 删 100 天前(经 s.gdb 直插旧版本)+旧 blob 回收 / 按总大小 LRU 删到 <=上限）。localhistory **18 测** dev+prod 全绿。commit `b5f5d23`。
+- **Local History 存储核心收口**（基座+标签+restore+查询+pruning/config，18 测）。**剩**：gzip 压缩 compress_blobs（小，可测）/ diff 引擎（**Go diff 库选型=决策点**，到该单元问用户）/ Wails 服务层（按项目缓存 Store + 文件监听记快照 + gitx auto-label 钩子接线 + bindings）。
+- **下一单元倾向**：gzip 压缩 compress_blobs（小、可测、收口存储）；之后 diff 引擎将触发 **Go diff 库选型决策门**（到时问用户：sergi/go-diff vs hexops/gotextdiff vs 自实现）。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
