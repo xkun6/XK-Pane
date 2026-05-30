@@ -696,6 +696,13 @@
 - **🎯 现在可真机验证**：`wails3 dev` → Git 页选项目 → 工具条 fetch/pull/push/stash/pop（push 弹确认；结果/错误走原生对话框；操作后状态自动刷新）。
 - **下一单元（续接前端）**：Git worktree 管理 UI（列表 + 新建[目录选择+分支名] + 删除[确认]）/ 或 localhistorysvc + 历史面板 / 或注册 session 服务。各为独立切片。
 
+### ▶ 续：Git worktree 管理 UI + 后端分组目录策略（垂直切片，同 /loop 自主续）
+- **后端**（分组目录策略归服务层，对齐 gitx 文档「上层 UX 留 gitsvc」）：`gitsvc.WorktreeAddUnder(repoPath, parentDir, name, newBranch)` —— `validateWorktreeName`（非空 / 无 `/ \` `..` / 前导 `-`）+ OS 感知 `filepath.Join(parentDir, name)` → 调 `repo.WorktreeAdd`，返回创建路径。+2 测（坏名/好名表 + 建树并入列表，**测中发现并归一** filepath.Join 反斜杠 vs git porcelain 正斜杠）。bindings 重生 **65 Methods**。go build/vet/test dev+prod 全绿。
+- **前端**：`GitService` 收口 worktrees / worktreeAddUnder / worktreeRemove + `GitWorktree` 类型。GitPage worktree 区：列表（路径/分支 Chip/短哈希/主树「主」标）+ 新建（名 TextField → `openDirectory` 选父目录 → 后端建树，名同时作分支名）+ 删除（仅非主树，原生确认 + 强制移除提示）。VM `load()` 改三路并发（branches/log/worktrees）；`addWorktree`/`removeWorktree` 走 busy 互斥 + 操作后重拉。文案 `git.worktree.*`（zh/en）。typecheck + build 通过。commit `7c73800`。
+- **设计注**：filepath.Join(Win 反斜杠) ≠ git porcelain(正斜杠)，但前端建树后**重拉列表**、不按返回路径匹配，故分隔符差异不影响 UI；删除按列表路径（git 在 Win 两种分隔符都接受）。
+- **Git 功能已对齐 cc-pane git 范围**：状态查看（分支/脏标/提交）+ 工具条（fetch/pull/push/stash/pop）+ worktree 管理（增删查）。**第二个完整端到端功能域**（继 Todo）。
+- **下一单元（续接前端，方向轮换）**：localhistorysvc（Wails 包装 internal/localhistory + 注册 + bindings）+ 历史面板 / 或注册 session 服务 + 会话恢复 UI。各为独立切片。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
