@@ -14,6 +14,13 @@ export const todoPageEnUS: Messages = {
       medium: 'Medium',
       low: 'Low',
     },
+    stats: {
+      total: 'Total {{count}}',
+      todo: 'To do {{count}}',
+      inProgress: 'In progress {{count}}',
+      done: 'Done {{count}}',
+      overdue: 'Overdue {{count}}',
+    },
     actions: {
       markDone: 'Mark done',
       markUndone: 'Mark not done',

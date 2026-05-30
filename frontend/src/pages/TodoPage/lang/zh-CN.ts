@@ -14,6 +14,13 @@ export const todoPageZhCN: Messages = {
       medium: '中',
       low: '低',
     },
+    stats: {
+      total: '共 {{count}}',
+      todo: '待办 {{count}}',
+      inProgress: '进行中 {{count}}',
+      done: '已完成 {{count}}',
+      overdue: '已逾期 {{count}}',
+    },
     actions: {
       markDone: '标记完成',
       markUndone: '标记未完成',

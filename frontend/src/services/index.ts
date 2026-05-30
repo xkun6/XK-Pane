@@ -31,6 +31,7 @@ export {
   type TodoSubtask,
   type CreateTodoInput,
   type UpdateTodoInput,
+  type TodoStats,
 } from './todo/TodoService';
 export {
   ProviderService,

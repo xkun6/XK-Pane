@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
-import { NativeDialogs, type Todo } from '@/services';
+import { useCallback, useEffect, useState } from 'react';
+import { NativeDialogs, TodoService, type Todo, type TodoStats } from '@/services';
 import { useTodos } from '@/todo';
 
 // TodoPage ViewModel：消费全局 TodoProvider + 管理「新建待办」输入草稿 + 编排原生对话框。
@@ -16,6 +16,7 @@ export interface RemoveStrings {
 export interface UseTodoPageResult {
   todos: Todo[];
   loading: boolean;
+  stats: TodoStats | null;
   newTitle: string;
   setNewTitle: (v: string) => void;
   submitNew: (errorTitle: string) => Promise<void>;
@@ -34,6 +35,22 @@ function messageOf(e: unknown): string {
 export const useTodoPage = (): UseTodoPageResult => {
   const { todos, loading, addTodo, updateTodo, removeTodo, addSubtask, toggleSubtask, removeSubtask } = useTodos();
   const [newTitle, setNewTitle] = useState('');
+  const [stats, setStats] = useState<TodoStats | null>(null);
+
+  // 统计由后端服务端聚合（含 overdue 日期逻辑）。每当 todos 变化（增/删/勾选）重取，保持同步。
+  useEffect(() => {
+    let alive = true;
+    TodoService.stats()
+      .then((s) => {
+        if (alive) setStats(s);
+      })
+      .catch(() => {
+        /* 统计失败不打扰主流程（列表仍可用） */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [todos]);
 
   const submitNew = useCallback(
     async (errorTitle: string): Promise<void> => {
@@ -117,6 +134,7 @@ export const useTodoPage = (): UseTodoPageResult => {
   return {
     todos,
     loading,
+    stats,
     newTitle,
     setNewTitle,
     submitNew,

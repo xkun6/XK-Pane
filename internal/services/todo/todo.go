@@ -1,15 +1,17 @@
-// Package todo 管理待办（todos + todo_subtasks 表）的 CRUD。
+// Package todo 管理待办（todos + todo_subtasks 表）的 CRUD + 查询 + 统计。
 //
-// 移植 cc-pane todo_repo 的**核心 CRUD 子集**：Create / Get / List / Update(patch) / Delete +
-// 子任务 AddSubtask / UpdateSubtask / DeleteSubtask。**延后**（后续单元）：高级 query 过滤
-// （按 scope/status/tags）、stats 统计、到期提醒 reminders、recurrence 轮转、reorder/batch。
-// tags 以 JSON 数组字符串存储（模型 Todo.Tags），DTO 出入用 []string。
+// 移植 cc-pane todo_repo：核心 CRUD（Create / Get / List / Update(patch) / Delete + 子任务
+// AddSubtask / UpdateSubtask / DeleteSubtask）+ 高级 Query（动态过滤 + 排序 + 分页）+ Stats
+// （按 status/scope/priority 分组计数 + 过期数）。**延后**（后续单元）：到期提醒 reminders、
+// recurrence 轮转、reorder/batch 批量。tags 以 JSON 数组字符串存储（模型 Todo.Tags），
+// DTO 出入用 []string。
 package todo
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"xkpane/internal/storage"
 
@@ -317,4 +319,164 @@ func (s *Service) DeleteSubtask(ctx context.Context, id string) error {
 		return errNotFound
 	}
 	return nil
+}
+
+// TodoQuery 是查询过滤条件（全部可选，nil/空串 = 不约束）。对齐 cc-pane TodoQuery。
+type TodoQuery struct {
+	Status   *string `json:"status,omitempty"`
+	Priority *string `json:"priority,omitempty"`
+	Scope    *string `json:"scope,omitempty"`
+	ScopeRef *string `json:"scopeRef,omitempty"`
+	Search   *string `json:"search,omitempty"` // 标题 / 描述 LIKE
+	Tag      *string `json:"tag,omitempty"`    // tags JSON 含该精确标签
+	SortBy   *string `json:"sortBy,omitempty"` // created_at|updated_at|priority|due_date，缺省 sort_order
+	Limit    *int    `json:"limit,omitempty"`  // 缺省 50
+	Offset   *int    `json:"offset,omitempty"` // 缺省 0
+	MyDay    *bool   `json:"myDay,omitempty"`  // true = 仅今日 My Day
+	TodoType *string `json:"todoType,omitempty"`
+}
+
+// TodoQueryResult 是分页查询结果。对齐 cc-pane TodoQueryResult。
+type TodoQueryResult struct {
+	Items   []TodoDTO `json:"items"`
+	Total   int       `json:"total"`
+	HasMore bool      `json:"hasMore"`
+}
+
+// TodoStats 是按维度的计数统计。对齐 cc-pane TodoStats。
+type TodoStats struct {
+	Total      int            `json:"total"`
+	ByStatus   map[string]int `json:"byStatus"`
+	ByScope    map[string]int `json:"byScope"`
+	ByPriority map[string]int `json:"byPriority"`
+	Overdue    int            `json:"overdue"` // due_date < now 且 status != done
+}
+
+// Query 动态过滤 + 排序 + 分页查询待办（含子任务），返回结果 + 总数 + 是否还有更多。
+// 对齐 cc-pane todo_repo.query。条件构造抽成闭包，count 与 data 各起一条独立查询（避免 GORM
+// 复用同一 Statement 把 SELECT count(*) 带进 data 查询）。
+func (s *Service) Query(ctx context.Context, q TodoQuery) (TodoQueryResult, error) {
+	applyConds := func(db *gorm.DB) *gorm.DB {
+		if q.Status != nil && *q.Status != "" {
+			db = db.Where("status = ?", *q.Status)
+		}
+		if q.Priority != nil && *q.Priority != "" {
+			db = db.Where("priority = ?", *q.Priority)
+		}
+		if q.Scope != nil && *q.Scope != "" {
+			db = db.Where("scope = ?", *q.Scope)
+		}
+		if q.ScopeRef != nil && *q.ScopeRef != "" {
+			db = db.Where("scope_ref = ?", *q.ScopeRef)
+		}
+		if q.Search != nil && *q.Search != "" {
+			p := "%" + *q.Search + "%"
+			db = db.Where("title LIKE ? OR description LIKE ?", p, p)
+		}
+		if q.Tag != nil && *q.Tag != "" {
+			db = db.Where("tags LIKE ?", "%\""+*q.Tag+"\"%") // tags 是 JSON 数组串，匹配带引号的精确标签
+		}
+		if q.TodoType != nil && *q.TodoType != "" {
+			db = db.Where("todo_type = ?", *q.TodoType)
+		}
+		if q.MyDay != nil && *q.MyDay {
+			db = db.Where("my_day = 1 AND my_day_date = ?", time.Now().Format("2006-01-02")) // 本地日期，对齐 cc-pane chrono::Local
+		}
+		return db
+	}
+
+	var total int64
+	if err := applyConds(s.db().WithContext(ctx).Model(&storage.Todo{})).Count(&total).Error; err != nil {
+		return TodoQueryResult{}, err
+	}
+
+	order := "sort_order ASC, created_at DESC"
+	if q.SortBy != nil {
+		switch *q.SortBy {
+		case "created_at":
+			order = "created_at DESC"
+		case "updated_at":
+			order = "updated_at DESC"
+		case "priority":
+			order = "CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 WHEN 'low' THEN 2 END ASC, sort_order ASC"
+		case "due_date":
+			order = "due_date IS NULL, due_date ASC, sort_order ASC" // SQLite 无 NULLS LAST，用 IS NULL 排序模拟
+		}
+	}
+
+	limit := 50
+	if q.Limit != nil {
+		limit = *q.Limit
+	}
+	offset := 0
+	if q.Offset != nil {
+		offset = *q.Offset
+	}
+
+	var rows []storage.Todo
+	if err := applyConds(s.db().WithContext(ctx).Model(&storage.Todo{})).
+		Preload("Subtasks", subtaskOrder).Order(order).Limit(limit).Offset(offset).Find(&rows).Error; err != nil {
+		return TodoQueryResult{}, err
+	}
+	items := make([]TodoDTO, 0, len(rows))
+	for _, t := range rows {
+		items = append(items, toDTO(t))
+	}
+	return TodoQueryResult{Items: items, Total: int(total), HasMore: offset+limit < int(total)}, nil
+}
+
+// Stats 统计待办：总数 + 按 status/scope/priority 分组计数 + 过期数。scope/scopeRef 非空则限定范围。
+// 对齐 cc-pane todo_repo.stats。
+func (s *Service) Stats(ctx context.Context, scope *string, scopeRef *string) (TodoStats, error) {
+	applyScope := func(db *gorm.DB) *gorm.DB {
+		if scope != nil && *scope != "" {
+			db = db.Where("scope = ?", *scope)
+		}
+		if scopeRef != nil && *scopeRef != "" {
+			db = db.Where("scope_ref = ?", *scopeRef)
+		}
+		return db
+	}
+	out := TodoStats{ByStatus: map[string]int{}, ByScope: map[string]int{}, ByPriority: map[string]int{}}
+
+	var total int64
+	if err := applyScope(s.db().WithContext(ctx).Model(&storage.Todo{})).Count(&total).Error; err != nil {
+		return out, err
+	}
+	out.Total = int(total)
+
+	// col 仅取固定字面量（status/scope/priority），非用户输入 —— 无注入面。
+	groupCount := func(col string, dst map[string]int) error {
+		type kv struct {
+			K string `gorm:"column:k"`
+			C int    `gorm:"column:c"`
+		}
+		var rows []kv
+		if err := applyScope(s.db().WithContext(ctx).Model(&storage.Todo{})).
+			Select(col + " as k, COUNT(*) as c").Group(col).Scan(&rows).Error; err != nil {
+			return err
+		}
+		for _, r := range rows {
+			dst[r.K] = r.C
+		}
+		return nil
+	}
+	if err := groupCount("status", out.ByStatus); err != nil {
+		return out, err
+	}
+	if err := groupCount("scope", out.ByScope); err != nil {
+		return out, err
+	}
+	if err := groupCount("priority", out.ByPriority); err != nil {
+		return out, err
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	var overdue int64
+	if err := applyScope(s.db().WithContext(ctx).Model(&storage.Todo{})).
+		Where("due_date IS NOT NULL AND due_date < ? AND status != 'done'", now).Count(&overdue).Error; err != nil {
+		return out, err
+	}
+	out.Overdue = int(overdue)
+	return out, nil
 }

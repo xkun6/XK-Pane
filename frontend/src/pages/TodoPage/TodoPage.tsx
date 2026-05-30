@@ -37,6 +37,47 @@ export const TodoPage = () => {
         <Typography sx={styles.title}>{t('todo.title')}</Typography>
       </Box>
 
+      {vm.stats && vm.stats.total > 0 && (
+        <Box sx={styles.statsRow}>
+          <Chip
+            size="small"
+            variant="outlined"
+            sx={styles.priorityChip}
+            label={t('todo.stats.total', { count: String(vm.stats.total) })}
+          />
+          <Chip
+            size="small"
+            variant="outlined"
+            sx={styles.priorityChip}
+            label={t('todo.stats.todo', { count: String(vm.stats.byStatus['todo'] ?? 0) })}
+          />
+          <Chip
+            size="small"
+            variant="outlined"
+            sx={styles.priorityChip}
+            label={t('todo.stats.inProgress', { count: String(vm.stats.byStatus['in_progress'] ?? 0) })}
+          />
+          <Chip
+            size="small"
+            variant="outlined"
+            sx={styles.priorityChip}
+            label={t('todo.stats.done', { count: String(vm.stats.byStatus['done'] ?? 0) })}
+          />
+          {vm.stats.overdue > 0 && (
+            <Chip
+              size="small"
+              variant="outlined"
+              sx={{
+                ...styles.priorityChip,
+                color: theme.palette.foundation.status.danger,
+                borderColor: theme.palette.foundation.status.danger,
+              }}
+              label={t('todo.stats.overdue', { count: String(vm.stats.overdue) })}
+            />
+          )}
+        </Box>
+      )}
+
       <Box sx={styles.addRow}>
         <TextField
           size="small"

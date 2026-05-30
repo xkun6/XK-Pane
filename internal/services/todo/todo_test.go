@@ -20,6 +20,7 @@ func newTestService(t *testing.T) *Service {
 
 func sp(s string) *string { return &s }
 func bp(b bool) *bool     { return &b }
+func ip(i int) *int       { return &i }
 
 func TestCreateDefaultsAndTags(t *testing.T) {
 	ctx := context.Background()
@@ -149,5 +150,123 @@ func TestSubtasksAndCascadeDelete(t *testing.T) {
 	// AddSubtask 到不存在的 todo 报错。
 	if _, err := svc.AddSubtask(ctx, "nope", "x"); err == nil {
 		t.Error("AddSubtask(unknown todo) err=nil, want error")
+	}
+}
+
+// 播种若干待办供 Query / Stats 测试用。
+func seedForQuery(t *testing.T, svc *Service, ctx context.Context) {
+	t.Helper()
+	mk := func(title, status, priority, scope string, tags []string) {
+		if _, err := svc.Create(ctx, CreateTodoInput{
+			Title: title, Status: sp(status), Priority: sp(priority), Scope: sp(scope), Tags: &tags,
+		}); err != nil {
+			t.Fatalf("seed %q: %v", title, err)
+		}
+	}
+	mk("fix login bug", "todo", "high", "global", []string{"bug"})
+	mk("add feature", "in_progress", "medium", "global", []string{"feature"})
+	mk("write docs", "done", "low", "project", []string{"docs"})
+	mk("review PR", "todo", "high", "project", []string{"bug", "review"})
+}
+
+func TestQueryFilterSearchAndPaginate(t *testing.T) {
+	ctx := context.Background()
+	svc := newTestService(t)
+	seedForQuery(t, svc, ctx)
+
+	// 无过滤：全 4 条。
+	if r, err := svc.Query(ctx, TodoQuery{}); err != nil || r.Total != 4 || len(r.Items) != 4 || r.HasMore {
+		t.Fatalf("Query(all) = (%+v, %v), want total 4 / 4 items / no more", r, err)
+	}
+
+	// 按状态过滤。
+	if r, _ := svc.Query(ctx, TodoQuery{Status: sp("todo")}); r.Total != 2 {
+		t.Errorf("Query(status=todo) total = %d, want 2", r.Total)
+	}
+	// 按优先级过滤。
+	if r, _ := svc.Query(ctx, TodoQuery{Priority: sp("high")}); r.Total != 2 {
+		t.Errorf("Query(priority=high) total = %d, want 2", r.Total)
+	}
+	// 按 scope 过滤。
+	if r, _ := svc.Query(ctx, TodoQuery{Scope: sp("project")}); r.Total != 2 {
+		t.Errorf("Query(scope=project) total = %d, want 2", r.Total)
+	}
+	// 全文搜索（标题）。
+	if r, _ := svc.Query(ctx, TodoQuery{Search: sp("login")}); r.Total != 1 || r.Items[0].Title != "fix login bug" {
+		t.Errorf("Query(search=login) = %+v, want only 'fix login bug'", r)
+	}
+	// 按标签（tags JSON 精确匹配）。
+	if r, _ := svc.Query(ctx, TodoQuery{Tag: sp("bug")}); r.Total != 2 {
+		t.Errorf("Query(tag=bug) total = %d, want 2", r.Total)
+	}
+	// 分页：limit 3 → 首页 3 条 + hasMore。
+	r1, _ := svc.Query(ctx, TodoQuery{Limit: ip(3), Offset: ip(0)})
+	if r1.Total != 4 || len(r1.Items) != 3 || !r1.HasMore {
+		t.Errorf("Query(limit=3) = total %d / %d items / hasMore %v, want 4 / 3 / true", r1.Total, len(r1.Items), r1.HasMore)
+	}
+	r2, _ := svc.Query(ctx, TodoQuery{Limit: ip(3), Offset: ip(3)})
+	if len(r2.Items) != 1 || r2.HasMore {
+		t.Errorf("Query(offset=3) = %d items / hasMore %v, want 1 / false", len(r2.Items), r2.HasMore)
+	}
+}
+
+func TestStatsGrouping(t *testing.T) {
+	ctx := context.Background()
+	svc := newTestService(t)
+	seedForQuery(t, svc, ctx)
+
+	st, err := svc.Stats(ctx, nil, nil)
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if st.Total != 4 {
+		t.Errorf("stats total = %d, want 4", st.Total)
+	}
+	if st.ByStatus["todo"] != 2 || st.ByStatus["in_progress"] != 1 || st.ByStatus["done"] != 1 {
+		t.Errorf("byStatus = %+v, want todo:2 in_progress:1 done:1", st.ByStatus)
+	}
+	if st.ByScope["global"] != 2 || st.ByScope["project"] != 2 {
+		t.Errorf("byScope = %+v, want global:2 project:2", st.ByScope)
+	}
+	if st.ByPriority["high"] != 2 || st.ByPriority["medium"] != 1 || st.ByPriority["low"] != 1 {
+		t.Errorf("byPriority = %+v, want high:2 medium:1 low:1", st.ByPriority)
+	}
+	if st.Overdue != 0 {
+		t.Errorf("overdue = %d, want 0 (no due dates seeded)", st.Overdue)
+	}
+
+	// scope 限定：仅 project（2 条）。
+	if sp2, _ := svc.Stats(ctx, sp("project"), nil); sp2.Total != 2 {
+		t.Errorf("Stats(scope=project) total = %d, want 2", sp2.Total)
+	}
+}
+
+func TestStatsOverdue(t *testing.T) {
+	ctx := context.Background()
+	svc := newTestService(t)
+
+	past := "2000-01-01T00:00:00Z"
+	future := "2999-01-01T00:00:00Z"
+	if _, err := svc.Create(ctx, CreateTodoInput{Title: "overdue", DueDate: sp(past)}); err != nil {
+		t.Fatalf("create overdue: %v", err)
+	}
+	if _, err := svc.Create(ctx, CreateTodoInput{Title: "future", DueDate: sp(future)}); err != nil {
+		t.Fatalf("create future: %v", err)
+	}
+	// 过期但已完成的不计入 overdue。
+	doneOverdue, err := svc.Create(ctx, CreateTodoInput{Title: "done-overdue", DueDate: sp(past)})
+	if err != nil {
+		t.Fatalf("create done-overdue: %v", err)
+	}
+	if err := svc.Update(ctx, doneOverdue.ID, UpdateTodoInput{Status: sp("done")}); err != nil {
+		t.Fatalf("mark done: %v", err)
+	}
+
+	st, err := svc.Stats(ctx, nil, nil)
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if st.Overdue != 1 {
+		t.Errorf("overdue = %d, want 1 (past+notdone only; future and done-overdue excluded)", st.Overdue)
 	}
 }

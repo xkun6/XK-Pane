@@ -5,7 +5,7 @@ import {
   CreateTodoInput as RawCreateInput,
   UpdateTodoInput as RawUpdateInput,
 } from '@bindings/xkpane/internal/services/todo';
-import type { TodoDTO as RawTodo } from '@bindings/xkpane/internal/services/todo/models';
+import type { TodoDTO as RawTodo, TodoStats as RawStats } from '@bindings/xkpane/internal/services/todo/models';
 import type { TodoSubtask as RawSubtask } from '@bindings/xkpane/internal/storage/models';
 
 export interface TodoSubtask {
@@ -47,6 +47,21 @@ export interface UpdateTodoInput {
   status?: string;
   priority?: string;
   tags?: string[];
+}
+
+// 待办统计（按维度计数 + 过期数，服务端聚合）。
+export interface TodoStats {
+  total: number;
+  byStatus: Record<string, number>;
+  byScope: Record<string, number>;
+  byPriority: Record<string, number>;
+  overdue: number;
+}
+
+function toCountMap(m: Record<string, number | undefined> | undefined): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(m ?? {})) out[k] = v ?? 0;
+  return out;
 }
 
 function toSubtask(s: RawSubtask): TodoSubtask {
@@ -129,5 +144,17 @@ export const TodoService = {
 
   async removeSubtask(id: string): Promise<void> {
     await Binding.DeleteSubtask(id);
+  },
+
+  // 服务端聚合统计（总数 / 按 status·scope·priority 计数 / 过期数）。scope·scopeRef 可选限定范围。
+  async stats(scope?: string, scopeRef?: string): Promise<TodoStats> {
+    const s: RawStats = await Binding.Stats(scope ?? null, scopeRef ?? null);
+    return {
+      total: s.total ?? 0,
+      byStatus: toCountMap(s.byStatus),
+      byScope: toCountMap(s.byScope),
+      byPriority: toCountMap(s.byPriority),
+      overdue: s.overdue ?? 0,
+    };
   },
 } as const;
