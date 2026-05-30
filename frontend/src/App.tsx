@@ -4,6 +4,7 @@ import { registerHomePageLocales } from '@/pages/HomePage/lang';
 import { registerSettingsPageLocales } from '@/pages/SettingsPage/lang';
 import { registerTodoPageLocales } from '@/pages/TodoPage';
 import { registerGitPageLocales } from '@/pages/GitPage';
+import { registerHistoryPageLocales } from '@/pages/HistoryPage';
 import { registerProjectPanelLocales } from '@/components/ProjectPanel';
 import { PreferencesProvider } from '@/preferences';
 import { ProjectProvider } from '@/project';
@@ -27,6 +28,7 @@ registerHomePageLocales();
 registerSettingsPageLocales();
 registerTodoPageLocales();
 registerGitPageLocales();
+registerHistoryPageLocales();
 registerProjectPanelLocales();
 
 // Provider 嵌套顺序（自外向内）：

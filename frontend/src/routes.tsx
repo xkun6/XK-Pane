@@ -3,10 +3,12 @@ import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
 import ChecklistRoundedIcon from '@mui/icons-material/ChecklistRounded';
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
+import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import { lazy } from 'react';
 import { HomePage } from '@/pages/HomePage/HomePage';
 import { TodoPage } from '@/pages/TodoPage';
 import { GitPage } from '@/pages/GitPage';
+import { HistoryPage } from '@/pages/HistoryPage';
 import { HomePageSkeleton } from '@/pages/HomePage/HomePage.skeleton';
 import { SettingsPageSkeleton } from '@/pages/SettingsPage/SettingsPage.skeleton';
 import { TerminalPageSkeleton } from '@/pages/TerminalPage/TerminalPage.skeleton';
@@ -72,6 +74,14 @@ export const routes: RouteDefinition[] = [
     label: 'Git',
     icon: AccountTreeRoundedIcon,
     element: <GitPage />,
+    slot: 'primary',
+  },
+  {
+    id: 'history',
+    labelKey: 'route.history',
+    label: 'History',
+    icon: HistoryRoundedIcon,
+    element: <HistoryPage />,
     slot: 'primary',
   },
   {

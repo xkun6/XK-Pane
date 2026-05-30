@@ -13,6 +13,11 @@ export {
   type GitWorktree,
 } from './git/GitService';
 export {
+  LocalHistoryService,
+  type RecentChange,
+  type FileVersion,
+} from './localhistory/LocalHistoryService';
+export {
   TodoService,
   type Todo,
   type TodoSubtask,
