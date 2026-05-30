@@ -96,8 +96,9 @@
   - [x] **restore + CreateAutoLabel**（`restore.go`，commit `49ad357`）：RestoreVersion(恢复前 'Before Restore' 标签 + 写回 + mkdir 父目录,os.WriteFile 保权限) / RestoreToLabel('Before Rollback' + 逐快照 best-effort 写回 + 未知标签报错) / CreateAutoLabel(快照全部最新,gitx auto-label 钩子的服务层入口)。branch 由服务层经 gitx 传入。10 测 dev+prod 全绿。
   - [x] **查询**（`query.go`，commit `ff04e53`）：GetRecentChanges(跨文件最新在前 + label_name 子查询) / ListDirectoryChanges(LIKE+ESCAPE,dirPath 空=全部,since 过滤) / ListDeletedFiles(最新=删除标记) + escapeLikePattern。4 测。
   - [x] **pruning + HistoryConfig**（`prune.go`/`config.go`，commit `b5f5d23`）：CleanupOldVersions(age+count)/CleanupByTotalSize(LRU)/cleanupOrphanBlobs/Cleanup + HistoryConfig(默认值/ReadConfig 缺失保留默认/SaveConfig)。**偏离：config 用 JSON(.xkpanes/config.json)+filex 非 TOML**（与 storage.json 一致免依赖）。18 测 dev+prod 全绿。
-  - [ ] gzip 压缩 compress_blobs（≥512B 未压缩 blob → gzip，GetVersionContent 已能解压）。
-  - [ ] diff 引擎（行级 hunk + 字符级 inline，**Go diff 库选型 = 后续决策点**，到该单元问用户）。
+  - [x] **gzip 压缩 compress_blobs**（`compress.go`，commit `51cb1e5`）：≥512B 未压缩 blob → gzip 更小才原子替换 + ctx 可取消；GetVersionContent 透明解压。**Local History 存储核心收口，19 测**。
+  - [ ] **diff 引擎**（行级 hunk + 字符级 inline）—— ⚠️ **决策门 D11：Go diff 库选型**（go-udiff / diffmatchpatch / gotextdiff / 自实现），已 AskUserQuestion。
+  - [ ] gitsvc/localhistory Wails 服务层（按项目缓存 Store + 文件监听 fsnotify 记快照 + gitx Pull/Push/Stash 前 CreateAutoLabel 钩子 + bindings）——前端消费方待建。
   - [ ] gitsvc/localhistory Wails 服务层（按项目缓存 Store + 文件监听记快照 + gitx Pull/Push/Stash 前 CreateAutoLabel 钩子 + bindings）。
   - [ ] gitsvc 服务层（Wails 包装 + 按项目缓存 Store + gitx Pull/Push/Stash 的 auto-label 钩子）；`.xkpanes` 自动加 .gitignore 的 UX 决定。
 - [ ] 运行时：Local/WSL/SSH（ssh_machine + wsl_discovery）
@@ -132,7 +133,7 @@
 | Phase 1 | ✅ complete | ptyx ✅ / events ✅ / models ✅ / cliadapters ✅（18 守门 ok，MCP/hooks 延后 Phase 5）；subprocess git 白名单改判延后 Phase 4（层次修正） |
 | Phase 2 | 🟡 待视觉验证 | **结构完成、可运行**：后端 service + 状态层(reducer/Context+reconcile) + TerminalView/SplitView/TabBar + PaneTree + App 接线（TerminalProvider/终端页/路由）+ MVP 启动入口（打开文件夹→裸 shell）。全程 typecheck/build/单测(37)/对抗审查全绿，但**前端从未在真 app 跑过**→ **loop 停在此里程碑，待用户首个视觉 checkpoint**（开文件夹→shell 输出→回显→分屏拖拽→关标签回收 PTY）。验证 OK 后转 ✅。侧边栏树/右键启动/CLI 选择/TabBar 拖拽重排 → Phase 3 或另列单元 |
 | Phase 3 | 🔵 in_progress | 后端扁平 `project` service ✅(c8df705，19 测+对抗审查 wf_7bc251b0-c1f)；前端 project Context/侧边栏树 + 会话恢复/设置/i18n/窗口形态待做；**Workspace 持久化模型 = D9 决策门（文件存储 vs SQLite，到该单元停问用户，findings J8）** |
-| Phase 4 | 🔵 in_progress | Git: gitx 只读+worktree·stash+network ✅（`bf279a6`/`c8f6d8c`/`4d6f9d4`，8 测）；Local History 存储基座/标签/restore/查询/pruning+config ✅（`43d6f80`/`a089f0b`/`49ad357`/`ff04e53`/`b5f5d23`），18 测。剩 gzip 压缩 + diff(库选型决策点) + Wails 服务层。**剩**：git 面板(结构化 status/stage/commit/diff，UI 门控) + gitsvc 服务层；Local History diff/标签/restore/最近变更/pruning/压缩 + 服务层。多运行时 / 启动配置 / Todo·Spec 未起 |
+| Phase 4 | 🔵 in_progress | Git: gitx 只读+worktree·stash+network ✅（`bf279a6`/`c8f6d8c`/`4d6f9d4`，8 测）；Local History 存储核心**全部完成**（基座/标签/restore/查询/pruning+config/gzip 压缩，6 unit，19 测，`43d6f80`…`51cb1e5`）。剩 diff(D11 库选型决策门) + Wails 服务层。**已累计 Git+Local History 两大可测后端、无 UI 消费方——会话30 末停下向用户检查方向。****剩**：git 面板(结构化 status/stage/commit/diff，UI 门控) + gitsvc 服务层；Local History diff/标签/restore/最近变更/pruning/压缩 + 服务层。多运行时 / 启动配置 / Todo·Spec 未起 |
 | Phase 5 | ⬜ pending | Bedrock/MCPE/notify/memory |
 | Phase 6 | ⬜ pending | 收尾打包 |
 

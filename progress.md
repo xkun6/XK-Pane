@@ -635,6 +635,11 @@
 - **Local History 存储核心收口**（基座+标签+restore+查询+pruning/config，18 测）。**剩**：gzip 压缩 compress_blobs（小，可测）/ diff 引擎（**Go diff 库选型=决策点**，到该单元问用户）/ Wails 服务层（按项目缓存 Store + 文件监听记快照 + gitx auto-label 钩子接线 + bindings）。
 - **下一单元倾向**：gzip 压缩 compress_blobs（小、可测、收口存储）；之后 diff 引擎将触发 **Go diff 库选型决策门**（到时问用户：sergi/go-diff vs hexops/gotextdiff vs 自实现）。
 
+### ▶ 续：Local History unit 6 — gzip 压缩 + ⏸ 方向检查点（同 /loop 自主续）
+- `compress.go`：CompressBlobs（跳过 .db*/已 gzip/<512B，gzip 后更小才原子替换 filex + ctx 可取消）。blob 名仍是原始内容 SHA256，压缩只改内容；GetVersionContent 按魔数透明解压 → 对去重/读取/二次保存透明。+TestCompressBlobs。**Local History 存储核心全部完成，19 测** dev+prod 全绿。commit `51cb1e5`。
+- **⏸ 停下检查方向（会话30 末，2026-05-30）**：连续 ~10 个自主 tick 交付**两大可测后端**——Git（只读+worktree/stash+network，8 测）+ Local History 存储核心（6 unit，19 测）——全 tested/committed/文档化。但：① 下一个 in-context 单元 = diff 引擎，触发 **决策门 D11（Go diff 库选型，新依赖 + 行级 hunk+字符级 inline 设计）**；② **已累计大量可测后端但无 UI 消费方**，且终端栈 + 项目面板仍从未真机验证（视觉验证债持续累积）；③ 余下高价值动作多需用户方向（继续 LH diff/服务层 / 转早期子系统 Bedrock·MCPE·notify·memory / 先做个视觉 checkpoint 验证累积成果）。→ 按停止粒度（仅在决策门停）AskUserQuestion 问方向 + diff 库，停 loop 待答。
+- **续跑路径**：用户答 AskUserQuestion 后即按其选择推进；若选继续 LH diff，按所选 Go diff 库落地（go-udiff+diffmatchpatch 为推荐）。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
