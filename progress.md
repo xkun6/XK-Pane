@@ -962,3 +962,27 @@ P1（`b4b042f` 收尾「最近启动真拉起 CLI」）+ P2 经用户 `wails3 de
 
 ### ⏳ P3b 未开始（下一步，详见 `P3_PLAN.md` 的 P3b 节）
 SessionsView + **resume 透传链**（critic 核实 = 前端 **6 处链路**，核心是 `TerminalContext` reconcile effect 的 `TerminalService.create`，**非** TerminalView；后端 2 处：`CreateSpec.ResumeID` + `resolveLaunch` 赋值，adapter 层已就绪）+ **`terminal:status` store 前置单元**（活跃指示数据源，XK 现无消费方）+ **扫盘回填**（扫 ~/.claude·~/.codex jsonl，LastPrompt 必 cryptox、resumeId 明文）。**若不做 resume，P3 核心 Workspace 树已交付可用。**
+
+---
+
+## 会话（2026-05-31）— P3b SessionsView + resume（4 单元 / 7 提交，全绿，待用户手测）
+
+承上 P3a 用户手测通过 → 执行 P3b。**用户拍板两处**：① SessionsView 落点 = **复用 history 路由**（删现有 Local History 页，P4 重做；preview 已明示删除）；② **跟 cc-pane 保持一致**——忠实复刻 cc-pane 的两个会话面，且 WorkspaceItem **不加**活跃点（cc-pane 无，属 XK 自创增强）。WSL/SSH 全程跳过（Windows 桌面优先）。
+
+### P3b-1 resume 透传链（`a776650`）
+后端 2 处：`terminal.go` `CreateSpec.ResumeID` 明文字段 + `resolveLaunch` cctx 赋值（adapter 层 claude `--resume`/codex `resume`/reclaude `--resume` 已就绪，不改）。前端 6 处链路：`TerminalService.CreateSpec` → `LaunchProjectInput` → `launchProject`（含 cliTool 兜底：resume 不能裸 shell，缺省 claude）→ `NewTabOptions` → `createTab` → `Tab`/`TerminalPaneLeaf` 加 `resumeId` → **reconcile effect 的 `TerminalService.create` 读 `tab.resumeId`**（session 创建唯一发生点）→ `TabWithPane` 透传。bindings 14→14 Services/97 Methods。
+
+### P3b-2 扫盘 service（`03f8e92`）
+新增 `internal/services/sessionscan`（**纯 FS 扫盘、无 DB 依赖**——「轮询 backfill 留后续」拍板点 9，按需扫盘只把磁盘真相返回）：`ListProjectSessions` 扫 `~/.claude/projects/<编码目录>/*.jsonl`（`: \ / _`→`-`）+ `~/.codex/sessions/**/*.jsonl`（session_meta 取 id+cwd），忠实移植 description 解析（claude 首 100 行 / codex 首 200 行首条用户 prompt，截 80 字，跳过 progress/tool_use/AGENTS.md/继续）；**WSL collect/list/detect 不移植**；6 解析测试。`launchhistory` 扩 resume：`RecordSpec` 加 `ResumeSessionID/LastPrompt/ProviderID/LaunchCwd`，**LastPrompt 落库 cryptox 加密、List 读后解密**（service 层，仿 provider）、ResumeSessionID 明文；前端 `LaunchHistoryService` 同步扩字段；密文落库断言测试。bindings 15 Services/98 Methods。
+
+### P3b-3a terminal:status store（`f2777d4`）
+活跃指示数据源（XK 现状：`onStatus` 已定义零消费）。后端已发 `terminal:status`（首次输出→active / 退出→exited）。新增 `terminalStatus.ts` 纯函数（`StatusMap`+`applyStatus`：exited 删条目、状态不变返回原 map；`isSessionActive`）+ `TerminalStatusContext`（单点 `TerminalService.onAnyStatus` 全量订阅）+ `onAnyStatus` 服务方法 + App.tsx 在 TerminalProvider 内挂载；8 单元测试。terminal/index 补回 `LaunchProjectInput` 导出。
+
+### P3b-3b SessionsView UI（两子提交）
+- **(i) SessionsView 页 `d44625c`**：history 路由→`sessions`（routes/i18n route.*/App register/HomePage 快捷入口/图标 RestartAltRounded 同步改名），删 `pages/HistoryPage`（LocalHistoryService/DiffView 仍被 GitService/GitPage 消费，**无孤儿**）。新 `pages/SessionsPage` 忠实移植 cc-pane SessionsView+RecentLaunches+ResumeDetailPopover：活跃会话（面板树+status store 派生，绿/灰点，点击聚焦终端页）+ 最近启动按工作空间分组折叠（resumeSessionId 过滤、未分组沉底）+ 点行恢复（launchProject 带 resumeId）+ ResumeDetailPopover（id 截断/复制 + lastPrompt 3 行 + Resume/Delete；XK 无 reveal 故省「打开文件夹」）+ per-row 删除 + 清空(confirm)。后端 `launchhistory` 补 `Delete(id)`/`Clear`，前端同步。`groupLaunches` 纯函数+3 测试。bindings 15 Services/100 Methods。
+- **(ii) 项目节点会话子列表 `d3c12b0`**：移植 cc-pane SessionSubList 到 WorkspaceTree 项目节点（cc-pane 即挂在项目节点 chevron 下）：`WorkspaceProjectItem` 行首 chevron 展开 `SessionSubList`（`useSessionSubList` VM 首次展开按需扫盘）；左键恢复（resumeId+引擎作 cliTool）；右键菜单 恢复/以 reclaude 恢复(仅 claude)/复制 id；resume id 守门（非空·不含 `:`）；引擎用 MUI 图标区分（claude=SmartToy/codex=AutoAwesome，遵 Icon 铁律不用品牌 SVG）。新增前端 `SessionScanService`；WorkspaceTree styles/lang 扩展。
+
+### ✅ P3b 完成（待用户手测）
+- **验证**：go vet+test ./internal/...（含 sessionscan 6 + launchhistory 密文 测试）✅ / pnpm typecheck ✅ / 48 vitest（+11）✅ / pnpm build ✅。bindings 15 Services/100 Methods。
+- **关键拍板记录**：history 路由被 SessionsView 取代（Local History 页删除，P4 重做）；resumeId 明文、LastPrompt cryptox；轮询 backfill / reveal-in-explorer / WorkspaceItem 活跃点 均留后续。
+- **待用户 `wails3 dev` 目检**：① Sessions 页活跃会话点亮 + 最近启动分组折叠 + 点行 resume 真恢复（看进程 args `claude --resume`/`codex resume`）+ Popover 复制 id；② 工作空间项目节点 chevron 展开扫盘列表 + 右键 resume。

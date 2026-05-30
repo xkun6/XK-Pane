@@ -7,22 +7,21 @@
 
 - **P1 ✅**：终端真跑 Claude / Codex（TUI 兼容层 + 启动菜单 + cliadapters），用户确认。
 - **P2 ✅**：删 Todo/Spec/Memory（`dc11388`）+ VSCode 式 Git SCM 面板（`e6d107a`）+ Home 仪表盘（`c47c0a3`）。用户手测通过。
-- **P3a ✅（本阶段，用户手测通过）**：Workspace 两层树。6 单元 `d7c54b8..d1213e4` + 文档 `7f5d8b2` + 手测 5 修复 `8e301f6`/`4f9d7b0`/`e895ee0`/`8980da9`/`2279dcf`。逐单元全绿（go test + typecheck + build + 37 vitest）。明细见 progress.md 末节。
-  - 交付：`workspaces`+`workspace_projects` 两表 → `internal/services/workspace` → 前端 `WorkspaceProvider` + `components/WorkspaceTree`（折叠树 + 收藏星 + 计数 + 右键菜单 CLI 启动/导入/重命名/别名/移除/复制路径 + @dnd-kit 拖拽排序）+ 通用 `components/TextInputDialog`。旧 `ProjectPanel` 已删。
-  - 拍板落地：资源管理器打开=砍掉；排序=@dnd-kit；不生成文件产物 / 不做迁移快照 / resumeId 明文 / 项目软关联（launchProject 用节点 id 作 projectId）/ 新建文本对话框 / 按需扫盘。
+- **P3a ✅（用户手测通过）**：Workspace 两层树。6 单元 `d7c54b8..d1213e4` + 文档 + 手测 5 修复。交付 `workspaces`+`workspace_projects` 两表 → `internal/services/workspace` → 前端 `WorkspaceProvider` + `components/WorkspaceTree`（折叠树 + 收藏星 + 右键菜单 + @dnd-kit 拖拽）+ `components/TextInputDialog`。明细见 progress.md。
+- **P3b ✅（本阶段，待用户手测）**：SessionsView + resume 透传 + 扫盘。4 单元 7 提交 `a776650`/`03f8e92`/`f2777d4`/`d44625c`/`d3c12b0`，逐单元全绿（go vet+test / typecheck / 48 vitest / build）。明细见 progress.md 末节。
+  - **用户拍板**：① SessionsView 落点 = **复用 history 路由**（删 Local History 页，P4 重做）；② **跟 cc-pane 保持一致**（忠实两面 + WorkspaceItem 不加活跃点）；WSL/SSH 全程跳过（Windows 桌面优先）。
+  - 交付：resume 透传链（后端 `CreateSpec.ResumeID`+resolveLaunch / 前端 6 处链路核心是 reconcile effect）；`internal/services/sessionscan`（纯 FS 扫盘 claude+codex，无 DB）；`launchhistory` resume 字段 + LastPrompt cryptox + Delete/Clear；`TerminalStatusContext`（terminal:status store，活跃指示源）；`pages/SessionsPage`（活跃会话 + 最近启动分组 + ResumeDetailPopover）取代 history 路由；WorkspaceTree 项目节点 chevron 展开 `SessionSubList`（按需扫盘 resume）。
+  - **留后续**：轮询 backfill（拍板点 9）/ reveal-in-explorer（拍板点 2）/ WorkspaceItem 活跃点（cc-pane 无）。
 
-## 下一步 = P3b（未开始）
+## 下一步 = 待用户手测 P3b → 然后 P4 或 P5
 
-**SessionsView + resume 透传 + 扫盘回填**（XL）。详细骨架见 `P3_PLAN.md` 的「P3b」节。要点（critic 已核实）：
+**先等用户 `wails3 dev` 目检 P3b**（见 progress.md 末节验收清单）：Sessions 页活跃会话/分组折叠/点行 resume（看进程 args `claude --resume`/`codex resume`）/ Popover 复制 id；项目节点 chevron 展开扫盘列表 + 右键 resume。手测发现 bug 当场修（仿 P3a 手测 5 修复节奏）。
 
-1. **resume 透传链 = 前端 6 处 + 后端 2 处**：
-   - 后端（必补 2 处）：`internal/services/terminal/terminal.go` 的 `CreateSpec` 加 `ResumeID`；`resolveLaunch` 的 cctx 字面量加 `ResumeID: spec.ResumeID`。**adapter 层已就绪**（`claude.go`/`codex.go`/`reclaude.go` 的 `if ctx.ResumeID != ""`），不改 adapter。
-   - 前端（必补 6 处链路）：`LaunchProjectInput` → `launchProject` 的 addTab opts → `NewTabOptions`(reducer.ts) → `addTab→createTab`(reducer.ts) → `Tab`/`TerminalPaneLeaf`(types.ts/paneTree.ts) 加 `resumeId` → **核心：`TerminalContext` reconcile effect 的 `TerminalService.create` 入参读 `tab.resumeId`**（session 创建的唯一发生点，**不是** TerminalView/useTerminalView）。cliTool 兜底：resume 时不能 'none'。
-2. **`terminal:status` store 前置单元**：活跃指示数据源在 XK **不存在**（`TerminalService.onStatus` 已定义但零消费，`useTerminalView` 只订阅 onOutput/onExit）。需新建订阅 `terminal:status`（events.go:42）的状态 store/Context（非事件）+ TerminalView/Context 接订阅，否则活跃指示永不点亮。
-3. **扫盘回填**：新建 `internal/services/sessionscan`，扫 `~/.claude/projects/*.jsonl` + `~/.codex/sessions/**/*.jsonl` 解析 session id/cwd/首条 prompt；backfill 到 launch_history（字段基本已齐：`models_ccpane.go` 的 LaunchHistory 有 ResumeSessionID/LastPrompt/WorkspaceName/LaunchCwd/ProviderID）。**LastPrompt 落库必 `cryptox.EncryptString`**（service 层加解密，仿 provider）；**resumeId 明文**。先做「按需扫盘」（前端打开 SessionsView 调一次），轮询 backfill 留后续。
-4. **SessionsView 前端**：活跃会话派生（从 `useTerminal().rootPane` 收集 terminal tabs）+ 最近启动分组/折叠/resume + SessionSubList（扫盘历史）+ ResumeDetailPopover。落点建议复用现有 `history` 路由。
+手测通过后按蓝图 §2 推进（与用户确认优先级）：
+- **P4 Local History 忠实化**：当前 `localhistorysvc` 后端在用（git auto-label），但 UI 已被 SessionsView 取代 → P4 重做 Local History UI（落点待定，可新路由）+ 自动捕获 watcher（需 fsnotify）。
+- **P5 终端进阶**：内层分屏（splitTerminalPane）/ Tab 拖拽（moveTab，注意 reconcile 的 setTabSession 跨 pane TODO）/ 回放。
 
-> **若用户决定不做 resume**：P3 核心 Workspace 树已交付可用，可转 P4（Local History 忠实化 + 自动捕获 watcher，需 fsnotify）或 P5（终端进阶：内层分屏 / Tab 拖拽 / 回放）。见蓝图 §2。
+> P3 核心（Workspace 树 + 会话恢复）已全部交付可用。
 
 ## 铁律速查（违反即返工，详见 CLAUDE.md / 蓝图 §5）
 
