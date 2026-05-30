@@ -1,20 +1,20 @@
 import { Box, useTheme } from '@mui/material';
 import { PaneTree } from '@/components/PaneTree';
-import { ProjectPanel } from '@/components/ProjectPanel';
+import { WorkspaceTree } from '@/components/WorkspaceTree';
 import { useTerminal } from '@/terminal';
 import { terminalPageStyles } from './TerminalPage.styles';
-import { useTerminalPage } from './useTerminalPage';
 
-// 终端页：左列项目面板（列项目 / 添加 / 点击启动）+ 右列递归 PaneTree（消费 TerminalContext.rootPane）。
+// 终端页：左列 Workspace 两层树（取代旧扁平 ProjectPanel）+ 右列递归 PaneTree
+// （消费 TerminalContext.rootPane）。WorkspaceTree 自包含（消费 WorkspaceContext，
+// CLI 启动在 P3a-5b 直接走 useTerminal().launchProject）。
 export const TerminalPage = () => {
   const theme = useTheme();
   const styles = terminalPageStyles(theme);
   const { rootPane } = useTerminal();
-  const { launchProject } = useTerminalPage();
 
   return (
     <Box sx={styles.root}>
-      <ProjectPanel onLaunchProject={launchProject} />
+      <WorkspaceTree />
       <Box sx={styles.body}>
         <PaneTree node={rootPane} />
       </Box>

@@ -4,9 +4,10 @@ import { registerHomePageLocales } from '@/pages/HomePage/lang';
 import { registerSettingsPageLocales } from '@/pages/SettingsPage/lang';
 import { registerGitPageLocales } from '@/pages/GitPage';
 import { registerHistoryPageLocales } from '@/pages/HistoryPage';
-import { registerProjectPanelLocales } from '@/components/ProjectPanel';
+import { registerWorkspaceTreeLocales } from '@/components/WorkspaceTree';
 import { PreferencesProvider } from '@/preferences';
 import { ProjectProvider } from '@/project';
+import { WorkspaceProvider } from '@/workspace';
 import { ProviderProvider } from '@/provider';
 import { RouterProvider } from '@/router';
 import { routes } from '@/routes';
@@ -26,7 +27,7 @@ registerHomePageLocales();
 registerSettingsPageLocales();
 registerGitPageLocales();
 registerHistoryPageLocales();
-registerProjectPanelLocales();
+registerWorkspaceTreeLocales();
 
 // Provider 嵌套顺序（自外向内）：
 //  ① I18nProvider —— 文案是任何子组件都可能用到的最基础上下文
@@ -34,8 +35,9 @@ registerProjectPanelLocales();
 //  ③ PreferencesProvider —— 行为偏好
 //  ④ TerminalProvider —— 终端面板树 / 会话生命周期（全局，跨路由保活；reconcile effect 在此）
 //  ⑤ ProjectProvider —— 项目登记表（全局，侧边栏项目树消费；mount 异步拉取）
-//  ⑥ ProviderProvider —— 接入 Provider 登记表（全局，设置子页 + 启动选 Provider 消费）
-//  ⑦ RouterProvider —— 路由切换时上面都已就绪
+//  ⑥ WorkspaceProvider —— Workspace 两层树（全局，侧边栏 WorkspaceTree 消费；mount 异步拉取）
+//  ⑦ ProviderProvider —— 接入 Provider 登记表（全局，设置子页 + 启动选 Provider 消费）
+//  ⑧ RouterProvider —— 路由切换时上面都已就绪
 export const App = () => {
   return (
     <I18nProvider>
@@ -43,11 +45,13 @@ export const App = () => {
         <PreferencesProvider>
           <TerminalProvider>
             <ProjectProvider>
-              <ProviderProvider>
-                <RouterProvider routes={routes}>
-                  <AppLayout />
-                </RouterProvider>
-              </ProviderProvider>
+              <WorkspaceProvider>
+                <ProviderProvider>
+                  <RouterProvider routes={routes}>
+                    <AppLayout />
+                  </RouterProvider>
+                </ProviderProvider>
+              </WorkspaceProvider>
             </ProjectProvider>
           </TerminalProvider>
         </PreferencesProvider>

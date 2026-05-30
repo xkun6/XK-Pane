@@ -1,0 +1,53 @@
+import type { Messages } from '@/i18n';
+
+export const workspaceTreeEnUS: Messages = {
+  workspaceTree: {
+    title: 'Workspaces',
+    empty: 'No workspaces yet',
+    emptyHint: 'Create one to organize your projects',
+    newWorkspace: 'New workspace',
+    noProjects: 'No projects',
+    projectCountAria: '{{count}} projects',
+    pin: 'Pin',
+    unpin: 'Unpin',
+    delete: 'Delete',
+    expand: 'Expand',
+    collapse: 'Collapse',
+    deleteConfirm: {
+      title: 'Delete workspace',
+      message: 'Delete workspace "{{name}}"? Its project memberships will be removed (files on disk are not deleted).',
+    },
+    dialog: {
+      createTitle: 'New workspace',
+      nameLabel: 'Workspace name',
+      create: 'Create',
+      save: 'Save',
+    },
+    renameDialog: {
+      title: 'Rename workspace',
+      label: 'New name',
+    },
+    aliasDialog: {
+      title: 'Set alias',
+      label: 'Alias (leave empty to clear)',
+    },
+    menu: {
+      openTerminal: 'Open terminal',
+      launchLoading: 'Detecting CLI tools…',
+      notInstalled: 'Not installed',
+      importProject: 'Import project',
+      importDialogTitle: 'Choose a project directory',
+      rename: 'Rename',
+      setAlias: 'Set alias',
+      copyPath: 'Copy path',
+      removeProject: 'Remove project',
+      removeProjectConfirm: {
+        title: 'Remove project',
+        message: 'Remove project "{{name}}" from this workspace? It is only removed from the list; files on disk are not deleted.',
+      },
+    },
+    error: {
+      title: 'Workspace operation failed',
+    },
+  },
+};
