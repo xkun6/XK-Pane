@@ -30,6 +30,7 @@
 | D7 | 路径字段铁律 | 严格沿用 cc-pane 的 `project_path`(=PTY cwd) / `workspace_path`(仅多目录 CLI 拼 --add-dir 且 ≠project_path) / `launch_cwd`(运行时观测) 三字段语义 | cc-pane CLAUDE.md「铁律」；守门测试必须一并移植 |
 | D8 | 数据持久化 | 全部走 foundation 的 GORM+SQLite（AllModels 追加模型），敏感字段(API key/token)经 cryptox 加密 | foundation 持久化铁律；禁 localStorage |
 | D10 | Local History 存储 | **已定**（用户 2026-05-30）：每项目独立 `<proj>/.xkpanes/history/`（history.db + 内容寻址磁盘 blob），目录名 `.xkpanes`（非 cc-pane 的 `.ccpanes`）。GORM 按项目多 db（不走 Holder） | 文件历史是每项目/随项目走/内容大的独立域，是对 D8（app 级单库）的有意分层；忠实 cc-pane 每项目存储。详见 findings J12 |
+| D11 | Local History diff 库 | **已定**（用户授权选库，2026-05-30）：`github.com/sergi/go-diff/diffmatchpatch`（行模式 DiffLinesToChars + 字符模式 DiffMain） | 已是间接依赖（go-git/wails），promote direct **零新依赖**；单库即覆盖行级+字符级，优于另引 go-udiff |
 
 ---
 
@@ -97,7 +98,7 @@
   - [x] **查询**（`query.go`，commit `ff04e53`）：GetRecentChanges(跨文件最新在前 + label_name 子查询) / ListDirectoryChanges(LIKE+ESCAPE,dirPath 空=全部,since 过滤) / ListDeletedFiles(最新=删除标记) + escapeLikePattern。4 测。
   - [x] **pruning + HistoryConfig**（`prune.go`/`config.go`，commit `b5f5d23`）：CleanupOldVersions(age+count)/CleanupByTotalSize(LRU)/cleanupOrphanBlobs/Cleanup + HistoryConfig(默认值/ReadConfig 缺失保留默认/SaveConfig)。**偏离：config 用 JSON(.xkpanes/config.json)+filex 非 TOML**（与 storage.json 一致免依赖）。18 测 dev+prod 全绿。
   - [x] **gzip 压缩 compress_blobs**（`compress.go`，commit `51cb1e5`）：≥512B 未压缩 blob → gzip 更小才原子替换 + ctx 可取消；GetVersionContent 透明解压。**Local History 存储核心收口，19 测**。
-  - [ ] **diff 引擎**（行级 hunk + 字符级 inline）—— ⚠️ **决策门 D11：Go diff 库选型**（go-udiff / diffmatchpatch / gotextdiff / 自实现），已 AskUserQuestion。
+  - [x] **diff 引擎**（`diff.go`，commit `80bf6cd`）：D11 已定 = diffmatchpatch（已是间接依赖，promote direct，零新依赖，单库行级+字符级）。ComputeDiff(二进制/截断/行级 hunk+上下文+合并/stats/字符级 inline rune 位置) + GetVersionDiff/GetVersionsDiff。8 测。⏳ 对抗审查 workflow `w05btokta` 在跑。
   - [ ] gitsvc/localhistory Wails 服务层（按项目缓存 Store + 文件监听 fsnotify 记快照 + gitx Pull/Push/Stash 前 CreateAutoLabel 钩子 + bindings）——前端消费方待建。
   - [ ] gitsvc/localhistory Wails 服务层（按项目缓存 Store + 文件监听记快照 + gitx Pull/Push/Stash 前 CreateAutoLabel 钩子 + bindings）。
   - [ ] gitsvc 服务层（Wails 包装 + 按项目缓存 Store + gitx Pull/Push/Stash 的 auto-label 钩子）；`.xkpanes` 自动加 .gitignore 的 UX 决定。

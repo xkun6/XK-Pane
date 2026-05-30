@@ -640,6 +640,13 @@
 - **⏸ 停下检查方向（会话30 末，2026-05-30）**：连续 ~10 个自主 tick 交付**两大可测后端**——Git（只读+worktree/stash+network，8 测）+ Local History 存储核心（6 unit，19 测）——全 tested/committed/文档化。但：① 下一个 in-context 单元 = diff 引擎，触发 **决策门 D11（Go diff 库选型，新依赖 + 行级 hunk+字符级 inline 设计）**；② **已累计大量可测后端但无 UI 消费方**，且终端栈 + 项目面板仍从未真机验证（视觉验证债持续累积）；③ 余下高价值动作多需用户方向（继续 LH diff/服务层 / 转早期子系统 Bedrock·MCPE·notify·memory / 先做个视觉 checkpoint 验证累积成果）。→ 按停止粒度（仅在决策门停）AskUserQuestion 问方向 + diff 库，停 loop 待答。
 - **续跑路径**：用户答 AskUserQuestion 后即按其选择推进；若选继续 LH diff，按所选 Go diff 库落地（go-udiff+diffmatchpatch 为推荐）。
 
+### ▶ 续：用户选「继续 Local History → diff 引擎」→ unit 7 diff 引擎（决策门 D11 已定）
+- **D11**：用户授权我选库 → 用 `sergi/go-diff/diffmatchpatch`（**已是间接依赖**，promote direct **零新依赖**，单库行级 DiffLinesToChars + 字符级 DiffMain；优于另引 go-udiff）。记决策表 D11。
+- `diff.go`：移植 cc-pane compute_diff/compute_inline_changes。ComputeDiff(二进制 BOM/\0 检测→IsBinary；超 MAX_DIFF_LINES=10000→Truncated；行级 Equal/Delete/Insert→CONTEXT_LINES=3 上下文 + 相邻段间距≤2*CONTEXT 合并 hunk；stats add/del/changes=min；相邻 Delete/Insert 行配对字符级 inline，**rune 计数非字节**) + GetVersionDiff(版本 vs 工作树)/GetVersionsDiff(版本间)。splitLines(Rust .lines 语义)/splitDiffBlock(行块拆分)。
+- +8 测（替换+inline / 增删行+行号侧 / 相同 / 二进制 / 截断 / **多字节 rune 位置** / 远距双 hunk / Store diff 方法）。localhistory **27 测** dev+prod 全绿。go-diff promote direct。commit `80bf6cd`。
+- **⏳ 对抗审查 workflow `w05btokta`（wf_e4f728f5-11b）在跑**：3 lens（cc-pane 保真 / 边界 off-by-one / 换行·rune·diffmatchpatch）→ refute-by-default 验证。这是本会话最算法敏感的代码，ultracode 下值得对抗验证。完成后处理确认的真问题。
+- **Local History 后端基本完整**（7 unit：基座+标签+restore+查询+pruning/config+压缩+diff，27 测）。剩 Wails 服务层（按项目缓存 Store + 文件监听 fsnotify + gitx auto-label 钩子 + bindings）—— 前端消费方/视觉门控。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
