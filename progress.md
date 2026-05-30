@@ -660,6 +660,11 @@
 - **进度盘点**：Git(3 unit/8 测) + Local History(7 unit/28 测,已对抗验证) + 会话恢复(1 unit/4 测) 后端均完成。**清晰无门的核心可测后端渐少**——剩 Todo/Spec CRUD(模型已存,可测无门)、launch_profile(需新模型)、运行时 WSL discovery(平台相关)；之后多为前端消费方/视觉门控的服务层 + UI，或用户强调的早期子系统(Bedrock/MCPE/notify/memory，Phase 5，含 D5 MCP 等较大架构)。
 - **下一单元倾向**：Todo + TodoSubtask CRUD（模型已在 AllModels，Holder 模式，纯可测无门）；做完后若仍无新方向 + 清晰可测后端耗尽，再设检查点建议用户验证/接前端/转早期子系统。
 
+### ▶ 续：Todo 核心 CRUD 后端 + ⏸ 大方向检查点（同 /loop 自主续）
+- `internal/services/todo/todo.go`：移植 cc-pane todo_repo 核心子集。Create(全字段+默认 todo/medium/global，uuid，sort_order 追加，tags JSON)/Get(含子任务,miss→nil)/List(sort_order,created_at)/Update(patch)/Delete(显式删 todo+子任务) + AddSubtask/UpdateSubtask/DeleteSubtask。TodoDTO tags 出入 []string。延后：高级 query/stats/reminders/recurrence/reorder/batch。暂不注册 app.go(面板 UI 视觉门控)。+3 测 dev+prod 全绿。commit `7a1c1ba`。
+- **⏸ 大方向检查点（会话末，2026-05-30）**：**用户明确指示的工作(继续 LH diff)已完整交付**（含对抗审查+CRLF 修复），此后我又自主补了会话恢复 + Todo CRUD。现状盘点：**已交付 ~14 个后端单元、~40 测、全 tested/committed/文档化、且无一个有前端消费方**；终端栈 + 项目面板仍从未真机验证（视觉验证债持续累积近 10 轮）。余下每条路都是**重大方向分叉**：① 接前端/让成果可验（Wails 服务层 + 最小 UI，打破未验证后端堆积循环）② 早期子系统 Bedrock/MCPE/notify/memory（用户「早期纳入」强调，含 MCP D5 等较大架构）③ 继续 Phase 4 外围后端（Spec CRUD / Todo 高级 / 运行时 WSL / 启动配置）。用户偏好实质改变后续数周方向 → 按停止粒度（决策门）AskUserQuestion 问大方向，停 loop 待答。**最高杠杆动作仍是用户 `wails3 dev` 验终端+provider，我替不了。**
+- **续跑路径**：用户答方向后即按其选择推进。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
