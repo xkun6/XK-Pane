@@ -6,6 +6,11 @@ export {
 } from './launchhistory/LaunchHistoryService';
 export { ProjectService, type Project } from './project/ProjectService';
 export {
+  WorkspaceService,
+  type Workspace,
+  type WorkspaceProject,
+} from './workspace/WorkspaceService';
+export {
   GitService,
   type GitStatus,
   type GitBranch,
