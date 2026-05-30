@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { Box, useTheme } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
-import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import {
+  closestCenter,
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useT } from '@/i18n';
 import { useCliTools } from '@/shared/hooks/useCliTools';
@@ -243,7 +250,7 @@ export const WorkspaceTree = () => {
         </Box>
       </Box>
 
-      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <Box sx={styles.list}>
           {isEmpty && (
             <Box sx={styles.empty}>
