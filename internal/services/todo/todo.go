@@ -2,9 +2,9 @@
 //
 // 移植 cc-pane todo_repo：核心 CRUD（Create / Get / List / Update(patch) / Delete + 子任务
 // AddSubtask / UpdateSubtask / DeleteSubtask）+ 高级 Query（动态过滤 + 排序 + 分页）+ Stats
-// （按 status/scope/priority 分组计数 + 过期数）。**延后**（后续单元）：到期提醒 reminders、
-// recurrence 轮转、reorder/batch 批量。tags 以 JSON 数组字符串存储（模型 Todo.Tags），
-// DTO 出入用 []string。
+// （按 status/scope/priority 分组计数 + 过期数）+ Reorder（拖拽重排 sort_order）+
+// BatchUpdateStatus（多选批量改状态）。**延后**（后续单元）：到期提醒 reminders、recurrence 轮转。
+// tags 以 JSON 数组字符串存储（模型 Todo.Tags），DTO 出入用 []string。
 package todo
 
 import (
@@ -479,4 +479,35 @@ func (s *Service) Stats(ctx context.Context, scope *string, scopeRef *string) (T
 	}
 	out.Overdue = int(overdue)
 	return out, nil
+}
+
+// Reorder 按给定 id 顺序把各待办的 sort_order 重写为其下标（i 即新次序），事务内逐条更新。
+// 用 UpdateColumn **不触碰 updated_at**（重排是排序而非内容变更，对齐 cc-pane reorder）。
+// ids 中不存在的 id 静默跳过（更新 0 行）。
+func (s *Service) Reorder(ctx context.Context, ids []string) error {
+	return s.db().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for i, id := range ids {
+			if err := tx.Model(&storage.Todo{}).Where("id = ?", id).
+				UpdateColumn("sort_order", i).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// BatchUpdateStatus 批量把 ids 的状态设为 status，返回实际更新的行数。用 Update（**自动 bump
+// updated_at**，对齐 cc-pane batch_update_status）。空 ids 直接返回 0。
+func (s *Service) BatchUpdateStatus(ctx context.Context, ids []string, status string) (int, error) {
+	if status == "" {
+		return 0, errors.New("status is required")
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	res := s.db().WithContext(ctx).Model(&storage.Todo{}).Where("id IN ?", ids).Update("status", status)
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	return int(res.RowsAffected), nil
 }

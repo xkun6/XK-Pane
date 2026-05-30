@@ -270,3 +270,66 @@ func TestStatsOverdue(t *testing.T) {
 		t.Errorf("overdue = %d, want 1 (past+notdone only; future and done-overdue excluded)", st.Overdue)
 	}
 }
+
+func TestReorder(t *testing.T) {
+	ctx := context.Background()
+	svc := newTestService(t)
+
+	a, _ := svc.Create(ctx, CreateTodoInput{Title: "A"})
+	b, _ := svc.Create(ctx, CreateTodoInput{Title: "B"})
+	c, _ := svc.Create(ctx, CreateTodoInput{Title: "C"})
+
+	// 重排为 C, A, B。
+	if err := svc.Reorder(ctx, []string{c.ID, a.ID, b.ID}); err != nil {
+		t.Fatalf("Reorder: %v", err)
+	}
+	list, err := svc.List(ctx) // List 按 sort_order, created_at 升序
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 3 || list[0].ID != c.ID || list[1].ID != a.ID || list[2].ID != b.ID {
+		t.Fatalf("order after reorder = [%s %s %s], want [C A B]", list[0].Title, list[1].Title, list[2].Title)
+	}
+	if list[0].SortOrder != 0 || list[1].SortOrder != 1 || list[2].SortOrder != 2 {
+		t.Errorf("sortOrder after reorder = %d,%d,%d want 0,1,2", list[0].SortOrder, list[1].SortOrder, list[2].SortOrder)
+	}
+}
+
+func TestBatchUpdateStatus(t *testing.T) {
+	ctx := context.Background()
+	svc := newTestService(t)
+
+	a, _ := svc.Create(ctx, CreateTodoInput{Title: "A"})
+	b, _ := svc.Create(ctx, CreateTodoInput{Title: "B"})
+	c, _ := svc.Create(ctx, CreateTodoInput{Title: "C"})
+
+	// 批量把 A、B 标 done → 影响 2 行。
+	n, err := svc.BatchUpdateStatus(ctx, []string{a.ID, b.ID}, "done")
+	if err != nil {
+		t.Fatalf("BatchUpdateStatus: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("affected = %d, want 2", n)
+	}
+	ga, _ := svc.Get(ctx, a.ID)
+	gb, _ := svc.Get(ctx, b.ID)
+	gc, _ := svc.Get(ctx, c.ID)
+	if ga.Status != "done" || gb.Status != "done" {
+		t.Errorf("A/B status = %q/%q, want done", ga.Status, gb.Status)
+	}
+	if gc.Status != "todo" {
+		t.Errorf("C status = %q, want unchanged (todo)", gc.Status)
+	}
+
+	// 含未知 id：仅存在的计入。
+	if n, _ := svc.BatchUpdateStatus(ctx, []string{c.ID, "nope"}, "in_progress"); n != 1 {
+		t.Errorf("affected with unknown id = %d, want 1", n)
+	}
+	// 空 ids → 0；空 status → 报错。
+	if n, err := svc.BatchUpdateStatus(ctx, nil, "done"); err != nil || n != 0 {
+		t.Errorf("BatchUpdateStatus(empty) = (%d, %v), want (0, nil)", n, err)
+	}
+	if _, err := svc.BatchUpdateStatus(ctx, []string{a.ID}, ""); err == nil {
+		t.Error("BatchUpdateStatus(empty status) err=nil, want error")
+	}
+}
