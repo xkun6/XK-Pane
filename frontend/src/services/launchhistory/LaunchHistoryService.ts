@@ -80,4 +80,14 @@ export const LaunchHistoryService = {
     const rows = await Binding.List(limit);
     return (rows ?? []).map(toRecord);
   },
+
+  // 删除一条启动记录（幂等）。
+  async delete(id: number): Promise<void> {
+    await Binding.Delete(id);
+  },
+
+  // 清空所有启动记录。
+  async clear(): Promise<void> {
+    await Binding.Clear();
+  },
 } as const;

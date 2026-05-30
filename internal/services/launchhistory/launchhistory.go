@@ -95,6 +95,16 @@ func (s *Service) Record(ctx context.Context, spec RecordSpec) (storage.LaunchHi
 	return rec, nil
 }
 
+// Delete 按 id 删除一条启动记录（幂等：不存在不报错）。
+func (s *Service) Delete(ctx context.Context, id uint) error {
+	return s.db().WithContext(ctx).Delete(&storage.LaunchHistory{}, id).Error
+}
+
+// Clear 清空所有启动记录。
+func (s *Service) Clear(ctx context.Context) error {
+	return s.db().WithContext(ctx).Where("1 = 1").Delete(&storage.LaunchHistory{}).Error
+}
+
 // List 返回最近的启动记录，按 launched_at 倒序（最新在前）。limit<=0 表示不限。
 // 空结果返回非 nil 空切片（JSON []）。
 func (s *Service) List(ctx context.Context, limit int) ([]storage.LaunchHistory, error) {
