@@ -819,3 +819,9 @@
   - `MemoryStats{ total, byScope, byCategory }`。`StoreMemoryRequest{ title, content, scope?, category?, importance?, workspaceName?, projectPath?, sessionId?, tags?, source? }`。`UpdateMemoryRequest{ title?, content?, category?, importance?, tags? }`。
   - 实现要点：tags JSON 串（同 Todo）；is_deleted 软删（cc-pane 软删，list/search 过滤 is_deleted=0）；新增 `Memory` 模型进 AllModels（app 级单库，按 scope/workspace/project 列查）；search LIKE（title/content）；stats 分组同 Todo.Stats 模式。
 - **下一单元**：实现 **memory 后端**（`internal/services/memorysvc` + `Memory` 模型进 AllModels + store/search(LIKE)/list/get/update/delete/stats + 软删 + tags JSON + 测）。之后 surface 成 Memory 页（同 Todo/Spec 两段式）。notify 留后（部分视觉门控 + 触发耦合终端，价值待终端栈解门）。
+
+### ▶ 续：memorysvc 记忆子系统后端（dep-free 可测，同 /loop 自主续）
+- **移植 cc-memory crate**（早期子系统首块落地）。新增 `Memory` 模型（`internal/storage/models_memory.go` 进 AllModels，memories 表自动迁移）+ `internal/services/memorysvc` 并注册。先读 cc-memory `service.rs`/`repository.rs` 取准 store 校验·默认·scope 约束、search 过滤·排序·LIKE、stats、touch、软删 语义。
+- 方法：`Store`（校验+scope 约束+importance 钳 1-5+默认）/ `Search`（参数化过滤 + LIKE 全文 title/content/tags ESCAPE 转义 + 排序 + 分页 + 软删过滤；FTS5 留可选增强未移植，对齐 cc-memory LIKE 降级）/ `List`（包 Search）/ `Get`（命中 touch：UpdateColumns 更新 accessed_at+access_count **不 bump updated_at**）/ `Update`（patch + 校验）/ `Delete`（软删 is_deleted=1）/ `Stats`（total+byScope+byCategory）。tags JSON 串（同 Todo）；时间 time.Time（与本仓一致）；云端预留字段恒 local_only。
+- +9 测（含 Get-touch-不-bump-updated 的 Windows 计时器分辨率坑：断言用 `!Before` 而非 `After`，access_count==1 已证 touch 执行）。bindings 15 Services/104 Methods(+7)/67 Models。dev+prod 全绿；前端 typecheck 通过。commit `06ccd46`。**延后**（耦合终端/AI）：format_for_injection / 日报 DailyReport / 云 sync。
+- **下一单元**：**Memory UI**（MemorysPage：搜索框 + scope/category/importance 过滤 + 列表（标题/类别/重要度/scope chip）+ 新建（标题+内容+scope+category+importance+tags）+ 看/编辑 + 删除 + 统计条——surface memorysvc，**非终端栈、可验证**，同 Todo/Spec 两段式）。之后早期子系统仅剩 notify（部分视觉门控）/ Bedrock（重，决策门）/ MCPE（MCP 桥，决策门）——届时 dep-free 可 surface runway 基本耗尽，转向陈列门控清单待用户。
