@@ -41,6 +41,7 @@ export const TextInputDialog = (props: TextInputDialogProps) => {
             label={props.label}
             value={value}
             onChange={(e) => setValue(e.target.value)}
+            sx={styles.field}
           />
         </DialogContent>
         <DialogActions sx={styles.actions}>
