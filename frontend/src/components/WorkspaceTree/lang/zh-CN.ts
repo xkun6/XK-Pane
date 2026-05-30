@@ -50,5 +50,20 @@ export const workspaceTreeZhCN: Messages = {
     error: {
       title: '工作空间操作失败',
     },
+    sessions: {
+      toggle: '会话历史',
+      loading: '扫描会话中…',
+      empty: '暂无会话历史',
+      noPrompt: '（无摘要）',
+      resume: '恢复会话',
+      resumeWithReclaude: '以 reclaude 恢复',
+      copyId: '复制会话 ID',
+      time: {
+        justNow: '刚刚',
+        minutes: '{{n}} 分钟前',
+        hours: '{{n}} 小时前',
+        days: '{{n}} 天前',
+      },
+    },
   },
 };

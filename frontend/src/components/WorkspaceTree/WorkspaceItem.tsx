@@ -15,6 +15,7 @@ export interface WorkspaceItemStrings {
   expand: string;
   collapse: string;
   noProjects: string;
+  sessionsToggle: string;
   projectCountAria: (count: number) => string;
 }
 
@@ -114,6 +115,7 @@ export const WorkspaceItem = ({
                 key={p.id}
                 project={p}
                 styles={styles}
+                sessionsToggleLabel={strings.sessionsToggle}
                 onOpenMenu={(anchor) => onOpenProjectMenu(p, anchor)}
               />
             ))}

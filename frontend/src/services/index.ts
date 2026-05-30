@@ -76,3 +76,4 @@ export {
   type CliTool,
   type CliToolCapabilities,
 } from './clitools/CliToolService';
+export { SessionScanService, type ResumeSession } from './sessionscan/SessionScanService';

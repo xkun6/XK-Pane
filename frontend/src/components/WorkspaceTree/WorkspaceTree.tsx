@@ -103,6 +103,7 @@ export const WorkspaceTree = () => {
     expand: t('workspaceTree.expand'),
     collapse: t('workspaceTree.collapse'),
     noProjects: t('workspaceTree.noProjects'),
+    sessionsToggle: t('workspaceTree.sessions.toggle'),
     projectCountAria: (count) => t('workspaceTree.projectCountAria', { count }),
   };
 

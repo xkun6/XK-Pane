@@ -19,12 +19,19 @@ export interface WorkspaceTreeSx {
   deleteBtn: S;
   projectList: S;
   projectRow: S;
+  projectChevron: S;
   projectIcon: S;
   projectText: S;
   projectName: S;
   projectPath: S;
   projectEmpty: S;
   newButton: S;
+  sessionList: S;
+  sessionRow: S;
+  sessionGlyph: S;
+  sessionDesc: S;
+  sessionTime: S;
+  sessionHint: S;
 }
 
 export const workspaceTreeStyles = (theme: Theme): WorkspaceTreeSx => {
@@ -102,12 +109,13 @@ export const workspaceTreeStyles = (theme: Theme): WorkspaceTreeSx => {
     projectRow: {
       display: 'flex',
       alignItems: 'center',
-      gap: 1,
-      pl: 4,
+      gap: 0.5,
+      pl: 2,
       pr: 1.5,
       py: 0.5,
       '&:hover': { backgroundColor: fp.bg.hover },
     },
+    projectChevron: { flexShrink: 0, color: fp.text.muted, p: 0.25 },
     projectIcon: { color: fp.text.secondary, flexShrink: 0 },
     projectText: { flex: 1, minWidth: 0 },
     projectName: {
@@ -125,6 +133,29 @@ export const workspaceTreeStyles = (theme: Theme): WorkspaceTreeSx => {
       textOverflow: 'ellipsis',
     },
     projectEmpty: { pl: 4, py: 0.5, fontSize: 11, color: fp.text.muted },
+    sessionList: { pl: 5.5, pr: 1.5, pb: 0.5 },
+    sessionRow: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 0.75,
+      px: 0.75,
+      py: 0.5,
+      borderRadius: '6px',
+      cursor: 'pointer',
+      color: fp.text.secondary,
+      '&:hover': { backgroundColor: fp.bg.hover, color: fp.text.primary },
+    },
+    sessionGlyph: { flexShrink: 0, color: fp.text.muted },
+    sessionDesc: {
+      flex: 1,
+      minWidth: 0,
+      fontSize: 11,
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+    },
+    sessionTime: { flexShrink: 0, fontSize: 10, color: fp.text.muted },
+    sessionHint: { px: 0.75, py: 0.5, fontSize: 10, color: fp.text.muted },
     newButton: {
       m: 1,
       py: 0.75,

@@ -49,5 +49,20 @@ export const workspaceTreeEnUS: Messages = {
     error: {
       title: 'Workspace operation failed',
     },
+    sessions: {
+      toggle: 'Session history',
+      loading: 'Scanning sessions…',
+      empty: 'No session history',
+      noPrompt: '(no summary)',
+      resume: 'Resume session',
+      resumeWithReclaude: 'Resume with reclaude',
+      copyId: 'Copy session ID',
+      time: {
+        justNow: 'just now',
+        minutes: '{{n}}m ago',
+        hours: '{{n}}h ago',
+        days: '{{n}}d ago',
+      },
+    },
   },
 };
