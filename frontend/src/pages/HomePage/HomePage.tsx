@@ -38,11 +38,24 @@ export const HomePage = () => {
   };
 
   const renderLaunch = (r: LaunchRecord) => (
-    <Box key={r.id} sx={styles.recentRow} onClick={() => vm.navigate('terminal')}>
+    <Box
+      key={r.id}
+      sx={styles.recentRow}
+      role="button"
+      tabIndex={0}
+      title={t('home.recent.relaunchHint', { path: r.projectPath })}
+      onClick={() => vm.relaunch(r)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          vm.relaunch(r);
+        }
+      }}
+    >
       <Box component="span" sx={styles.recentIcon}>
         <TerminalRoundedIcon fontSize="small" />
       </Box>
-      <Typography component="span" sx={styles.recentName} title={r.projectPath}>
+      <Typography component="span" sx={styles.recentName}>
         {r.projectName} · {cliLabel(r.cliTool)}
       </Typography>
       <Typography component="span" sx={styles.recentTime}>

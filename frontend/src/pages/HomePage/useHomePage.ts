@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { LaunchHistoryService, type CliTool, type LaunchRecord } from '@/services';
 import { useProjects } from '@/project';
 import { useCliTools } from '@/shared/hooks/useCliTools';
 import { useRouter } from '@/router';
+import { useTerminal } from '@/terminal';
 
 // HomePage ViewModel：仪表盘数据装配 —— 时段问候 + 项目数 + 最近启动 + CLI 环境检测 + 导航。
 // 复用既有数据源（LaunchHistoryService / ProjectProvider / useCliTools / Router），不新建后端。
@@ -26,12 +27,15 @@ export interface UseHomePageResult {
   tools: CliTool[];
   toolsLoading: boolean;
   navigate: (id: string) => void;
+  /** 重新启动一条最近记录（按其 cliTool 新建终端 Tab）并跳到终端页。 */
+  relaunch: (r: LaunchRecord) => void;
 }
 
 export const useHomePage = (): UseHomePageResult => {
   const { projects } = useProjects();
   const { tools, loading: toolsLoading } = useCliTools();
   const { navigate } = useRouter();
+  const { launchProject } = useTerminal();
   const [recentLaunches, setRecentLaunches] = useState<LaunchRecord[]>([]);
   const [launchesLoading, setLaunchesLoading] = useState(true);
   // 问候按首次挂载的本地小时定（home 非保活，每次进入重算；见 routes.tsx）。
@@ -54,6 +58,19 @@ export const useHomePage = (): UseHomePageResult => {
     };
   }, []);
 
+  const relaunch = useCallback(
+    (r: LaunchRecord): void => {
+      launchProject({
+        projectId: r.projectId,
+        projectName: r.projectName,
+        projectPath: r.projectPath,
+        cliTool: r.cliTool,
+      });
+      navigate('terminal');
+    },
+    [launchProject, navigate],
+  );
+
   return {
     greetingKey,
     projectCount: projects.length,
@@ -62,5 +79,6 @@ export const useHomePage = (): UseHomePageResult => {
     tools,
     toolsLoading,
     navigate,
+    relaunch,
   };
 };

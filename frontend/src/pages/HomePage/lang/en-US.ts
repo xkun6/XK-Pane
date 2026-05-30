@@ -23,6 +23,7 @@ export const homePageEnUS: Messages = {
       title: 'Recent launches',
       empty: 'No launches yet. Open a terminal, pick a project, and start a CLI to begin.',
       shell: 'Shell',
+      relaunchHint: 'Relaunch in the terminal: {{path}}',
     },
     env: {
       title: 'Environment',

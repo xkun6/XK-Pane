@@ -24,6 +24,7 @@ export const homePageZhCN: Messages = {
       title: '最近启动',
       empty: '还没有启动记录。打开终端、选择项目并启动一个 CLI 即可开始。',
       shell: '终端',
+      relaunchHint: '在终端中重新启动：{{path}}',
     },
     env: {
       title: '环境检测',

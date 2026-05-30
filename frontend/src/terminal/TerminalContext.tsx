@@ -19,7 +19,7 @@ import {
   useRef,
   type ReactNode,
 } from 'react';
-import { TerminalService } from '@/services';
+import { LaunchHistoryService, TerminalService } from '@/services';
 import {
   createInitialTreeState,
   terminalTreeReducer,
@@ -34,6 +34,15 @@ import {
 } from './sessionReconcile';
 import type { PaneNode, SplitDirection } from './types';
 
+/** 启动一个项目终端所需的最小信息（projectPath = PTY cwd，铁律 D7）。 */
+export interface LaunchProjectInput {
+  projectId: string;
+  projectName: string;
+  projectPath: string;
+  alias?: string | null;
+  cliTool: string;
+}
+
 export interface TerminalContextValue {
   /** 外层面板树根（窗口布局）。 */
   rootPane: PaneNode;
@@ -41,6 +50,11 @@ export interface TerminalContextValue {
   activePaneId: string;
   /** 在指定面板新建一个终端 Tab 并激活。 */
   newTab: (paneId: string, opts: NewTabOptions) => void;
+  /**
+   * 在活动面板启动一个项目终端：新建 Tab（projectPath + cliTool）并记录启动历史。
+   * Home 最近启动、ProjectPanel 启动菜单共用此入口（跨页面启动的唯一事实源）。
+   */
+  launchProject: (input: LaunchProjectInput) => void;
   /** 关闭 Tab；若是面板最后一个 Tab 则连带关闭面板（自动折叠单子 split）。 */
   closeTab: (paneId: string, tabId: string) => void;
   /** 激活某面板内的某 Tab（同时把该面板设为活动面板）。 */
@@ -75,6 +89,26 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
   const newTab = useCallback(
     (paneId: string, opts: NewTabOptions) => dispatch({ type: 'addTab', paneId, opts }),
     [],
+  );
+  const launchProject = useCallback(
+    (input: LaunchProjectInput): void => {
+      const base = input.alias ?? input.projectName;
+      const title = input.cliTool && input.cliTool !== 'none' ? `${base} (${input.cliTool})` : base;
+      dispatch({
+        type: 'addTab',
+        paneId: state.activePaneId,
+        opts: { projectId: input.projectId, projectPath: input.projectPath, cliTool: input.cliTool, title },
+      });
+      // 记录启动历史（fire-and-forget：记录失败绝不阻断终端启动）。
+      void LaunchHistoryService.record({
+        projectId: input.projectId,
+        projectName: input.projectName,
+        projectPath: input.projectPath,
+        cliTool: input.cliTool,
+        runtimeKind: 'local',
+      }).catch(() => {});
+    },
+    [state.activePaneId],
   );
   const closeTab = useCallback(
     (paneId: string, tabId: string) => dispatch({ type: 'closeTab', paneId, tabId }),
@@ -169,6 +203,7 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
       rootPane: state.rootPane,
       activePaneId: state.activePaneId,
       newTab,
+      launchProject,
       closeTab,
       setActiveTab,
       setActivePanel,
@@ -181,6 +216,7 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
       state.rootPane,
       state.activePaneId,
       newTab,
+      launchProject,
       closeTab,
       setActiveTab,
       setActivePanel,
