@@ -719,6 +719,14 @@
 - **🎯 现在可真机验证**：`wails3 dev` → 「本地历史」页 → 选项目 → 输相对路径快照 → 见最近变更 → 编辑文件再快照 → 回滚到旧版本（文件内容回退）。**第三个端到端功能域**（继 Todo / Git）。
 - **下一单元（续接前端）**：Local History diff 查看器（LocalHistoryService 加 getVersionDiff/getVersionsDiff + DiffView 组件，行级 + inline 字符级渲染，点变更看 diff）/ 或注册 session 服务 + 会话恢复 UI。各为独立切片。
 
+### ▶ 续：Local History diff 查看器（第二阶段，同 /loop 自主续）
+- `LocalHistoryService` 加 `versionDiff` + 完整 diff DTO（DiffResult/Hunk/Line/Stats/InlineChange + `DiffChangeType` 联合 `'equal'|'insert'|'delete'|'replace'`），converter 把 binding 嵌套类收口为干净接口。
+- **新增纯展示组件 `components/DiffView/`**（labels 经 prop 传入、不持 i18n、可复用）：渲染 +N/−N 统计行 + 每 hunk 头（`@@ -a,b +c,d @@`）+ 双行号 gutter + 符号列 + 内容；行底色按 changeType（insert 绿 / delete 红，`alpha 14%`），inline 高亮 `alpha 38%`。**inline 按码点切片**（`Array.from`）——InlineChange.start/end 是 rune 下标非 UTF-16 单元，非 BMP 字符（emoji）才正确。
+- HistoryPage：变更行主区可点（role/tabindex/Enter/Space 无障碍）→ `viewDiff`（版本 vs 工作树），选中行 accent 描边；下方 diff 区显示标题 + DiffView。VM 加 selectedVersionId/diff/diffLoading + viewDiff（`diffReqRef` 请求令牌防过期）；切项目 / 回滚后 `clearDiff`。文案 `history.diff.*`（zh/en）。本 tick 无 Go 改动。typecheck + build 通过。commit `818cde3`。
+- **把后端已对抗审查过的 diff 引擎首次可视化**。**Local History 域功能完整**：列表 + 快照 + 回滚 + diff（行级 + 字符级 inline）。第三个完整端到端功能域收尾。
+- **🎯 现在可真机验证**：`wails3 dev` → 本地历史页 → 快照文件 → 编辑 → 再快照 → 点某版本看 diff（绿/红行 + 字符级高亮）→ 回滚。
+- **下一单元（续接前端，方向轮换）**：注册 session 服务（已写未注册）+ 会话恢复 UI / 或 Git 域接 Local History（pull/push/stash 前 auto-label 钩子）/ 或 Todo 高级功能。各为独立切片。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
