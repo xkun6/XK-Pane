@@ -13,7 +13,7 @@ import { ProviderProvider } from '@/provider';
 import { RouterProvider } from '@/router';
 import { routes } from '@/routes';
 import { FoundationThemeProvider, registerFoundationThemes } from '@/styles/themes';
-import { TerminalProvider } from '@/terminal';
+import { TerminalProvider, TerminalStatusProvider } from '@/terminal';
 
 // 启动时注册：
 //  1. 内置主题预设（light / dark / obsidian + 已保存的 custom）
@@ -36,25 +36,28 @@ registerPaneTreeLocales();
 //  ② FoundationThemeProvider —— CssBaseline 在这里注入；与 i18n 互不依赖
 //  ③ PreferencesProvider —— 行为偏好
 //  ④ TerminalProvider —— 终端面板树 / 会话生命周期（全局，跨路由保活；reconcile effect 在此）
-//  ⑤ ProjectProvider —— 项目登记表（全局，侧边栏项目树消费；mount 异步拉取）
-//  ⑥ WorkspaceProvider —— Workspace 两层树（全局，侧边栏 WorkspaceTree 消费；mount 异步拉取）
-//  ⑦ ProviderProvider —— 接入 Provider 登记表（全局，设置子页 + 启动选 Provider 消费）
-//  ⑧ RouterProvider —— 路由切换时上面都已就绪
+//  ⑤ TerminalStatusProvider —— 会话状态 store（单点订阅 terminal:status；活跃指示数据源）
+//  ⑥ ProjectProvider —— 项目登记表（全局，侧边栏项目树消费；mount 异步拉取）
+//  ⑦ WorkspaceProvider —— Workspace 两层树（全局，侧边栏 WorkspaceTree 消费；mount 异步拉取）
+//  ⑧ ProviderProvider —— 接入 Provider 登记表（全局，设置子页 + 启动选 Provider 消费）
+//  ⑨ RouterProvider —— 路由切换时上面都已就绪
 export const App = () => {
   return (
     <I18nProvider>
       <FoundationThemeProvider>
         <PreferencesProvider>
           <TerminalProvider>
-            <ProjectProvider>
-              <WorkspaceProvider>
-                <ProviderProvider>
-                  <RouterProvider routes={routes}>
-                    <AppLayout />
-                  </RouterProvider>
-                </ProviderProvider>
-              </WorkspaceProvider>
-            </ProjectProvider>
+            <TerminalStatusProvider>
+              <ProjectProvider>
+                <WorkspaceProvider>
+                  <ProviderProvider>
+                    <RouterProvider routes={routes}>
+                      <AppLayout />
+                    </RouterProvider>
+                  </ProviderProvider>
+                </WorkspaceProvider>
+              </ProjectProvider>
+            </TerminalStatusProvider>
           </TerminalProvider>
         </PreferencesProvider>
       </FoundationThemeProvider>

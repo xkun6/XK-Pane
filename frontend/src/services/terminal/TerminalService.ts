@@ -133,6 +133,24 @@ export const TerminalService = {
     });
   },
 
+  // 订阅**所有**会话的状态变更（不按 sessionId 过滤）—— 供全局状态 store 单点接入，
+  // 维护 sessionId→status 映射（活跃指示数据源）。返回取消函数。
+  onAnyStatus(handler: (status: TerminalStatus) => void): () => void {
+    const off = Events.On(EVENT.status, (e) => {
+      const d = e?.data as TerminalStatus | undefined;
+      if (!d || typeof d.sessionId !== 'string') return;
+      handler({
+        sessionId: d.sessionId,
+        status: (d.status ?? 'active') as TerminalStatusKind,
+        lastOutputAt: Number(d.lastOutputAt ?? 0),
+        pid: Number(d.pid ?? 0),
+      });
+    });
+    return () => {
+      if (typeof off === 'function') off();
+    };
+  },
+
   // 订阅指定会话的退出事件。
   onExit(sessionId: string, handler: (info: TerminalExit) => void): () => void {
     return onSession<TerminalExit>(EVENT.exit, sessionId, (d) => {
