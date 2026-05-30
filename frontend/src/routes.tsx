@@ -1,18 +1,12 @@
 import HomeRoundedIcon from '@mui/icons-material/HomeRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
-import ChecklistRoundedIcon from '@mui/icons-material/ChecklistRounded';
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
-import DescriptionRoundedIcon from '@mui/icons-material/DescriptionRounded';
-import PsychologyRoundedIcon from '@mui/icons-material/PsychologyRounded';
 import { lazy } from 'react';
 import { HomePage } from '@/pages/HomePage/HomePage';
-import { TodoPage } from '@/pages/TodoPage';
 import { GitPage } from '@/pages/GitPage';
 import { HistoryPage } from '@/pages/HistoryPage';
-import { SpecsPage } from '@/pages/SpecsPage';
-import { MemorysPage } from '@/pages/MemorysPage';
 import { HomePageSkeleton } from '@/pages/HomePage/HomePage.skeleton';
 import { SettingsPageSkeleton } from '@/pages/SettingsPage/SettingsPage.skeleton';
 import { TerminalPageSkeleton } from '@/pages/TerminalPage/TerminalPage.skeleton';
@@ -65,14 +59,6 @@ export const routes: RouteDefinition[] = [
     keepAlive: true, // 保活：保留 xterm 实例与滚动回溯（终端页离开后再回不重建会话视图）
   },
   {
-    id: 'todo',
-    labelKey: 'route.todo',
-    label: 'Todos',
-    icon: ChecklistRoundedIcon,
-    element: <TodoPage />,
-    slot: 'primary',
-  },
-  {
     id: 'git',
     labelKey: 'route.git',
     label: 'Git',
@@ -86,22 +72,6 @@ export const routes: RouteDefinition[] = [
     label: 'History',
     icon: HistoryRoundedIcon,
     element: <HistoryPage />,
-    slot: 'primary',
-  },
-  {
-    id: 'specs',
-    labelKey: 'route.specs',
-    label: 'Specs',
-    icon: DescriptionRoundedIcon,
-    element: <SpecsPage />,
-    slot: 'primary',
-  },
-  {
-    id: 'memory',
-    labelKey: 'route.memory',
-    label: 'Memory',
-    icon: PsychologyRoundedIcon,
-    element: <MemorysPage />,
     slot: 'primary',
   },
   {

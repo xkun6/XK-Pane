@@ -891,4 +891,21 @@
 - 真因：`codex.go` 的 `BuildCommand` 在 `SkipMCP=true`（P1 恒为真，无 orchestrator）时注入 `-c mcp_servers.ccpanes.enabled=false`，让 codex 0.134.0 凭空造出一个**只有 enabled、无 type/command/url** 的 `[mcp_servers.ccpanes]` 表 → 强制 transport 校验失败。**实测复现**：`codex -c mcp_servers.ccpanes.enabled=false mcp list` 原样报错。
 - 这是**忠实移植了 cc-pane `codex.rs:512` 的同一隐患**：cc-pane 正常带 orchestrator（走 `else` 注入合法 `url`），从不进 skip_mcp 那条；现代 cc-pane 用 per-launch `-c`、从不往全局写 ccpanes（用户 config 里确无 ccpanes），故该 `enabled=false` 是无收益的遗留防御。codex 字段实为 `disabled`（用户 exa 配置佐证），`enabled` 它根本不认。
 - 修：`SkipMCP` 时**零注入**（claude/reclaude 本就如此——`generateMCPConfig` P1 恒 `""`，不受影响）。真正「禁用已存在的全局 ccpanes」需解析 `~/.codex/config.toml` 仅对存在项 disabled → 归 Phase 5。
-- 加守门测试 `TestBuildCommandSkipMCPOmitsCcpanesOverride`（codex 在 PATH 时实跑断言无 ccpanes 覆盖，否则 skip）。验证：`go test ./internal/services/cliadapters/` ✅ + `codex mcp list` 干净 exit 0 + go vet + go build 主程序全绿。**未提交**（待用户继续验证）。
+- 加守门测试 `TestBuildCommandSkipMCPOmitsCcpanesOverride`（codex 在 PATH 时实跑断言无 ccpanes 覆盖，否则 skip）。验证：`go test ./internal/services/cliadapters/` ✅ + `codex mcp list` 干净 exit 0 + go vet + go build 主程序全绿。已提交 `ad2cf5f`。
+
+---
+
+## 会话（2026-05-30）— P1 验过（codex+claude 都能进）→ 进 P2
+
+用户确认 `wails3 dev` 下 codex 与 claude 均能正常进入交互界面，P1 闭环。进入 P2。
+
+### P2a 清场：删除 Todo / Spec / Memory（前后端一起删干净）✅ complete
+**删前精确盘点**（避免误删同名）：确认 `terminal.CreateSpec` 是会话创建 spec（**非** Spec 功能）、各处 "memory" 注释无关；前端三个 Service/Provider 消费方全自包含（App.tsx + 各自页面 + services/index.ts），ProjectPanel/HomePage/TerminalPage **无隐藏引用**；后端仅 app.go 引用三个包。
+- **删目录/文件（11）**：后端 `internal/services/{todo,specsvc,memorysvc}/` + `internal/storage/models_memory.go`；前端 `pages/{TodoPage,SpecsPage,MemorysPage}/` + `services/{todo,spec,memory}/` + `todo/`(TodoProvider)。
+- **编辑共享文件（7）**：`models_ccpane.go`（去 Todo/TodoSubtask/Spec 三 struct + init 3 条 descriptor + 3 个 TableName）；`models_ccpane_test.go`（want 列表去 todos/todo_subtasks/specs，注释改）；`app.go`（去 3 import + todoSvc/specSvc 构造块 + 3 个 NewService；`context` 因 SetProviderResolver 闭包保留）；`routes.tsx`（去 3 图标 import + 3 页面 import + 3 路由）；`App.tsx`（去 3 register import + TodoProvider import + 3 register 调用 + `<TodoProvider>` 包裹）；`services/index.ts`（去 3 桶导出）；`i18n/locales/{zh-CN,en-US}.ts`（去 route.{todo,specs,memory}）。
+- **保留**：`TaskBinding`（用户只点名 T/S/M；它无 service 无 UI，`TodoID`/`SessionID` 只是可空文本列，删 Todo 不破坏编译）——记一笔，未来若做编排再说。
+- **验证**：go build 主程序 ✅ / go vet ./internal/... ✅ / go test storage+cliadapters ✅；`wails3 generate bindings` → **13 Services / 79 Methods**（从 16/106）；前端 pnpm typecheck ✅ / pnpm build ✅。
+
+### P2b/P2c 待办（本会话继续）
+- **P2b Git → VSCode SCM**：`StatusFiles`(porcelain v2) + `DiffFile`(file/staged) + `Stage/Unstage/Discard/Commit`（全 git CLI，扩 gitx/cli.go allowlist + subprocess 白名单）；前端 GitPage 三段式（commit 框 + 变更分组 + 复用 DiffView），绑活动项目。per-file 先做，per-hunk 留 P2.1。可能引 notistack（已预授权）。
+- **P2c Home 仪表盘**：HomePage 重做（问候 + 快捷动作 + 最近项目 + 活跃会话 + 环境检测）。

@@ -26,26 +26,6 @@ export {
   type HistoryStats,
 } from './localhistory/LocalHistoryService';
 export {
-  TodoService,
-  type Todo,
-  type TodoSubtask,
-  type CreateTodoInput,
-  type UpdateTodoInput,
-  type TodoStats,
-  type TodoQuery,
-  type TodoQueryResult,
-} from './todo/TodoService';
-export { SpecService, type Spec } from './spec/SpecService';
-export {
-  MemoryService,
-  type Memory,
-  type MemoryStats,
-  type MemoryQuery,
-  type MemoryQueryResult,
-  type StoreMemoryInput,
-  type UpdateMemoryInput,
-} from './memory/MemoryService';
-export {
   ProviderService,
   type Provider,
   type ProviderInput,

@@ -6,7 +6,7 @@ import (
 )
 
 // TestAutoMigrateAllModels 守门测试：Open() 应为 AllModels 里每个 ModelDescriptor
-// 建出对应表（含 cc-pane 移植的 7 张核心表）。任何模型结构体写错（GORM tag 非法、
+// 建出对应表（含 cc-pane 移植的核心表）。任何模型结构体写错（GORM tag 非法、
 // 类型不支持等）都会让 Open 的 AutoMigrate 失败，在此被捕获。
 func TestAutoMigrateAllModels(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "test.db")
@@ -27,8 +27,7 @@ func TestAutoMigrateAllModels(t *testing.T) {
 // TestCoreCcpaneTablesRegistered 确认 cc-pane 核心表都已登记到 AllModels。
 func TestCoreCcpaneTablesRegistered(t *testing.T) {
 	want := []string{
-		"projects", "launch_history", "todos", "todo_subtasks",
-		"specs", "terminal_sessions", "task_bindings",
+		"projects", "launch_history", "terminal_sessions", "task_bindings",
 	}
 	for _, name := range want {
 		if FindDescriptor(name) == nil {
