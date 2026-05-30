@@ -78,4 +78,31 @@ export const GitService = {
     const rows = await Binding.Log(path, limit);
     return (rows ?? []).map(toCommit);
   },
+
+  // —— 变更操作（git 工具条；失败抛 git 原始错误，调用方经 NativeDialogs 提示）——
+
+  // 拉取所有远端引用（fetch --all）；只更新远端跟踪引用，不动工作树。
+  async fetch(path: string): Promise<void> {
+    await Binding.Fetch(path);
+  },
+
+  // 合并远端改动（git pull）；可能改动工作树。
+  async pull(path: string): Promise<void> {
+    await Binding.Pull(path);
+  },
+
+  // 推送当前分支（git push）；无上游分支会失败。
+  async push(path: string): Promise<void> {
+    await Binding.Push(path);
+  },
+
+  // 暂存工作区改动，返回 git 提示信息（如「Saved working directory ...」/「No local changes to save」）。
+  async stash(path: string): Promise<string> {
+    return Binding.Stash(path);
+  },
+
+  // 弹出最近一次 stash，返回 git 提示信息；无 stash 条目时失败。
+  async stashPop(path: string): Promise<string> {
+    return Binding.StashPop(path);
+  },
 } as const;

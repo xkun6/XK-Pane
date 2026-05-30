@@ -19,5 +19,25 @@ export const gitPageEnUS: Messages = {
     error: {
       title: 'Git operation failed',
     },
+    actions: {
+      fetch: 'Fetch',
+      pull: 'Pull',
+      push: 'Push',
+      stash: 'Stash',
+      stashPop: 'Stash Pop',
+    },
+    ops: {
+      fetch: { title: 'Fetch complete', done: 'Fetched all remote refs.' },
+      pull: { title: 'Pull complete', done: 'Merged remote changes.' },
+      push: { title: 'Push complete', done: 'Pushed the current branch.' },
+      stash: { title: 'Stash complete', done: 'Stashed working tree changes.' },
+      stashPop: { title: 'Stash Pop complete', done: 'Popped the latest stash.' },
+    },
+    pushConfirm: {
+      title: 'Push to remote',
+      message: 'Push the current branch to the remote? This publishes commits externally.',
+      ok: 'Push',
+      cancel: 'Cancel',
+    },
   },
 };

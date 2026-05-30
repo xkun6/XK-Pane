@@ -1,5 +1,6 @@
 import {
   Box,
+  Button,
   Chip,
   IconButton,
   MenuItem,
@@ -10,6 +11,11 @@ import {
 } from '@mui/material';
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
+import CloudDownloadRoundedIcon from '@mui/icons-material/CloudDownloadRounded';
+import SouthRoundedIcon from '@mui/icons-material/SouthRounded';
+import NorthRoundedIcon from '@mui/icons-material/NorthRounded';
+import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
+import UnarchiveRoundedIcon from '@mui/icons-material/UnarchiveRounded';
 import { useT } from '@/i18n';
 import { gitPageStyles } from './GitPage.styles';
 import { useGitPage } from './useGitPage';
@@ -24,6 +30,30 @@ export const GitPage = () => {
   const vm = useGitPage();
 
   const errorTitle = t('git.error.title');
+  const toolbarDisabled = vm.busy || vm.loading;
+
+  const onFetch = (): void =>
+    void vm.fetch({ successTitle: t('git.ops.fetch.title'), successMessage: t('git.ops.fetch.done'), errorTitle });
+  const onPull = (): void =>
+    void vm.pull({ successTitle: t('git.ops.pull.title'), successMessage: t('git.ops.pull.done'), errorTitle });
+  const onStash = (): void =>
+    void vm.stash({ successTitle: t('git.ops.stash.title'), successMessage: t('git.ops.stash.done'), errorTitle });
+  const onStashPop = (): void =>
+    void vm.stashPop({
+      successTitle: t('git.ops.stashPop.title'),
+      successMessage: t('git.ops.stashPop.done'),
+      errorTitle,
+    });
+  const onPush = (): void =>
+    void vm.push({
+      successTitle: t('git.ops.push.title'),
+      successMessage: t('git.ops.push.done'),
+      errorTitle,
+      confirmTitle: t('git.pushConfirm.title'),
+      confirmMessage: t('git.pushConfirm.message'),
+      okLabel: t('git.pushConfirm.ok'),
+      cancelLabel: t('git.pushConfirm.cancel'),
+    });
 
   return (
     <Box sx={styles.root}>
@@ -94,6 +124,59 @@ export const GitPage = () => {
                           : theme.palette.foundation.status.success,
                       }}
                     />
+                  </Box>
+
+                  <Box sx={styles.toolbar}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<CloudDownloadRoundedIcon />}
+                      onClick={onFetch}
+                      disabled={toolbarDisabled}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      {t('git.actions.fetch')}
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<SouthRoundedIcon />}
+                      onClick={onPull}
+                      disabled={toolbarDisabled}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      {t('git.actions.pull')}
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<NorthRoundedIcon />}
+                      onClick={onPush}
+                      disabled={toolbarDisabled}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      {t('git.actions.push')}
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<Inventory2RoundedIcon />}
+                      onClick={onStash}
+                      disabled={toolbarDisabled}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      {t('git.actions.stash')}
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<UnarchiveRoundedIcon />}
+                      onClick={onStashPop}
+                      disabled={toolbarDisabled}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      {t('git.actions.stashPop')}
+                    </Button>
                   </Box>
 
                   <Box sx={styles.section}>

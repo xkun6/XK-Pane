@@ -54,6 +54,11 @@ export const gitPageStyles = (theme: Theme): Styles => ({
     fontWeight: 600,
     fontFamily: 'monospace',
   },
+  toolbar: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 1,
+  },
   // —— 分区 ——
   section: {
     display: 'flex',

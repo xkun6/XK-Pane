@@ -12,15 +12,36 @@ import { useProjects } from '@/project';
 
 const LOG_LIMIT = 20;
 
+// 工具条操作的文案束（由 View 经 t() 填好后传入；VM 不持翻译串）。
+export interface OpStrings {
+  successTitle: string;
+  successMessage: string; // void 返回的操作用此；stash/pop 优先用 git 返回文本
+  errorTitle: string;
+}
+
+// push 额外需要确认对话框文案（推送是对外不可逆操作）。
+export interface PushStrings extends OpStrings {
+  confirmTitle: string;
+  confirmMessage: string;
+  okLabel: string;
+  cancelLabel: string;
+}
+
 export interface UseGitPageResult {
   projects: Project[];
   selectedPath: string;
   loading: boolean;
+  busy: boolean;
   status: GitStatus | null;
   branches: GitBranch[];
   commits: GitCommit[];
   select: (path: string, errorTitle: string) => Promise<void>;
   refresh: (errorTitle: string) => Promise<void>;
+  fetch: (s: OpStrings) => Promise<void>;
+  pull: (s: OpStrings) => Promise<void>;
+  push: (s: PushStrings) => Promise<void>;
+  stash: (s: OpStrings) => Promise<void>;
+  stashPop: (s: OpStrings) => Promise<void>;
 }
 
 function messageOf(e: unknown): string {
@@ -32,6 +53,7 @@ export const useGitPage = (): UseGitPageResult => {
   const { projects } = useProjects();
   const [selectedPath, setSelectedPath] = useState('');
   const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<GitStatus | null>(null);
   const [branches, setBranches] = useState<GitBranch[]>([]);
   const [commits, setCommits] = useState<GitCommit[]>([]);
@@ -90,5 +112,64 @@ export const useGitPage = (): UseGitPageResult => {
     [selectedPath, load],
   );
 
-  return { projects, selectedPath, loading, status, branches, commits, select, refresh };
+  // 工具条操作统一编排：互斥（busy 守门）→ 调后端 → 成功 info（stash/pop 用 git 返回文本）
+  // → 重新拉取状态/分支/提交（变更可能改动它们）→ 失败 error。
+  const runOp = useCallback(
+    async (
+      fn: (path: string) => Promise<string | void>,
+      s: OpStrings,
+      showResult: boolean,
+    ): Promise<void> => {
+      if (!selectedPath || busy) return;
+      setBusy(true);
+      try {
+        const res = await fn(selectedPath);
+        const msg = showResult && typeof res === 'string' && res.trim() ? res.trim() : s.successMessage;
+        await NativeDialogs.info(s.successTitle, msg);
+        await load(selectedPath, s.errorTitle);
+      } catch (e) {
+        await NativeDialogs.error(s.errorTitle, messageOf(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [selectedPath, busy, load],
+  );
+
+  const fetch = useCallback((s: OpStrings) => runOp(GitService.fetch, s, false), [runOp]);
+  const pull = useCallback((s: OpStrings) => runOp(GitService.pull, s, false), [runOp]);
+  const stash = useCallback((s: OpStrings) => runOp(GitService.stash, s, true), [runOp]);
+  const stashPop = useCallback((s: OpStrings) => runOp(GitService.stashPop, s, true), [runOp]);
+
+  const push = useCallback(
+    async (s: PushStrings): Promise<void> => {
+      if (!selectedPath || busy) return;
+      const ok = await NativeDialogs.confirm({
+        title: s.confirmTitle,
+        message: s.confirmMessage,
+        okLabel: s.okLabel,
+        cancelLabel: s.cancelLabel,
+      });
+      if (!ok) return;
+      await runOp(GitService.push, s, false);
+    },
+    [selectedPath, busy, runOp],
+  );
+
+  return {
+    projects,
+    selectedPath,
+    loading,
+    busy,
+    status,
+    branches,
+    commits,
+    select,
+    refresh,
+    fetch,
+    pull,
+    push,
+    stash,
+    stashPop,
+  };
 };
