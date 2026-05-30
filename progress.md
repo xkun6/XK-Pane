@@ -789,3 +789,11 @@
 - **有意分层**（独立跨服务/高级单元，延后）：关联 Todo（todoType=spec）、Tasks 段 checkbox 双向同步、Log 段追加、active spec 摘要注入终端。故 Create 不建关联 Todo、Delete 不级联 Todo。
 - +8 测：titleToFilename(含 CJK)/Create 建文件+行/List 按项目+状态/内容往返/activate 互斥降级/archive 移文件+archived_at/delete 清文件+行/GetActive 空。bindings 14 Services/97 Methods(+8)/61 Models。dev+prod 全绿；前端 typecheck+build 通过。commit `4508644`。
 - **下一单元（仍有 surfaceable runway）**：① **Spec UI**（SpecsPage：选项目→列 spec→新建→看/编辑 .md 内容（MVP 用 textarea，Monaco D6 可后续升级）→激活/归档/删除——surface specsvc，**非终端栈、可验证**，同 Git/History/Todo 页两段式）；② 早期子系统 **notify/memory** 起步（需先盘 cc-pane 源，判断是否自包含/有决策门）。**门控类**（暂不自推）：会话恢复前端 / reorder·batch UI（视觉）、file-watcher（fsnotify 决策门）、Bedrock（重）。倾向下一 tick 取 **Spec UI**（续可验 surface 链）。
+
+### ▶ 续：SpecsPage —— surface specsvc（同 /loop 自主续）
+- **续 specsvc 后端**（候选①），新增 SpecsPage 让需求规格可真机验证。纯前端，无 Go 改动 / 无需重生 bindings。
+- `SpecService.ts`：包 specsvc（list/create/get/getActive/getContent/saveContent/update/remove），`Spec` 类型收口（时间→string，archivedAt/todoId 可空）。
+- `pages/SpecsPage`（View/VM/Style/lang/index）：项目下拉（useProjects）+ 新建行 + 规格列表（标题/文件名/状态 chip draft·active·archived 染色 + 激活/归档/删除按钮）+ 选中规格 .md 内容编辑器（MVP multiline textarea + dirty 标记 + 保存）。状态留 VM（reqIdRef 列表 / contentReqRef 内容，双令牌防过期）；归档/删除走 NativeDialogs 确认；归档后若正打开则清选区（文件已移走）。routes 加 specs（DescriptionRounded）；i18n route.specs + specs.*（zh/en）；App 注册 locale；services 桶导出。typecheck + build 通过。commit `f04dc8f`。
+- **🎯 现在可真机验证**：`wails3 dev` → 需求规格页 → 选项目 → 新建规格（.xkpanes/specs/<slug>.spec.md 生成）→ 编辑内容保存 → 激活（互斥）→ 归档（移 archived/）→ 删除。**Spec 域核心 surface 完毕**。
+- **进度盘点 + runway 收窄提示**：可 surface 的 dep-free 域（Git/Local History/Todo 全/Spec 核心/session 脱敏）**已基本做完**。**剩余 dep-free 可测 runway**：Spec↔Todo 集成（create 建关联 Todo todoType=spec + Tasks 段 checkbox 双向同步 + Log 追加；markdown 解析/渲染是纯函数有 cc-pane 单测可直移；orchestration 用注入式 TodoLinker 同 gitsvc.AutoLabeler）——dep-free + 可测 + 有消费方（完成 Spec 子系统）。之后 **早期子系统**（notify/memory 待盘是否自包含；Bedrock 重 + MCP dep；MCPE 需 MCP 桥）。**门控类**（待用户回来）：终端栈真机验证 / 会话恢复前端 / reorder·batch UI（视觉）、file-watcher（fsnotify 决策门）。
+- **下一单元**：倾向 **Spec↔Todo 集成**（dep-free 可测，完成 Spec 子系统；先移植 cc-pane spec_service 的 markdown 纯函数 + 测，再做 TodoLinker 注入式 orchestration）。若该单元后多数剩余皆门控，则向用户陈列决策门（早期子系统选型 / 视觉验证）而非空转。
