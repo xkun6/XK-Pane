@@ -986,3 +986,11 @@ SessionsView + **resume 透传链**（critic 核实 = 前端 **6 处链路**，�
 - **验证**：go vet+test ./internal/...（含 sessionscan 6 + launchhistory 密文 测试）✅ / pnpm typecheck ✅ / 48 vitest（+11）✅ / pnpm build ✅。bindings 15 Services/100 Methods。
 - **关键拍板记录**：history 路由被 SessionsView 取代（Local History 页删除，P4 重做）；resumeId 明文、LastPrompt cryptox；轮询 backfill / reveal-in-explorer / WorkspaceItem 活跃点 均留后续。
 - **待用户 `wails3 dev` 目检**：① Sessions 页活跃会话点亮 + 最近启动分组折叠 + 点行 resume 真恢复（看进程 args `claude --resume`/`codex resume`）+ Popover 复制 id；② 工作空间项目节点 chevron 展开扫盘列表 + 右键 resume。
+
+### 🔄 手测后回退：撤独立 Sessions 页，仅留树扫盘子列表（`274ce46`）
+用户手测两图后拍板：**独立 Sessions 页（最近启动空壳）无用，只保留 Image#2 = 工作空间树项目节点 chevron 的按需扫盘子列表**；history 导航位**不恢复 Local History，直接移除**（Sidebar = Home/Terminal/Git/Settings）。
+- **移除**（grep 确认仅 SessionsPage 消费、无其他引用）：`pages/SessionsPage` 整目录 + sessions 路由 + i18n route.sessions + App register + HomePage 快捷入口（→3 项）；P3b-3a status store（terminalStatus/.test + TerminalStatusContext + `TerminalService.onAnyStatus` + terminal/index 导出 + App 挂载）；P3b-2 launchhistory resume 附加（RecordSpec resume 字段 + LastPrompt cryptox + Delete/Clear + 前端同字段/方法 + 密文测试）。
+- **保留**：P3b-1 resume 透传链 + sessionscan 后端（含 6 测试）+ SessionScanService + SessionSubList/树接入（`SessionSubList.resume → launchProject resumeId → CLI resume` 端到端仍通）。
+- **净效果**：会话恢复入口收敛到唯一处 = 工作空间树项目节点展开扫盘列表（左键恢复 / 右键 恢复·以 reclaude 恢复·复制 id）。`launchhistory` 回到 P3b 前（Record+List，无 resume 字段/cryptox/Delete/Clear）；后端 LaunchHistory **模型**字段（ResumeSessionID/LastPrompt 等）属忠实 schema 仍在，只是无写入方。
+- **验证**：go vet ./internal/... + launchhistory/sessionscan/terminal test（非缓存）/ bindings 15 Services/**98** Methods（-2 Delete/Clear）/ typecheck / **37** vitest（回基线）/ build 全绿。
+- **待用户 `wails3 dev` 目检**：仅 ② 工作空间项目节点 chevron 展开扫盘列表 + 左键/右键 resume（看进程 args `claude --resume`/`codex resume`）。Sidebar 不再有 Sessions/History 入口。
