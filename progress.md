@@ -665,6 +665,12 @@
 - **⏸ 大方向检查点（会话末，2026-05-30）**：**用户明确指示的工作(继续 LH diff)已完整交付**（含对抗审查+CRLF 修复），此后我又自主补了会话恢复 + Todo CRUD。现状盘点：**已交付 ~14 个后端单元、~40 测、全 tested/committed/文档化、且无一个有前端消费方**；终端栈 + 项目面板仍从未真机验证（视觉验证债持续累积近 10 轮）。余下每条路都是**重大方向分叉**：① 接前端/让成果可验（Wails 服务层 + 最小 UI，打破未验证后端堆积循环）② 早期子系统 Bedrock/MCPE/notify/memory（用户「早期纳入」强调，含 MCP D5 等较大架构）③ 继续 Phase 4 外围后端（Spec CRUD / Todo 高级 / 运行时 WSL / 启动配置）。用户偏好实质改变后续数周方向 → 按停止粒度（决策门）AskUserQuestion 问大方向，停 loop 待答。**最高杠杆动作仍是用户 `wails3 dev` 验终端+provider，我替不了。**
 - **续跑路径**：用户答方向后即按其选择推进。
 
+### ▶ 续：用户选「接前端/让成果可验」→ Todo 端到端垂直切片（同 /loop 自主续）
+- **首个用户可端到端验证的功能,完全不依赖未验证的终端栈**。后端 todo 服务注册到 app.go + 重生 bindings(10 Services/51 Methods) + 前端全套 MVVM：`services/todo/TodoService.ts`(binding 收口,Create/Update 用生成类构造器补默认字段) + `src/todo/`(TodoProvider 纯 Context,镜像 ProviderProvider) + `pages/TodoPage/`(View/VM/Style/lang，列表+新建+状态勾选+删除[原生确认]+子任务增勾删,TodoRow 子组件持子任务输入态) + routes.tsx(slot primary) + i18n(todo.*+route.todo) + App.tsx 接 TodoProvider。
+- 遵循全部 MVVM 铁律(View↛业务/VM↛JSX·↛t()/经 services 层/可见串走 t()/@mui *Rounded 图标/theme.palette.foundation.* 取色/删除走 NativeDialogs.confirm)。pnpm typecheck+build 通过,go build internal 通过。commit `8854af5`。
+- **🎯 现在可真机验证**：`wails3 dev` → 侧边栏「待办」页 → 新建/勾选/删除待办 + 子任务,端到端验证 Wails 服务往返 + Provider + MVVM + confirm 修复。**这是「接前端/让成果可验」方向的首个落地,也顺带验证 app 能启动。** 终端页 + 设置→Provider 仍待你一并验。
+- **下一单元（续接前端）**：gitsvc（Wails 包装 gitx + 注册 + bindings，让 Git 后端可达，可测）；之后 Git 面板 UI / localhistorysvc + 历史面板 / 注册 session。各为独立切片。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
