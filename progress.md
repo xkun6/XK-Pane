@@ -994,3 +994,11 @@ SessionsView + **resume 透传链**（critic 核实 = 前端 **6 处链路**，�
 - **净效果**：会话恢复入口收敛到唯一处 = 工作空间树项目节点展开扫盘列表（左键恢复 / 右键 恢复·以 reclaude 恢复·复制 id）。`launchhistory` 回到 P3b 前（Record+List，无 resume 字段/cryptox/Delete/Clear）；后端 LaunchHistory **模型**字段（ResumeSessionID/LastPrompt 等）属忠实 schema 仍在，只是无写入方。
 - **验证**：go vet ./internal/... + launchhistory/sessionscan/terminal test（非缓存）/ bindings 15 Services/**98** Methods（-2 Delete/Clear）/ typecheck / **37** vitest（回基线）/ build 全绿。
 - **待用户 `wails3 dev` 目检**：仅 ② 工作空间项目节点 chevron 展开扫盘列表 + 左键/右键 resume（看进程 args `claude --resume`/`codex resume`）。Sidebar 不再有 Sessions/History 入口。
+
+### 📋 P4 规划（5-agent workflow 研究 → 产出 P4_PLAN/P4_HANDOFF，未开工）
+应用户「写文档，清空上下文后再实现 P4」要求，跑 5 路并行研究（cc-pane LH 后端 watcher / cc-pane LH 前端 4-tab / XK localhistorysvc 现状 / 删除的 HistoryPage 复用性 / P4 约束）→ 综合成 [P4_PLAN.md](./P4_PLAN.md) + [P4_HANDOFF.md](./P4_HANDOFF.md)。
+- **关键结论**：LH 后端「忠实甚至超前、几乎全就绪」（16 service 方法 + 域层 store/diff/labels/restore/prune/compress/query/config，diff 还修了 CRLF 假阳性）。P4 只需补三样：① **自动捕获 file-watcher**（灵魂，全缺，需 fsnotify；忠实移植 cc-pane `history_service.rs:408-549` 的 dispatch→分支检测→500ms debounce→过滤→单写者保存→Emit 管线）② **暴露 PutLabel/GetFileBranches** 等已实现未 wrap 的 API ③ **重建 4-tab 前端页**（旧 HistoryPage 已删且是线性单-diff，建议全新 `pages/HistoryPage/` 忠实 cc-pane LocalHistoryPanel 两阶段+4-tab）。
+- **复用资产（无孤儿）**：`LocalHistoryService`（8 方法+DTO）+ `DiffView`（GitPage 在用）+ 旧 lang（`git show d44625c^` 恢复）。
+- **依赖**：新增 fsnotify；bep/debounce v1.2.1 已 indirect 提 direct。
+- **8 个拍板点**（D4-1~D4-8）默认已写入计划，开工前需用户确认 **D4-4（watcher 启动时机）** 与 **D4-6（LH 页是否重新上 Sidebar，注意刚移除过 history 位）**。
+- 单元切分：P4a-1 事件+watcher 骨架 → P4a-2 管线 → P4b 暴露 API → P4c-1 页骨架 → P4c-2 时间线+4-tab → P4c-3 标签+操作+live 刷新。
