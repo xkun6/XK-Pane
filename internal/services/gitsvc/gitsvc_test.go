@@ -114,6 +114,64 @@ func TestDetailMethodsNonRepoPropagate(t *testing.T) {
 	}
 }
 
+// validateWorktreeName：纯校验逻辑（service 在原语之上新增），不需 git 二进制。
+func TestValidateWorktreeName(t *testing.T) {
+	bad := []string{"", "   ", "feat/x", `feat\x`, "..", "a..b", "-rf", "-"}
+	for _, n := range bad {
+		if err := validateWorktreeName(n); err == nil {
+			t.Errorf("validateWorktreeName(%q) = nil, want error", n)
+		}
+	}
+	good := []string{"feature-wt", "wt1", "my_branch", "v2.1"}
+	for _, n := range good {
+		if err := validateWorktreeName(n); err != nil {
+			t.Errorf("validateWorktreeName(%q) = %v, want nil", n, err)
+		}
+	}
+}
+
+// WorktreeAddUnder：service 层的分组目录策略 —— 校验名 → join(parent,name) → 建树。
+func TestWorktreeAddUnder(t *testing.T) {
+	requireGit(t)
+	ctx := context.Background()
+	svc := New()
+	dir := initRepoCommit(t)
+
+	parent := t.TempDir()
+	created, err := svc.WorktreeAddUnder(ctx, dir, parent, "feature-wt", "feature-wt")
+	if err != nil {
+		t.Fatalf("WorktreeAddUnder: %v", err)
+	}
+	if created != filepath.Join(parent, "feature-wt") {
+		t.Errorf("created path = %q, want %q", created, filepath.Join(parent, "feature-wt"))
+	}
+	if _, statErr := os.Stat(created); statErr != nil {
+		t.Errorf("worktree dir not created: %v", statErr)
+	}
+
+	// 出现在 Worktrees 列表里，且带新分支。
+	wts, err := svc.Worktrees(ctx, dir)
+	if err != nil {
+		t.Fatalf("Worktrees: %v", err)
+	}
+	// 注意：filepath.Join 在 Windows 产出反斜杠，而 `git worktree list --porcelain`
+	// 回正斜杠 —— 按分隔符归一后比较（git 在 Windows 两种分隔符都接受，故移除仍按列表路径可行）。
+	var found bool
+	for _, w := range wts {
+		if filepath.ToSlash(w.Path) == filepath.ToSlash(created) && w.Branch == "feature-wt" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("added worktree not found in list %+v", wts)
+	}
+
+	// 坏名直接被校验挡下（不触达 git）。
+	if _, err := svc.WorktreeAddUnder(ctx, dir, parent, "bad/name", ""); err == nil {
+		t.Error("WorktreeAddUnder(bad name) = nil err, want validation error")
+	}
+}
+
 // 委托链通畅：Branches / Log 经 service 拿到与底层一致的结果。
 func TestBranchesAndLogDelegate(t *testing.T) {
 	requireGit(t)

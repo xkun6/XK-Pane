@@ -39,5 +39,23 @@ export const gitPageZhCN: Messages = {
       ok: '推送',
       cancel: '取消',
     },
+    worktree: {
+      title: '工作树（{{count}}）',
+      main: '主',
+      add: '新建工作树',
+      remove: '删除工作树',
+      namePlaceholder: '工作树名称（同时作分支名，不含 / 或 ..）',
+      pickerTitle: '选择新工作树的父目录',
+      addedTitle: '工作树已创建',
+      addedMessage: '新工作树已创建并检出新分支。',
+      removedTitle: '工作树已删除',
+      removedMessage: '工作树已移除。',
+      removeConfirm: {
+        title: '删除工作树',
+        message: '确定删除工作树「{{path}}」吗？将强制移除（即使有未提交改动）。',
+        ok: '删除',
+        cancel: '取消',
+      },
+    },
   },
 };

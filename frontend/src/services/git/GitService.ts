@@ -8,6 +8,7 @@ import type { StatusDTO as RawStatus } from '@bindings/xkpane/internal/services/
 import type {
   BranchInfo as RawBranch,
   CommitInfo as RawCommit,
+  WorktreeInfo as RawWorktree,
 } from '@bindings/xkpane/internal/utils/gitx/models';
 
 // 仓库概要状态。isRepo=false 时 branch/isDirty 无意义（前端据此隐藏 Git 详情）。
@@ -29,6 +30,14 @@ export interface GitCommit {
   subject: string;
   author: string;
   when: string;
+}
+
+// 一条 worktree。path 由 git porcelain 输出（Windows 下为正斜杠）；isMain=主工作树（不可删）。
+export interface GitWorktree {
+  path: string;
+  branch: string;
+  commit: string;
+  isMain: boolean;
 }
 
 function toStatus(s: RawStatus): GitStatus {
@@ -53,6 +62,15 @@ function toCommit(c: RawCommit): GitCommit {
     subject: c.subject ?? '',
     author: c.author ?? '',
     when: typeof c.when === 'string' ? c.when : '',
+  };
+}
+
+function toWorktree(w: RawWorktree): GitWorktree {
+  return {
+    path: w.path ?? '',
+    branch: w.branch ?? '',
+    commit: w.commit ?? '',
+    isMain: w.isMain ?? false,
   };
 }
 
@@ -104,5 +122,24 @@ export const GitService = {
   // 弹出最近一次 stash，返回 git 提示信息；无 stash 条目时失败。
   async stashPop(path: string): Promise<string> {
     return Binding.StashPop(path);
+  },
+
+  // —— worktree 管理 ——
+
+  // 列出所有 worktree（含主工作树，首条为主）。非仓库会抛 ErrNotARepo。
+  async worktrees(path: string): Promise<GitWorktree[]> {
+    const rows = await Binding.Worktrees(path);
+    return (rows ?? []).map(toWorktree);
+  },
+
+  // 在 parentDir 下以 name 为子目录名新建 worktree（后端做名校验 + OS 感知 join）；
+  // newBranch 非空则创建并检出该新分支。返回创建出的绝对路径。
+  async worktreeAddUnder(repoPath: string, parentDir: string, name: string, newBranch: string): Promise<string> {
+    return Binding.WorktreeAddUnder(repoPath, parentDir, name, newBranch);
+  },
+
+  // 删除 worktreePath 处的 worktree（恒带 --force）。
+  async worktreeRemove(repoPath: string, worktreePath: string): Promise<void> {
+    await Binding.WorktreeRemove(repoPath, worktreePath);
   },
 } as const;

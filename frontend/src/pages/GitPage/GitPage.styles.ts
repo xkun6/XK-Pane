@@ -109,4 +109,32 @@ export const gitPageStyles = (theme: Theme): Styles => ({
     color: theme.palette.foundation.text.secondary,
     whiteSpace: 'nowrap',
   },
+  // —— worktree ——
+  worktreeAddRow: {
+    display: 'flex',
+    gap: 1,
+    alignItems: 'center',
+  },
+  worktreeList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 0.5,
+  },
+  worktreeRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 1,
+    padding: '8px 12px',
+    borderRadius: 8,
+    border: `1px solid ${theme.palette.foundation.divider}`,
+    backgroundColor: theme.palette.foundation.bg.elevated,
+  },
+  worktreePath: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: 'monospace',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
 });

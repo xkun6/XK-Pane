@@ -16,6 +16,8 @@ package gitsvc
 import (
 	"context"
 	"errors"
+	"path/filepath"
+	"strings"
 
 	"xkpane/internal/utils/gitx"
 )
@@ -109,6 +111,49 @@ func (s *Service) WorktreeRemove(ctx context.Context, repoPath, worktreePath str
 		return err
 	}
 	return repo.WorktreeRemove(ctx, worktreePath)
+}
+
+// WorktreeAddUnder 在 parentDir 下以 name 为子目录名新建 worktree（cc-pane 分组目录策略，
+// gitx 文档明确把此「上层 UX 决策」留给 service 层）。本方法在此做服务层该做的两件事：
+//   1. name 安全校验（非空、无路径分隔符 / '..' / 前导 '-'）—— 护住「子目录名」语义不被
+//      穿越或当作 git 选项；
+//   2. 用 filepath.Join（OS 感知）算出绝对 worktreePath = parentDir/name，再交原语创建。
+//
+// newBranch 非空则创建并检出该新分支（典型用法：name 同时作目录名与分支名，由 View 传同值）。
+// 返回创建出的 worktree 绝对路径，便于前端提示 / 后续操作。目标路径已存在时 git 原语报错透传。
+func (s *Service) WorktreeAddUnder(ctx context.Context, repoPath, parentDir, name, newBranch string) (string, error) {
+	if err := validateWorktreeName(name); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(parentDir) == "" {
+		return "", errors.New("gitsvc: worktree parent directory required")
+	}
+	repo, err := gitx.Open(repoPath)
+	if err != nil {
+		return "", err
+	}
+	wtPath := filepath.Join(parentDir, strings.TrimSpace(name))
+	if err := repo.WorktreeAdd(ctx, wtPath, newBranch); err != nil {
+		return "", err
+	}
+	return wtPath, nil
+}
+
+// validateWorktreeName 校验「子目录名 / 分支名」安全：非空、不含路径分隔符或 '..'、不以 '-'
+// 开头（避免被当作 git 选项）。允许的字符集刻意保守（基本名段）——复杂分支名（含 '/'）超出
+// 本基础 UI 范畴，留待更专门的 worktree 单元。
+func validateWorktreeName(name string) error {
+	n := strings.TrimSpace(name)
+	if n == "" {
+		return errors.New("gitsvc: worktree name cannot be empty")
+	}
+	if strings.ContainsAny(n, `/\`) || strings.Contains(n, "..") {
+		return errors.New("gitsvc: worktree name must not contain path separators or '..'")
+	}
+	if strings.HasPrefix(n, "-") {
+		return errors.New("gitsvc: worktree name must not start with '-'")
+	}
+	return nil
 }
 
 // Stash 暂存当前工作区改动，返回 git 提示信息。非仓库透传 ErrNotARepo。

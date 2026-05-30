@@ -16,7 +16,10 @@ import SouthRoundedIcon from '@mui/icons-material/SouthRounded';
 import NorthRoundedIcon from '@mui/icons-material/NorthRounded';
 import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
 import UnarchiveRoundedIcon from '@mui/icons-material/UnarchiveRounded';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useT } from '@/i18n';
+import type { GitWorktree } from '@/services';
 import { gitPageStyles } from './GitPage.styles';
 import { useGitPage } from './useGitPage';
 
@@ -53,6 +56,23 @@ export const GitPage = () => {
       confirmMessage: t('git.pushConfirm.message'),
       okLabel: t('git.pushConfirm.ok'),
       cancelLabel: t('git.pushConfirm.cancel'),
+    });
+  const onAddWorktree = (): void =>
+    void vm.addWorktree({
+      pickerTitle: t('git.worktree.pickerTitle'),
+      successTitle: t('git.worktree.addedTitle'),
+      successMessage: t('git.worktree.addedMessage'),
+      errorTitle,
+    });
+  const onRemoveWorktree = (wt: GitWorktree): void =>
+    void vm.removeWorktree(wt, {
+      confirmTitle: t('git.worktree.removeConfirm.title'),
+      confirmMessage: t('git.worktree.removeConfirm.message', { path: wt.path }),
+      okLabel: t('git.worktree.removeConfirm.ok'),
+      cancelLabel: t('git.worktree.removeConfirm.cancel'),
+      successTitle: t('git.worktree.removedTitle'),
+      successMessage: t('git.worktree.removedMessage'),
+      errorTitle,
     });
 
   return (
@@ -218,6 +238,73 @@ export const GitPage = () => {
                         ))}
                       </Box>
                     )}
+                  </Box>
+
+                  <Box sx={styles.section}>
+                    <Typography sx={styles.sectionTitle}>
+                      {t('git.worktree.title', { count: String(vm.worktrees.length) })}
+                    </Typography>
+                    <Box sx={styles.worktreeAddRow}>
+                      <TextField
+                        size="small"
+                        fullWidth
+                        placeholder={t('git.worktree.namePlaceholder')}
+                        value={vm.newWorktreeName}
+                        onChange={(e) => vm.setNewWorktreeName(e.target.value)}
+                        disabled={toolbarDisabled}
+                      />
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<AddRoundedIcon />}
+                        onClick={onAddWorktree}
+                        disabled={toolbarDisabled || !vm.newWorktreeName.trim()}
+                        sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}
+                      >
+                        {t('git.worktree.add')}
+                      </Button>
+                    </Box>
+                    <Box sx={styles.worktreeList}>
+                      {vm.worktrees.map((wt) => (
+                        <Box key={wt.path} sx={styles.worktreeRow}>
+                          <Typography component="span" sx={styles.worktreePath} title={wt.path}>
+                            {wt.path}
+                          </Typography>
+                          {wt.branch && (
+                            <Chip
+                              label={wt.branch}
+                              size="small"
+                              variant="outlined"
+                              sx={{ borderRadius: 6, fontFamily: 'monospace' }}
+                            />
+                          )}
+                          <Typography component="span" sx={styles.commitHash}>
+                            {wt.commit}
+                          </Typography>
+                          {wt.isMain ? (
+                            <Chip
+                              label={t('git.worktree.main')}
+                              size="small"
+                              color="primary"
+                              sx={{ borderRadius: 6 }}
+                            />
+                          ) : (
+                            <Tooltip title={t('git.worktree.remove')}>
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  aria-label={t('git.worktree.remove')}
+                                  onClick={() => onRemoveWorktree(wt)}
+                                  disabled={toolbarDisabled}
+                                >
+                                  <DeleteOutlineRoundedIcon fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          )}
+                        </Box>
+                      ))}
+                    </Box>
                   </Box>
                 </>
               )}

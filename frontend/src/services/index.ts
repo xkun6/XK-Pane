@@ -10,6 +10,7 @@ export {
   type GitStatus,
   type GitBranch,
   type GitCommit,
+  type GitWorktree,
 } from './git/GitService';
 export {
   TodoService,

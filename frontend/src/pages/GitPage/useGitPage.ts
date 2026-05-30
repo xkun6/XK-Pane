@@ -1,5 +1,13 @@
 import { useCallback, useRef, useState } from 'react';
-import { GitService, NativeDialogs, type GitBranch, type GitCommit, type GitStatus, type Project } from '@/services';
+import {
+  GitService,
+  NativeDialogs,
+  type GitBranch,
+  type GitCommit,
+  type GitStatus,
+  type GitWorktree,
+  type Project,
+} from '@/services';
 import { useProjects } from '@/project';
 
 // GitPage ViewModel：消费全局 ProjectProvider 选项目 + 按 path 查询只读 Git 状态。
@@ -27,6 +35,25 @@ export interface PushStrings extends OpStrings {
   cancelLabel: string;
 }
 
+// 新建 worktree：需目录选择器标题 + 成功/失败文案（名称取 VM 的 newWorktreeName）。
+export interface AddWorktreeStrings {
+  pickerTitle: string;
+  successTitle: string;
+  successMessage: string;
+  errorTitle: string;
+}
+
+// 删除 worktree：需确认文案 + 成功/失败文案。
+export interface RemoveWorktreeStrings {
+  confirmTitle: string;
+  confirmMessage: string;
+  okLabel: string;
+  cancelLabel: string;
+  successTitle: string;
+  successMessage: string;
+  errorTitle: string;
+}
+
 export interface UseGitPageResult {
   projects: Project[];
   selectedPath: string;
@@ -35,6 +62,9 @@ export interface UseGitPageResult {
   status: GitStatus | null;
   branches: GitBranch[];
   commits: GitCommit[];
+  worktrees: GitWorktree[];
+  newWorktreeName: string;
+  setNewWorktreeName: (v: string) => void;
   select: (path: string, errorTitle: string) => Promise<void>;
   refresh: (errorTitle: string) => Promise<void>;
   fetch: (s: OpStrings) => Promise<void>;
@@ -42,6 +72,8 @@ export interface UseGitPageResult {
   push: (s: PushStrings) => Promise<void>;
   stash: (s: OpStrings) => Promise<void>;
   stashPop: (s: OpStrings) => Promise<void>;
+  addWorktree: (s: AddWorktreeStrings) => Promise<void>;
+  removeWorktree: (wt: GitWorktree, s: RemoveWorktreeStrings) => Promise<void>;
 }
 
 function messageOf(e: unknown): string {
@@ -57,51 +89,63 @@ export const useGitPage = (): UseGitPageResult => {
   const [status, setStatus] = useState<GitStatus | null>(null);
   const [branches, setBranches] = useState<GitBranch[]>([]);
   const [commits, setCommits] = useState<GitCommit[]>([]);
+  const [worktrees, setWorktrees] = useState<GitWorktree[]>([]);
+  const [newWorktreeName, setNewWorktreeName] = useState('');
 
   // 请求令牌：快速切换项目时丢弃过期响应，只采纳最新一次。
   const reqIdRef = useRef(0);
 
-  const load = useCallback(async (path: string, errorTitle: string): Promise<void> => {
-    const myReq = ++reqIdRef.current;
-    setLoading(true);
-    try {
-      const st = await GitService.getStatus(path);
-      if (myReq !== reqIdRef.current) return; // 已被更新的请求取代
-      setStatus(st);
-      if (st.isRepo) {
-        const [brs, logs] = await Promise.all([GitService.branches(path), GitService.log(path, LOG_LIMIT)]);
-        if (myReq !== reqIdRef.current) return;
-        setBranches(brs);
-        setCommits(logs);
-      } else {
-        setBranches([]);
-        setCommits([]);
-      }
-    } catch (e) {
-      if (myReq === reqIdRef.current) {
-        setStatus(null);
-        setBranches([]);
-        setCommits([]);
-      }
-      await NativeDialogs.error(errorTitle, messageOf(e));
-    } finally {
-      if (myReq === reqIdRef.current) setLoading(false);
-    }
+  const clearDetails = useCallback((): void => {
+    setStatus(null);
+    setBranches([]);
+    setCommits([]);
+    setWorktrees([]);
   }, []);
+
+  const load = useCallback(
+    async (path: string, errorTitle: string): Promise<void> => {
+      const myReq = ++reqIdRef.current;
+      setLoading(true);
+      try {
+        const st = await GitService.getStatus(path);
+        if (myReq !== reqIdRef.current) return; // 已被更新的请求取代
+        setStatus(st);
+        if (st.isRepo) {
+          const [brs, logs, wts] = await Promise.all([
+            GitService.branches(path),
+            GitService.log(path, LOG_LIMIT),
+            GitService.worktrees(path),
+          ]);
+          if (myReq !== reqIdRef.current) return;
+          setBranches(brs);
+          setCommits(logs);
+          setWorktrees(wts);
+        } else {
+          setBranches([]);
+          setCommits([]);
+          setWorktrees([]);
+        }
+      } catch (e) {
+        if (myReq === reqIdRef.current) clearDetails();
+        await NativeDialogs.error(errorTitle, messageOf(e));
+      } finally {
+        if (myReq === reqIdRef.current) setLoading(false);
+      }
+    },
+    [clearDetails],
+  );
 
   const select = useCallback(
     async (path: string, errorTitle: string): Promise<void> => {
       setSelectedPath(path);
       if (!path) {
         reqIdRef.current++; // 取消在途请求
-        setStatus(null);
-        setBranches([]);
-        setCommits([]);
+        clearDetails();
         return;
       }
       await load(path, errorTitle);
     },
-    [load],
+    [load, clearDetails],
   );
 
   const refresh = useCallback(
@@ -156,6 +200,53 @@ export const useGitPage = (): UseGitPageResult => {
     [selectedPath, busy, runOp],
   );
 
+  // 新建 worktree：名取 newWorktreeName（同时作子目录名与新分支名）→ 选父目录 →
+  // 后端 join + 名校验 + 建树 → 成功后清空输入并重拉。空名 / 取消选择器 → 静默返回。
+  const addWorktree = useCallback(
+    async (s: AddWorktreeStrings): Promise<void> => {
+      const name = newWorktreeName.trim();
+      if (!selectedPath || busy || !name) return;
+      const parentDir = await NativeDialogs.openDirectory({ title: s.pickerTitle });
+      if (!parentDir) return;
+      setBusy(true);
+      try {
+        await GitService.worktreeAddUnder(selectedPath, parentDir, name, name);
+        setNewWorktreeName('');
+        await NativeDialogs.info(s.successTitle, s.successMessage);
+        await load(selectedPath, s.errorTitle);
+      } catch (e) {
+        await NativeDialogs.error(s.errorTitle, messageOf(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [selectedPath, busy, newWorktreeName, load],
+  );
+
+  const removeWorktree = useCallback(
+    async (wt: GitWorktree, s: RemoveWorktreeStrings): Promise<void> => {
+      if (!selectedPath || busy) return;
+      const ok = await NativeDialogs.confirm({
+        title: s.confirmTitle,
+        message: s.confirmMessage,
+        okLabel: s.okLabel,
+        cancelLabel: s.cancelLabel,
+      });
+      if (!ok) return;
+      setBusy(true);
+      try {
+        await GitService.worktreeRemove(selectedPath, wt.path);
+        await NativeDialogs.info(s.successTitle, s.successMessage);
+        await load(selectedPath, s.errorTitle);
+      } catch (e) {
+        await NativeDialogs.error(s.errorTitle, messageOf(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [selectedPath, busy, load],
+  );
+
   return {
     projects,
     selectedPath,
@@ -164,6 +255,9 @@ export const useGitPage = (): UseGitPageResult => {
     status,
     branches,
     commits,
+    worktrees,
+    newWorktreeName,
+    setNewWorktreeName,
     select,
     refresh,
     fetch,
@@ -171,5 +265,7 @@ export const useGitPage = (): UseGitPageResult => {
     push,
     stash,
     stashPop,
+    addWorktree,
+    removeWorktree,
   };
 };

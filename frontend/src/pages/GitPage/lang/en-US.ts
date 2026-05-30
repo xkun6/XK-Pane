@@ -39,5 +39,23 @@ export const gitPageEnUS: Messages = {
       ok: 'Push',
       cancel: 'Cancel',
     },
+    worktree: {
+      title: 'Worktrees ({{count}})',
+      main: 'main',
+      add: 'Add worktree',
+      remove: 'Remove worktree',
+      namePlaceholder: 'Worktree name (also the branch name; no / or ..)',
+      pickerTitle: 'Choose the parent directory for the new worktree',
+      addedTitle: 'Worktree created',
+      addedMessage: 'New worktree created and the new branch checked out.',
+      removedTitle: 'Worktree removed',
+      removedMessage: 'The worktree has been removed.',
+      removeConfirm: {
+        title: 'Remove worktree',
+        message: 'Remove the worktree "{{path}}"? It will be force-removed (even with uncommitted changes).',
+        ok: 'Remove',
+        cancel: 'Cancel',
+      },
+    },
   },
 };
