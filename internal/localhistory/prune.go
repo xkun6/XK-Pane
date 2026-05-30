@@ -141,6 +141,31 @@ func (s *Store) cleanupOrphanBlobs(ctx context.Context) error {
 	return nil
 }
 
+// HistoryStats 是项目历史存储的概要统计（供 UI 展示存储占用 + 清理前后对比，
+// 对齐 cc-pane history get_storage_stats）。
+type HistoryStats struct {
+	VersionCount  int64 `json:"versionCount"`  // file_versions 行数（含删除标记版本）
+	FileCount     int64 `json:"fileCount"`     // 去重文件数（distinct file_path）
+	TotalBlobSize int64 `json:"totalBlobSize"` // blobs 目录总字节（不含 db / wal / shm）
+}
+
+// Stats 返回项目历史存储概要（版本数 / 文件数 / blob 总字节）。让清理操作可被观测。
+func (s *Store) Stats(ctx context.Context) (HistoryStats, error) {
+	var st HistoryStats
+	if err := s.gdb.WithContext(ctx).Model(&FileVersion{}).Count(&st.VersionCount).Error; err != nil {
+		return st, err
+	}
+	if err := s.gdb.WithContext(ctx).Model(&FileVersion{}).Distinct("file_path").Count(&st.FileCount).Error; err != nil {
+		return st, err
+	}
+	size, err := s.blobsDirSize()
+	if err != nil {
+		return st, err
+	}
+	st.TotalBlobSize = size
+	return st, nil
+}
+
 // blobsDirSize 计算 blobs 目录所有 blob 文件的总字节数。
 func (s *Store) blobsDirSize() (int64, error) {
 	entries, err := os.ReadDir(s.blobs)

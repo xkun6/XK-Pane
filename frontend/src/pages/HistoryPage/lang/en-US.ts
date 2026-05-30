@@ -38,6 +38,40 @@ export const historyPageEnUS: Messages = {
       added: 'Added',
       removed: 'Removed',
     },
+    config: {
+      title: 'History config & cleanup',
+      enabled: 'Enable local history',
+      maxVersionsPerFile: 'Max versions per file',
+      maxAgeDays: 'Retention days',
+      maxFileSizeMB: 'Max file size (MB)',
+      maxTotalSizeMB: 'Max total size (MB)',
+      minSaveIntervalSecs: 'Min save interval (s)',
+      ignorePatterns: 'Ignore patterns (one glob per line)',
+      save: 'Save config',
+      saved: {
+        title: 'Saved',
+        message: 'Local history config updated.',
+      },
+    },
+    stats: {
+      title: 'Storage usage',
+      summary: '{{versions}} versions · {{files}} files · {{size}}',
+      limit: 'limit {{limit}}',
+    },
+    cleanup: {
+      action: 'Clean up now',
+      confirm: {
+        title: 'Clean up history now',
+        message:
+          'This deletes expired / over-count / over-total-size old versions per the current config and reclaims orphan blobs. This cannot be undone. Continue?',
+        ok: 'Clean up',
+        cancel: 'Cancel',
+      },
+      done: {
+        title: 'Cleanup complete',
+        message: 'Old versions cleaned per config; the stats below are refreshed.',
+      },
+    },
     error: {
       title: 'Local history operation failed',
     },

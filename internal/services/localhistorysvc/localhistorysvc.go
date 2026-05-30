@@ -12,9 +12,12 @@
 //   - GetVersionDiff（版本 vs 工作树）/ GetVersionsDiff（版本间）：diff
 //   - RestoreVersion（单文件）/ RestoreToLabel（按标签整组）：回滚（内部自动打 Before-Restore 标签）
 //   - DeleteLabel：删标签
+//   - GetConfig / SaveConfig：每项目历史配置（保留期 / 数量 / 大小上限 / 忽略规则）
+//   - Cleanup：按配置清理（过期 + 超量 + 超总大小 + 孤儿 blob 回收）
+//   - GetStats：存储概要（版本数 / 文件数 / blob 总字节），让清理前后可观测
 //
-// 层次边界（留后续）：file-watcher 自动捕获、gitsvc Pull/Push/Stash 前的 auto-label 钩子、
-// 清理 / 压缩等维护操作 —— 不在面板交互面内，留更专门的单元。
+// 层次边界（留后续）：file-watcher 自动捕获、压缩等维护操作 —— 留更专门的单元。
+// gitsvc Pull/Push/Stash 前的 auto-label 钩子已在 AutoLabel 落地（app 层经 SetAutoLabeler 连接）。
 package localhistorysvc
 
 import (
@@ -185,4 +188,55 @@ func (s *Service) DeleteLabel(ctx context.Context, projectPath, labelID string) 
 		return err
 	}
 	return st.DeleteLabel(ctx, labelID)
+}
+
+// GetConfig 返回项目历史配置。项目尚无历史存储（Exists==false）时返回**默认配置**且
+// **不创建** .xkpanes/ —— 仅查看配置不应在磁盘落地历史目录（仅 SnapshotFile/SaveConfig 等
+// 显式动作才创建）。前端「数据存储 / 本地历史」面板据此展示默认值。
+func (s *Service) GetConfig(_ context.Context, projectPath string) (localhistory.HistoryConfig, error) {
+	if !localhistory.Exists(projectPath) {
+		return localhistory.DefaultHistoryConfig(), nil
+	}
+	st, err := s.store(projectPath)
+	if err != nil {
+		return localhistory.HistoryConfig{}, err
+	}
+	return st.ReadConfig()
+}
+
+// SaveConfig 原子写项目历史配置。此为**显式写操作**，会按需创建 .xkpanes/（用户主动配置即视为
+// 为该项目启用本地历史）。
+func (s *Service) SaveConfig(_ context.Context, projectPath string, cfg localhistory.HistoryConfig) error {
+	st, err := s.store(projectPath)
+	if err != nil {
+		return err
+	}
+	return st.SaveConfig(cfg)
+}
+
+// Cleanup 按项目配置执行清理：过期版本（max_age_days）+ 每文件数量上限（max_versions_per_file）
+// + 总大小 LRU（max_total_size）+ 孤儿 blob 回收。项目尚无历史存储时为 no-op（无可清理，
+// 不创建目录）。
+func (s *Service) Cleanup(ctx context.Context, projectPath string) error {
+	if !localhistory.Exists(projectPath) {
+		return nil
+	}
+	st, err := s.store(projectPath)
+	if err != nil {
+		return err
+	}
+	return st.Cleanup(ctx)
+}
+
+// GetStats 返回项目历史存储概要（版本数 / 文件数 / blob 总字节）。无历史 → 全 0（不创建目录）。
+// 前端在清理前后各取一次即可直观看到回收效果。
+func (s *Service) GetStats(ctx context.Context, projectPath string) (localhistory.HistoryStats, error) {
+	if !localhistory.Exists(projectPath) {
+		return localhistory.HistoryStats{}, nil
+	}
+	st, err := s.store(projectPath)
+	if err != nil {
+		return localhistory.HistoryStats{}, err
+	}
+	return st.Stats(ctx)
 }

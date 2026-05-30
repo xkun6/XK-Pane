@@ -37,6 +37,39 @@ export const historyPageZhCN: Messages = {
       added: '新增',
       removed: '删除',
     },
+    config: {
+      title: '历史配置与清理',
+      enabled: '启用本地历史',
+      maxVersionsPerFile: '每文件最多版本数',
+      maxAgeDays: '保留天数',
+      maxFileSizeMB: '单文件上限（MB）',
+      maxTotalSizeMB: '总存储上限（MB）',
+      minSaveIntervalSecs: '最小保存间隔（秒）',
+      ignorePatterns: '忽略规则（每行一条 glob）',
+      save: '保存配置',
+      saved: {
+        title: '已保存',
+        message: '本地历史配置已更新。',
+      },
+    },
+    stats: {
+      title: '存储占用',
+      summary: '{{versions}} 个版本 · {{files}} 个文件 · {{size}}',
+      limit: '上限 {{limit}}',
+    },
+    cleanup: {
+      action: '立即清理',
+      confirm: {
+        title: '立即清理历史',
+        message: '将按当前配置删除过期 / 超量 / 超总大小的旧版本并回收孤儿 blob，删除后不可恢复。继续吗？',
+        ok: '清理',
+        cancel: '取消',
+      },
+      done: {
+        title: '清理完成',
+        message: '已按配置清理旧版本，下方统计已刷新。',
+      },
+    },
     error: {
       title: '本地历史操作失败',
     },

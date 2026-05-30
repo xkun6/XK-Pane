@@ -81,6 +81,31 @@ export const historyPageStyles = (theme: Theme): Styles => ({
     flexDirection: 'column',
     gap: 0.75,
   },
+  configSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 1.5,
+    padding: '16px',
+    borderRadius: 8,
+    border: `1px solid ${theme.palette.foundation.divider}`,
+    backgroundColor: theme.palette.foundation.bg.elevated,
+  },
+  statsRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 1,
+    alignItems: 'center',
+  },
+  configGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+    gap: 1.5,
+  },
+  configActions: {
+    display: 'flex',
+    gap: 1,
+    flexWrap: 'wrap',
+  },
   diffTitle: {
     fontSize: 13,
     fontFamily: 'monospace',

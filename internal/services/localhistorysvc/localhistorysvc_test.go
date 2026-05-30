@@ -145,6 +145,99 @@ func TestAutoLabelGuardedByExists(t *testing.T) {
 	}
 }
 
+// 配置读写：无历史项目 GetConfig 返回默认且不落地 .xkpanes；SaveConfig 后 GetConfig 回读到改值。
+func TestConfigRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	svc := New()
+	proj := t.TempDir()
+	t.Cleanup(svc.closeAll)
+
+	// 无历史 → 默认配置，且不创建历史目录。
+	def, err := svc.GetConfig(ctx, proj)
+	if err != nil {
+		t.Fatalf("GetConfig(no history): %v", err)
+	}
+	if !def.Enabled || def.MaxVersionsPerFile != 50 {
+		t.Errorf("default config = %+v, want enabled + 50 versions/file", def)
+	}
+	if localhistory.Exists(proj) {
+		t.Error(".xkpanes created by GetConfig on a history-less project, want no-op view")
+	}
+
+	// 改两项保存（SaveConfig 显式写 → 会创建历史存储）。
+	def.MaxVersionsPerFile = 7
+	def.MaxAgeDays = 3
+	if err := svc.SaveConfig(ctx, proj, def); err != nil {
+		t.Fatalf("SaveConfig: %v", err)
+	}
+	got, err := svc.GetConfig(ctx, proj)
+	if err != nil {
+		t.Fatalf("GetConfig(after save): %v", err)
+	}
+	if got.MaxVersionsPerFile != 7 || got.MaxAgeDays != 3 {
+		t.Errorf("config after save = %+v, want 7 versions / 3 days", got)
+	}
+}
+
+// 清理按配置生效：3 个版本 + MaxVersionsPerFile=2 → Cleanup 后只剩最新 2 个；Stats 同步反映。
+func TestCleanupRespectsConfigAndStats(t *testing.T) {
+	ctx := context.Background()
+	svc := New()
+	proj := t.TempDir()
+	t.Cleanup(svc.closeAll)
+
+	for _, c := range []string{"v1\n", "v2\n", "v3\n"} {
+		writeFile(t, proj, "a.txt", c)
+		if _, err := svc.SnapshotFile(ctx, proj, "a.txt", ""); err != nil {
+			t.Fatalf("snapshot %q: %v", c, err)
+		}
+	}
+
+	pre, err := svc.GetStats(ctx, proj)
+	if err != nil {
+		t.Fatalf("GetStats(pre): %v", err)
+	}
+	if pre.VersionCount != 3 || pre.FileCount != 1 || pre.TotalBlobSize == 0 {
+		t.Fatalf("pre-cleanup stats = %+v, want 3 versions / 1 file / >0 bytes", pre)
+	}
+
+	cfg, err := svc.GetConfig(ctx, proj)
+	if err != nil {
+		t.Fatalf("GetConfig: %v", err)
+	}
+	cfg.MaxVersionsPerFile = 2 // 只留最新 2 个
+	cfg.MaxAgeDays = 3650       // 不按时间过期，隔离数量维度
+	if err := svc.SaveConfig(ctx, proj, cfg); err != nil {
+		t.Fatalf("SaveConfig: %v", err)
+	}
+	if err := svc.Cleanup(ctx, proj); err != nil {
+		t.Fatalf("Cleanup: %v", err)
+	}
+
+	vs, err := svc.ListVersions(ctx, proj, "a.txt")
+	if err != nil {
+		t.Fatalf("ListVersions: %v", err)
+	}
+	if len(vs) != 2 {
+		t.Fatalf("versions after cleanup = %d, want 2 (newest kept)", len(vs))
+	}
+	// 最旧的 v1 应被删，留下的应是 v2 / v3（id 升序）。
+	if c, _ := svc.GetVersionContent(ctx, proj, "a.txt", vs[0].ID); c != "v2\n" {
+		t.Errorf("oldest surviving version = %q, want v2", c)
+	}
+
+	post, err := svc.GetStats(ctx, proj)
+	if err != nil {
+		t.Fatalf("GetStats(post): %v", err)
+	}
+	if post.VersionCount != 2 {
+		t.Errorf("post-cleanup version count = %d, want 2", post.VersionCount)
+	}
+	if post.TotalBlobSize >= pre.TotalBlobSize {
+		t.Errorf("post blob size %d not < pre %d (orphan blob should be reclaimed)", post.TotalBlobSize, pre.TotalBlobSize)
+	}
+}
+
 // 第二个项目独立缓存（多 db 模式）。
 func TestSeparateProjectsCached(t *testing.T) {
 	ctx := context.Background()

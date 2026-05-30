@@ -11,6 +11,8 @@ import type {
   DiffHunk as RawHunk,
   DiffLine as RawLine,
   InlineChange as RawInline,
+  HistoryConfig as RawConfig,
+  HistoryStats as RawStats,
 } from '@bindings/xkpane/internal/localhistory/models';
 
 // 一条最近变更（跨文件）。labelName 空 = 该版本无关联标签。
@@ -33,6 +35,24 @@ export interface FileVersion {
   createdAt: string;
   isDeleted: boolean;
   branch: string;
+}
+
+// 每项目历史配置（保留期 / 数量 / 大小上限 / 忽略规则）。
+export interface HistoryConfig {
+  enabled: boolean;
+  ignorePatterns: string[];
+  maxVersionsPerFile: number;
+  maxAgeDays: number;
+  maxFileSize: number; // 单文件大小上限（字节）
+  maxTotalSize: number; // 项目级总存储上限（字节）
+  minSaveIntervalSecs: number; // 同文件同分支最小保存间隔（秒）
+}
+
+// 存储概要统计（清理前后对比）。
+export interface HistoryStats {
+  versionCount: number;
+  fileCount: number;
+  totalBlobSize: number; // blobs 目录总字节
 }
 
 // —— diff DTO（对齐后端 localhistory.DiffResult；changeType snake_case 枚举）——
@@ -140,6 +160,26 @@ function toVersion(v: RawVersion): FileVersion {
   };
 }
 
+function toConfig(c: RawConfig): HistoryConfig {
+  return {
+    enabled: c.enabled ?? true,
+    ignorePatterns: c.ignorePatterns ?? [],
+    maxVersionsPerFile: c.maxVersionsPerFile ?? 0,
+    maxAgeDays: c.maxAgeDays ?? 0,
+    maxFileSize: c.maxFileSize ?? 0,
+    maxTotalSize: c.maxTotalSize ?? 0,
+    minSaveIntervalSecs: c.minSaveIntervalSecs ?? 0,
+  };
+}
+
+function toStats(s: RawStats): HistoryStats {
+  return {
+    versionCount: s.versionCount ?? 0,
+    fileCount: s.fileCount ?? 0,
+    totalBlobSize: s.totalBlobSize ?? 0,
+  };
+}
+
 export const LocalHistoryService = {
   // 最近版本变更（跨文件，最新在前）；limit<=0 后端取默认 50。
   async recentChanges(projectPath: string, limit: number): Promise<RecentChange[]> {
@@ -161,5 +201,25 @@ export const LocalHistoryService = {
   // 某版本与当前工作树文件的 diff（工作树文件不存在视为空 = 删除全部）。
   async versionDiff(projectPath: string, filePath: string, versionId: string): Promise<DiffResult> {
     return toDiff(await Binding.GetVersionDiff(projectPath, filePath, versionId));
+  },
+
+  // 读项目历史配置；无历史项目返回默认配置（后端不创建 .xkpanes/）。
+  async getConfig(projectPath: string): Promise<HistoryConfig> {
+    return toConfig(await Binding.GetConfig(projectPath));
+  },
+
+  // 写项目历史配置（显式动作，后端按需创建历史存储）。
+  async saveConfig(projectPath: string, cfg: HistoryConfig): Promise<void> {
+    await Binding.SaveConfig(projectPath, cfg);
+  },
+
+  // 按配置清理（过期 + 超量 + 超总大小 + 孤儿 blob 回收）；无历史项目为 no-op。
+  async cleanup(projectPath: string): Promise<void> {
+    await Binding.Cleanup(projectPath);
+  },
+
+  // 存储概要（版本数 / 文件数 / blob 总字节）；无历史 → 全 0。
+  async getStats(projectPath: string): Promise<HistoryStats> {
+    return toStats(await Binding.GetStats(projectPath));
   },
 } as const;

@@ -2,8 +2,10 @@ import {
   Box,
   Button,
   Chip,
+  FormControlLabel,
   IconButton,
   MenuItem,
+  Switch,
   TextField,
   Tooltip,
   Typography,
@@ -13,21 +15,39 @@ import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import CameraAltRoundedIcon from '@mui/icons-material/CameraAltRounded';
 import RestoreRoundedIcon from '@mui/icons-material/RestoreRounded';
 import LabelRoundedIcon from '@mui/icons-material/LabelRounded';
+import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
+import CleaningServicesRoundedIcon from '@mui/icons-material/CleaningServicesRounded';
 import { useT } from '@/i18n';
 import type { RecentChange } from '@/services';
 import { DiffView } from '@/components/DiffView';
 import { historyPageStyles } from './HistoryPage.styles';
 import { useHistoryPage } from './useHistoryPage';
 
-// HistoryPage：选已登记项目 → 浏览 Local History 最近变更 + 手动快照 + 回滚。
-// 端到端验证 localhistorysvc（SnapshotFile / GetRecentChanges / RestoreVersion）。
-// diff 查看为后续单元。
+// HistoryPage：选已登记项目 → 浏览 Local History 最近变更 + 手动快照 + 回滚 + diff 查看，
+// 以及每项目历史配置编辑 + 存储统计 + 立即清理。端到端验证 localhistorysvc 全部暴露面。
+
+const MB = 1024 * 1024;
 
 // 把 RFC3339 时间戳格式化为本地可读串（数据展示，非 UI 文案，不走 t()）。
 function formatTime(ts: string): string {
   if (!ts) return '';
   const d = new Date(ts);
   return Number.isNaN(d.getTime()) ? ts : d.toLocaleString();
+}
+
+// 字节数 → 人类可读（B/KB/MB/GB 为国际单位符号，非翻译文案，同数据存储页风格）。
+function formatBytes(n: number): string {
+  if (n <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(Math.floor(Math.log(n) / Math.log(1024)), units.length - 1);
+  const v = n / Math.pow(1024, i);
+  return `${i === 0 ? v : v.toFixed(1)} ${units[i] ?? 'B'}`;
+}
+
+// 受控数字输入解析：非法 / 负数归一为 0。
+function toInt(v: string): number {
+  const n = parseInt(v, 10);
+  return Number.isNaN(n) ? 0 : Math.max(0, n);
 }
 
 export const HistoryPage = () => {
@@ -66,6 +86,24 @@ export const HistoryPage = () => {
     removed: t('history.diff.removed'),
   };
   const selectedChange = vm.changes.find((c) => c.versionId === vm.selectedVersionId) ?? null;
+
+  const onSaveConfig = (): void =>
+    void vm.saveConfig({
+      savedTitle: t('history.config.saved.title'),
+      savedMessage: t('history.config.saved.message'),
+      errorTitle,
+    });
+
+  const onCleanup = (): void =>
+    void vm.runCleanup({
+      confirmTitle: t('history.cleanup.confirm.title'),
+      confirmMessage: t('history.cleanup.confirm.message'),
+      okLabel: t('history.cleanup.confirm.ok'),
+      cancelLabel: t('history.cleanup.confirm.cancel'),
+      doneTitle: t('history.cleanup.done.title'),
+      doneMessage: t('history.cleanup.done.message'),
+      errorTitle,
+    });
 
   return (
     <Box sx={styles.root}>
@@ -202,6 +240,123 @@ export const HistoryPage = () => {
                   ) : (
                     vm.diff && <DiffView diff={vm.diff} labels={diffLabels} />
                   )}
+                </Box>
+              )}
+
+              {vm.config && (
+                <Box sx={styles.configSection}>
+                  <Typography sx={styles.sectionTitle}>{t('history.config.title')}</Typography>
+
+                  {vm.stats && (
+                    <Box sx={styles.statsRow}>
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        sx={{ borderRadius: 6 }}
+                        label={t('history.stats.summary', {
+                          versions: String(vm.stats.versionCount),
+                          files: String(vm.stats.fileCount),
+                          size: formatBytes(vm.stats.totalBlobSize),
+                        })}
+                      />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        sx={{ borderRadius: 6 }}
+                        label={t('history.stats.limit', { limit: formatBytes(vm.config.maxTotalSize) })}
+                      />
+                    </Box>
+                  )}
+
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={vm.config.enabled}
+                        onChange={(e) => vm.patchConfig({ enabled: e.target.checked })}
+                        disabled={vm.configBusy}
+                      />
+                    }
+                    label={t('history.config.enabled')}
+                  />
+
+                  <Box sx={styles.configGrid}>
+                    <TextField
+                      type="number"
+                      size="small"
+                      label={t('history.config.maxVersionsPerFile')}
+                      value={vm.config.maxVersionsPerFile}
+                      onChange={(e) => vm.patchConfig({ maxVersionsPerFile: toInt(e.target.value) })}
+                      disabled={vm.configBusy}
+                    />
+                    <TextField
+                      type="number"
+                      size="small"
+                      label={t('history.config.maxAgeDays')}
+                      value={vm.config.maxAgeDays}
+                      onChange={(e) => vm.patchConfig({ maxAgeDays: toInt(e.target.value) })}
+                      disabled={vm.configBusy}
+                    />
+                    <TextField
+                      type="number"
+                      size="small"
+                      label={t('history.config.maxFileSizeMB')}
+                      value={Math.round(vm.config.maxFileSize / MB)}
+                      onChange={(e) => vm.patchConfig({ maxFileSize: toInt(e.target.value) * MB })}
+                      disabled={vm.configBusy}
+                    />
+                    <TextField
+                      type="number"
+                      size="small"
+                      label={t('history.config.maxTotalSizeMB')}
+                      value={Math.round(vm.config.maxTotalSize / MB)}
+                      onChange={(e) => vm.patchConfig({ maxTotalSize: toInt(e.target.value) * MB })}
+                      disabled={vm.configBusy}
+                    />
+                    <TextField
+                      type="number"
+                      size="small"
+                      label={t('history.config.minSaveIntervalSecs')}
+                      value={vm.config.minSaveIntervalSecs}
+                      onChange={(e) => vm.patchConfig({ minSaveIntervalSecs: toInt(e.target.value) })}
+                      disabled={vm.configBusy}
+                    />
+                  </Box>
+
+                  <TextField
+                    multiline
+                    minRows={3}
+                    size="small"
+                    fullWidth
+                    label={t('history.config.ignorePatterns')}
+                    value={vm.config.ignorePatterns.join('\n')}
+                    onChange={(e) => vm.patchConfig({ ignorePatterns: e.target.value.split('\n') })}
+                    disabled={vm.configBusy}
+                    sx={{ '& textarea': { fontFamily: 'monospace', fontSize: 12 } }}
+                  />
+
+                  <Box sx={styles.configActions}>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      startIcon={<SaveRoundedIcon />}
+                      onClick={onSaveConfig}
+                      disabled={vm.configBusy}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      {t('history.config.save')}
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="warning"
+                      startIcon={<CleaningServicesRoundedIcon />}
+                      onClick={onCleanup}
+                      disabled={vm.configBusy || disabled}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      {t('history.cleanup.action')}
+                    </Button>
+                  </Box>
                 </Box>
               )}
             </>

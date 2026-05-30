@@ -22,6 +22,8 @@ export {
   type DiffStats,
   type InlineChange,
   type DiffChangeType,
+  type HistoryConfig,
+  type HistoryStats,
 } from './localhistory/LocalHistoryService';
 export {
   TodoService,

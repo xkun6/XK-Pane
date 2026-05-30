@@ -1,13 +1,20 @@
 import { useCallback, useRef, useState } from 'react';
-import { LocalHistoryService, NativeDialogs, type DiffResult, type Project, type RecentChange } from '@/services';
+import {
+  LocalHistoryService,
+  NativeDialogs,
+  type DiffResult,
+  type HistoryConfig,
+  type HistoryStats,
+  type Project,
+  type RecentChange,
+} from '@/services';
 import { useProjects } from '@/project';
 
 // HistoryPage ViewModel：消费全局 ProjectProvider 选项目 + 按 path 查 Local History 最近变更，
-// 支持手动快照与回滚。与 GitPage 同理 —— 历史是「按 path 即查」的视图态，不建全局 Provider，
-// 状态留 VM（reqIdRef 请求令牌丢弃快速切换的过期响应）。不返回 JSX、不持翻译串（MVVM 铁律）。
-//
-// 本阶段（第一阶段）：最近变更列表 + 快照 + 回滚。diff 查看为后续单元。branch 一律传 ""
-// （Local History 不依赖 git 分支，branch 仅元数据；接 gitsvc 取当前分支留后续）。
+// 支持手动快照、回滚、diff 查看，以及每项目历史配置 + 清理。与 GitPage 同理 —— 历史是
+// 「按 path 即查」的视图态，不建全局 Provider，状态留 VM（reqIdRef 请求令牌丢弃快速切换的过期
+// 响应）。不返回 JSX、不持翻译串（MVVM 铁律）。branch 一律传 ""（Local History 不依赖 git 分支，
+// branch 仅元数据；接 gitsvc 取当前分支留后续）。
 
 const RECENT_LIMIT = 100;
 
@@ -28,6 +35,22 @@ export interface RestoreStrings {
   errorTitle: string;
 }
 
+export interface ConfigStrings {
+  savedTitle: string;
+  savedMessage: string;
+  errorTitle: string;
+}
+
+export interface CleanupStrings {
+  confirmTitle: string;
+  confirmMessage: string;
+  okLabel: string;
+  cancelLabel: string;
+  doneTitle: string;
+  doneMessage: string;
+  errorTitle: string;
+}
+
 export interface UseHistoryPageResult {
   projects: Project[];
   selectedPath: string;
@@ -39,11 +62,17 @@ export interface UseHistoryPageResult {
   selectedVersionId: string;
   diff: DiffResult | null;
   diffLoading: boolean;
+  config: HistoryConfig | null;
+  stats: HistoryStats | null;
+  configBusy: boolean;
+  patchConfig: (patch: Partial<HistoryConfig>) => void;
   select: (path: string, errorTitle: string) => Promise<void>;
   refresh: (errorTitle: string) => Promise<void>;
   snapshot: (s: SnapshotStrings) => Promise<void>;
   restore: (c: RecentChange, s: RestoreStrings) => Promise<void>;
   viewDiff: (c: RecentChange, errorTitle: string) => Promise<void>;
+  saveConfig: (s: ConfigStrings) => Promise<void>;
+  runCleanup: (s: CleanupStrings) => Promise<void>;
 }
 
 function messageOf(e: unknown): string {
@@ -61,6 +90,9 @@ export const useHistoryPage = (): UseHistoryPageResult => {
   const [selectedVersionId, setSelectedVersionId] = useState('');
   const [diff, setDiff] = useState<DiffResult | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
+  const [config, setConfig] = useState<HistoryConfig | null>(null);
+  const [stats, setStats] = useState<HistoryStats | null>(null);
+  const [configBusy, setConfigBusy] = useState(false);
 
   const reqIdRef = useRef(0);
   const diffReqRef = useRef(0);
@@ -72,15 +104,24 @@ export const useHistoryPage = (): UseHistoryPageResult => {
     setDiffLoading(false);
   }, []);
 
+  // 拉最近变更 + 存储统计（两者均随快照 / 回滚 / 清理变化，故一起刷新）。配置不在此拉
+  // （仅 select 拉一次，避免覆盖用户正在编辑的表单）。
   const load = useCallback(async (path: string, errorTitle: string): Promise<void> => {
     const myReq = ++reqIdRef.current;
     setLoading(true);
     try {
-      const rows = await LocalHistoryService.recentChanges(path, RECENT_LIMIT);
+      const [rows, st] = await Promise.all([
+        LocalHistoryService.recentChanges(path, RECENT_LIMIT),
+        LocalHistoryService.getStats(path),
+      ]);
       if (myReq !== reqIdRef.current) return;
       setChanges(rows);
+      setStats(st);
     } catch (e) {
-      if (myReq === reqIdRef.current) setChanges([]);
+      if (myReq === reqIdRef.current) {
+        setChanges([]);
+        setStats(null);
+      }
       await NativeDialogs.error(errorTitle, messageOf(e));
     } finally {
       if (myReq === reqIdRef.current) setLoading(false);
@@ -94,7 +135,15 @@ export const useHistoryPage = (): UseHistoryPageResult => {
       if (!path) {
         reqIdRef.current++;
         setChanges([]);
+        setStats(null);
+        setConfig(null);
         return;
+      }
+      // 配置只在选项目时拉一次（失败不阻断列表，配置面板兜底为 null）。
+      try {
+        setConfig(await LocalHistoryService.getConfig(path));
+      } catch {
+        setConfig(null);
       }
       await load(path, errorTitle);
     },
@@ -181,6 +230,58 @@ export const useHistoryPage = (): UseHistoryPageResult => {
     [selectedPath, busy, load, clearDiff],
   );
 
+  // 本地编辑配置字段（仅改 VM 状态，保存才落盘）。
+  const patchConfig = useCallback((patch: Partial<HistoryConfig>): void => {
+    setConfig((prev) => (prev ? { ...prev, ...patch } : prev));
+  }, []);
+
+  // 保存配置：ignorePatterns 去空白 + 丢空行后落盘，再回读规范化结果。
+  const saveConfig = useCallback(
+    async (s: ConfigStrings): Promise<void> => {
+      if (!selectedPath || !config || configBusy) return;
+      setConfigBusy(true);
+      try {
+        const normalized: HistoryConfig = {
+          ...config,
+          ignorePatterns: config.ignorePatterns.map((p) => p.trim()).filter(Boolean),
+        };
+        await LocalHistoryService.saveConfig(selectedPath, normalized);
+        setConfig(await LocalHistoryService.getConfig(selectedPath));
+        await NativeDialogs.info(s.savedTitle, s.savedMessage);
+      } catch (e) {
+        await NativeDialogs.error(s.errorTitle, messageOf(e));
+      } finally {
+        setConfigBusy(false);
+      }
+    },
+    [selectedPath, config, configBusy],
+  );
+
+  // 立即清理：原生确认 → 按配置清理 → 重拉列表 + 统计（统计面板直观反映回收效果）。
+  const runCleanup = useCallback(
+    async (s: CleanupStrings): Promise<void> => {
+      if (!selectedPath || configBusy || busy) return;
+      const ok = await NativeDialogs.confirm({
+        title: s.confirmTitle,
+        message: s.confirmMessage,
+        okLabel: s.okLabel,
+        cancelLabel: s.cancelLabel,
+      });
+      if (!ok) return;
+      setConfigBusy(true);
+      try {
+        await LocalHistoryService.cleanup(selectedPath);
+        await NativeDialogs.info(s.doneTitle, s.doneMessage);
+        await load(selectedPath, s.errorTitle);
+      } catch (e) {
+        await NativeDialogs.error(s.errorTitle, messageOf(e));
+      } finally {
+        setConfigBusy(false);
+      }
+    },
+    [selectedPath, configBusy, busy, load],
+  );
+
   return {
     projects,
     selectedPath,
@@ -192,10 +293,16 @@ export const useHistoryPage = (): UseHistoryPageResult => {
     selectedVersionId,
     diff,
     diffLoading,
+    config,
+    stats,
+    configBusy,
+    patchConfig,
     select,
     refresh,
     snapshot,
     restore,
     viewDiff,
+    saveConfig,
+    runCleanup,
   };
 };
