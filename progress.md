@@ -711,6 +711,14 @@
 - **层次边界**（留后续）：file-watcher 自动捕获 / gitsvc Pull·Push·Stash 前 auto-label 钩子 / 清理压缩维护 —— 非面板交互面，留专门单元。
 - **下一单元（续接前端）**：Local History 历史面板 UI（消费 localhistorysvc：最近变更列表 + 版本 diff 查看 + 回滚，同 gitsvc→Git UI 两段式）/ 或注册 session 服务 + 会话恢复 UI。各为独立切片。
 
+### ▶ 续：Local History 历史面板 UI（第一阶段：列表/快照/回滚，同 /loop 自主续）
+- **有意两段拆分**（diff 渲染器较重）：本 tick = 选项目 + 最近变更列表 + 手动快照 + 回滚（证 SnapshotFile→GetRecentChanges→RestoreVersion 端到端）；**下一 tick = diff 查看器**。
+- `LocalHistoryService.ts` 收口 recentChanges/snapshotFile/restoreVersion + RecentChange/FileVersion 类型（diff 子集留下一单元）。
+- `pages/HistoryPage/`（View/VM/Style/lang）：项目下拉（消费 `useProjects()`）+ 手动快照行（相对路径 TextField → SnapshotFile，去重返回 null 时提示「无变化」）+ 最近变更列表（文件路径/本地化时间/分支 Chip/标签 Chip）+ 回滚（原生确认，覆盖工作树，后端回滚前自动打 Before-Restore 标签）。状态留 VM（同 GitPage：按 path 即查；reqIdRef 防过期；busy 互斥）。branch 暂传 ""（接 gitsvc 取当前分支留后续）。
+- routes 加 history 路由（HistoryRounded，slot primary）；i18n `route.history` + `history.*`（zh/en）；App 注册 locale。遵循全部 MVVM 铁律。本 tick 无 Go 改动。typecheck + build 通过。commit `dbf10fe`。
+- **🎯 现在可真机验证**：`wails3 dev` → 「本地历史」页 → 选项目 → 输相对路径快照 → 见最近变更 → 编辑文件再快照 → 回滚到旧版本（文件内容回退）。**第三个端到端功能域**（继 Todo / Git）。
+- **下一单元（续接前端）**：Local History diff 查看器（LocalHistoryService 加 getVersionDiff/getVersionsDiff + DiffView 组件，行级 + inline 字符级渲染，点变更看 diff）/ 或注册 session 服务 + 会话恢复 UI。各为独立切片。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
