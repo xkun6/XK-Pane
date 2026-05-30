@@ -17,8 +17,9 @@
   - `d1213e4` P3a-6 @dnd-kit 拖拽排序（工作空间组内 + 项目工作空间内）
 - **拍板落地**：#2 资源管理器打开=**砍掉**（菜单不含，归后续）；#3 排序=**@dnd-kit 拖拽**（已引入 core 6.3.1 / sortable 10.0.0 / utilities 3.2.2）；#1 不生成文件产物、#4 不做迁移快照、#5 resumeId 明文、#6 项目软关联（`launchProject` 用节点 id 作 `projectId`，不外键全局 projects）、#7 新建文本对话框、#9 按需扫盘 —— 均按建议默认。
 - **关键实现说明**：WorkspaceProject 自带 path 软关联全局 projects；`launch` 用节点（workspace/project）自身 id 作 LaunchHistory.projectId；workspace 无 path 时启动项 disabled；模型保留完整 schema（含无 UI 的 ProviderID/Hidden/DefaultEnvironment/LaunchProfileID 列），service 只实现 P3a 消费的方法。
-- **待手测**（desktop 窗口，只能用户做）：建/删/收藏/折叠/导入项目/右键启动 CLI/重命名/别名/移除/拖拽排序。
-- **下一步**：P3b（见下文骨架），动手前先手测 P3a。
+- **✅ 已手测通过**（用户 wails3 dev）：建/删/收藏/折叠/导入项目/右键启动 CLI/重命名/别名/移除/拖拽排序，及 P2 的 Git SCM + Home，均 OK。
+- **手测发现 5 处 bug 已修**（commit `8e301f6` 终端初始空态 / `4f9d7b0` 拖拽 closestCenter / `e895ee0` 拖拽锁 Y 轴 / `8980da9` 对话框 label 不裁 / `2279dcf` 禁用 webview 右键菜单）。
+- **下一步 = P3b（未开始）**：SessionsView + resume 透传链（前端 6 处 + 后端 2 处）+ `terminal:status` store 前置单元 + 扫盘回填，详见下文「P3b」节。**若不做 resume，P3 核心 Workspace 树已交付可用。**
 
 ---
 

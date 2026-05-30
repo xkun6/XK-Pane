@@ -930,3 +930,35 @@ HomePage 从脚手架 demo（greet + time 心跳）重做为仪表盘，**纯前
 
 ### ✅ P2 完成（清场 + Git SCM + Home 仪表盘）
 三个单元独立提交：P2a 清场 `dc11388`、P2b Git SCM `e6d107a`、P2c Home（本次）。**待用户 `wails3 dev` 目检**：Git 页变更分组/diff/stage/commit、Home 仪表盘。验证 OK → 进 P3（Workspace 树 + 会话视图 + 恢复）。
+
+---
+
+## 会话（2026-05-30 → 05-31）— P3a Workspace 两层树（6 单元 + 手测 5 修复，全绿 + 用户手测通过）
+
+P1（`b4b042f` 收尾「最近启动真拉起 CLI」）+ P2 经用户 `wails3 dev` 目检 → 进 P3。P3 切分（用户拍板）：**P3a = Workspace 两层树（先做）** → **P3b = SessionsView + resume 透传 + 扫盘回填（后做，未开始）**。
+
+### 深挖出计划（9-agent workflow）
+7 路并行通读 cc-pane(Workspace 树 + 会话恢复) + XK 现状基座 → 综合 → critic 审查，产出 `P3_PLAN.md`（带 file:line + critic 7 项修订）。**拍板落地**：资源管理器打开=砍掉（归后续）；排序=@dnd-kit 拖拽；不生成文件产物 / 不做迁移快照 / resumeId 明文 / 项目软关联 / 新建文本对话框 / 按需扫盘。
+
+### P3a-1~6（6 单元逐个提交，逐单元全绿）
+- `d7c54b8` P3a-1 数据模型：`internal/storage/models_workspace.go`（`workspaces` + `workspace_projects` 两表，SQLite-only 关系建模，联合唯一 `idx_ws_proj_path`，AutoMigrate 守门测试）；数据存储页 lang 补 2 LabelKey。
+- `20a9f7a` P3a-2 `internal/services/workspace`（List 树 pinned→sort→created / Create / Rename / Delete 级联 / SetAlias / SetPath / SetPinned / AddProject 归一化幂等去重 / RemoveProject / SetProjectAlias / Reorder / ReorderProjects；DTO-free 直返 storage 模型；持 Holder；app.go 注册；4 测试）。
+- `41167c1` P3a-3 前端 `services/workspace/WorkspaceService` + `workspace/WorkspaceProvider` 同构 Context（挂 TerminalProvider 内）。
+- `4e1bec7` P3a-5a 通用 `components/TextInputDialog`（应用内文本录入，补 NativeDialogs 缺口；critic S1 拆出的独立单元）。
+- `4f7761c` P3a-4/5b `components/WorkspaceTree`（两层折叠树 + pinned 置顶分组 + 收藏星 + 计数 pill + 折叠；右键菜单 `WorkspaceContextMenu`：CLI 启动复用 P1 useCliTools / 导入项目 / 重命名 / 别名 / 移除 / 复制路径；**启动用节点自身 id 作 launchProject.projectId 软关联**，workspace 无 path 时启动项灰置）；移植菜单后**删除旧 ProjectPanel**；TerminalPage 改挂 WorkspaceTree（useTerminalPage 退化为空 stub）。
+- `d1213e4` P3a-6 @dnd-kit 拖拽排序（core 6.3.1 / sortable 10.0.0 / utilities 3.2.2）：工作空间组内 + 项目工作空间内，`setActivatorNodeRef` 锁拖拽手柄到 row，`activationConstraint distance:6` 区分点击/拖拽。
+- `7f5d8b2` docs：`P3_PLAN.md`（计划 + 执行状态）。
+
+### 手测（用户 wails3 dev）→ 5 处 bug 当场修
+- `8e301f6` 终端页初始空态：`createEmptyPanel`（初始 / 关掉最后会话 = 空面板无 tab），PanelView 渲染「没有活动会话」空态提示；修正 6 个依赖"初始含 1 tab"的 reducer 测试（37 前端测试全过）；新增 PaneTree 组件级 lang `terminalPane.*`。
+- `4f9d7b0` 拖拽用 `closestCenter` 碰撞检测（拖到远处/空白不再还原）。
+- `e895ee0` 拖拽锁定 Y 轴位移（X=0）+ 列表 `overflowX:hidden`（消除横向滚动条 / 往右拖）。
+- `8980da9` TextInputDialog 浮动 label 不被裁（顶部空间加在 TextField margin，绕开 MUI `DialogTitle + DialogContent{paddingTop:0}` 相邻选择器特异性）。
+- `2279dcf` 禁用 webview 默认右键菜单（`main.tsx` 全局 contextmenu preventDefault，排除 input/textarea/contenteditable 保留系统复制粘贴）。
+
+### ✅ P3a 完成（用户手测通过）
+- **验证**：go test ./internal/...（含 workspace 4 测试）✅ / pnpm typecheck ✅ / pnpm build ✅ / pnpm test（37 vitest）✅。bindings 14 Services。
+- **用户手测确认**：工作空间 建/删/收藏/折叠/导入项目/右键启动 CLI/重命名/别名/拖拽排序，及 P2 的 Git SCM + Home，均 OK。
+
+### ⏳ P3b 未开始（下一步，详见 `P3_PLAN.md` 的 P3b 节）
+SessionsView + **resume 透传链**（critic 核实 = 前端 **6 处链路**，核心是 `TerminalContext` reconcile effect 的 `TerminalService.create`，**非** TerminalView；后端 2 处：`CreateSpec.ResumeID` + `resolveLaunch` 赋值，adapter 层已就绪）+ **`terminal:status` store 前置单元**（活跃指示数据源，XK 现无消费方）+ **扫盘回填**（扫 ~/.claude·~/.codex jsonl，LastPrompt 必 cryptox、resumeId 明文）。**若不做 resume，P3 核心 Workspace 树已交付可用。**
