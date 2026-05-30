@@ -825,3 +825,38 @@
 - 方法：`Store`（校验+scope 约束+importance 钳 1-5+默认）/ `Search`（参数化过滤 + LIKE 全文 title/content/tags ESCAPE 转义 + 排序 + 分页 + 软删过滤；FTS5 留可选增强未移植，对齐 cc-memory LIKE 降级）/ `List`（包 Search）/ `Get`（命中 touch：UpdateColumns 更新 accessed_at+access_count **不 bump updated_at**）/ `Update`（patch + 校验）/ `Delete`（软删 is_deleted=1）/ `Stats`（total+byScope+byCategory）。tags JSON 串（同 Todo）；时间 time.Time（与本仓一致）；云端预留字段恒 local_only。
 - +9 测（含 Get-touch-不-bump-updated 的 Windows 计时器分辨率坑：断言用 `!Before` 而非 `After`，access_count==1 已证 touch 执行）。bindings 15 Services/104 Methods(+7)/67 Models。dev+prod 全绿；前端 typecheck 通过。commit `06ccd46`。**延后**（耦合终端/AI）：format_for_injection / 日报 DailyReport / 云 sync。
 - **下一单元**：**Memory UI**（MemorysPage：搜索框 + scope/category/importance 过滤 + 列表（标题/类别/重要度/scope chip）+ 新建（标题+内容+scope+category+importance+tags）+ 看/编辑 + 删除 + 统计条——surface memorysvc，**非终端栈、可验证**，同 Todo/Spec 两段式）。之后早期子系统仅剩 notify（部分视觉门控）/ Bedrock（重，决策门）/ MCPE（MCP 桥，决策门）——届时 dep-free 可 surface runway 基本耗尽，转向陈列门控清单待用户。
+
+### ▶ 续：MemorysPage —— surface memorysvc（同 /loop 自主续）
+- **续 memorysvc 后端**，新增 MemorysPage 让记忆子系统可真机验证。记忆是 app 级（按 scope 分级），页面不依赖项目选择。纯前端，无 Go 改动。
+- `MemoryService.ts`（包 search/get/store/update/remove/stats，RawQuery/RawStore/RawUpdate 构造）+ `pages/MemorysPage`（统计条 + 搜索/scope/category 过滤行 + 新建区（标题/内容/scope+条件 scopeRef/类别/重要度/标签）+ 列表（P{n}/类别/scope chip + 删除）+ 选中编辑器）。VM 服务端 Search 驱动（200ms 防抖 + reqId）、mutation 重拉、新建按 scope 映射 scopeRef。routes 加 memory（PsychologyRounded）+ i18n + App 注册 + 桶导出。typecheck + build 通过。commit `de6fe1e`。
+- **🎯 现在可真机验证**：`wails3 dev` → 记忆页 → 新建（global 无需 ref）→ 搜索/按 scope·category 过滤 → 编辑 → 删除（软删，列表消失）→ 统计条实时反映。**记忆子系统核心 surface 完毕**。
+
+---
+
+## 🚦 自主轮收尾：dep-free + 可自验 runway 已耗尽（2026-05-30，autonomous /loop）
+
+**本轮自主 /loop 累计交付**（branch `rebuild/cc-pane`，每单元独立 commit + 测 + dev/prod/typecheck 全绿）：
+- **Local History**：prune/config 暴露 + 配置面板 + git auto-label 钩子（跨域）。
+- **session**：sshConfig 脱敏分层（绑定脱敏 / 包级明文出口）+ 安全注册。
+- **Todo**：Query 动态过滤分页 + Stats 聚合 + 统计条 + 过滤/搜索 UI + Reorder/BatchUpdateStatus 后端。
+- **Spec**：specsvc 元数据 CRUD + .md 文件生命周期 + SpecsPage + Spec↔Todo 关联（建/删联动）。
+- **Memory**：memorysvc 全 CRUD + LIKE 搜索 + 统计 + 软删 + MemorysPage。
+- 纠正「func/interface setter 不被 Wails 绑定」误解（实为已绑定但前端不可用的桩；specsvc 改构造注入回避）。
+
+**dep-free 可自验簇全部做完**：Git / Local History / Todo / Spec / Memory / session 脱敏。
+
+### 🟡 剩余皆门控——需用户「决策」或「视觉验证」，自主轮在此**收尾停 loop**（不空转、不自引依赖、不堆视觉债）
+
+**A. 决策门（需用户授权新依赖 / 选型，AskUserQuestion 候选）**：
+- **file-watcher 自动捕获**（Local History 自动快照）：需引 `fsnotify` 新依赖。
+- **Bedrock 知识库**：需 `modelcontextprotocol/go-sdk`（D5）+ 22MB embed.FS，较重。
+- **MCPE 集成**：需 MCP 桥 + MC PE 运行时（CC-Panes Orchestrator）。
+- **notify（cc-notify）**：dep-free（Wails 原生通知）但**价值耦合受门控的终端栈**（主触发器=会话退出/等待输入）+ toast 非自动可验；同 Spec Tasks-sync 的「门控上游」性质，**判定为低优先级、暂不自主建**（避免建「门控桥的后半」）。
+
+**B. 视觉门控（仅用户 `wails3 dev` 可验，自动验证仅 typecheck+build）**：
+- **终端栈 + 项目启动 CLI**（headline goal）——最高价值，但纯视觉/交互，已积大量视觉债。
+- **会话恢复前端**（消费已就位的 session 服务）。
+- **Todo reorder UI**（@dnd-kit 拖拽，交互）/ **batch-status UI**（多选→批量改状态，消费已就位的 BatchUpdateStatus；**此项 dep-free 且结果可验、非拖拽**，是 B 类里唯一可较轻 surface 的，若用户希望继续可优先）。
+- **Spec Tasks-checkbox/Log 同步**（耦合终端/AI 工作流）。
+
+**→ 用户回来后建议**：① 若要继续自主推进，可greenlight **Todo batch-status UI**（dep-free 可验）或 **notify 后端**（dep-free，接受其价值待终端解门）；② 决策门项请明确授权依赖（fsnotify / go-sdk / MCP 桥）；③ 视觉门控项（终端/会话恢复/reorder）建议 `wails3 dev` 实跑验证后再迭代。**本轮自主 /loop 到此停**。
