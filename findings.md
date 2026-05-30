@@ -241,3 +241,11 @@ React 19.2 / @mui/material 9 / @mui/icons-material 9 / @mui/x-charts 9 / emotion
 4. **Diff 引擎依赖**（diff 单元才需，可后定）：Go 侧候选 `github.com/sergi/go-diff`(diffmatchpatch) / `github.com/hexops/gotextdiff` / 自实现行级——需行级 hunk + 字符级 inline，匹配 cc-pane similar 的能力。
 - **首个有界单元建议**（定了 1-3 后）：存储基座 = 打开 per-project history store + FileVersion 模型 + SaveVersion(hash/去重/节流/blob) + ListVersions + GetVersionContent，**不含 diff**（diff/labels/restore/recent/pruning 各为后续 unit）。
 - **无门替代单元**（若用户想先放 Local History）：会话恢复后端（terminal_sessions Save/List，模型已在 AllModels，纯可测、贴合 Holder、无门）。
+
+### J13. diff 引擎换行归一化（对抗审查 w05btokta 确认，2026-05-30，commit `03f3171`）
+
+- **diffmatchpatch 行模式（DiffLinesToChars）是换行敏感的**：行 token 含行尾，故 `"a\r\n"` 与 `"a\n"` 被判为不同行 → CRLF↔LF 文件整块 Delete+Insert。这与 cc-pane 的 `similar::from_lines` 行为一致（继承，非移植 bug；deepwiki 确认 similar tokenize_lines 保留 \r\n）。
+- **本仓初版的额外 bug**：`splitDiffBlock` 在拆行时既剥 `\n` 又剥 `\r`，使 CRLF↔LF 场景两侧 content 变得**逐字相同** → UI 表现为「整文件全爆红、inline 高亮为空、看不出哪变了」。这比 cc-pane 更差（cc-pane `trim_end_matches('\n')` 保留 \r，inline 至少高亮尾部 \r）。`GetVersionDiff`（存储版本可能 CRLF vs 工作树文件被编辑器/Git 规范化为 LF）极易触发。
+- **修复（有意改进 cc-pane）**：`ComputeDiff` 在行级 diff 前 `normalizeNewlines(\r\n / 孤立 \r → \n)`。**仅作用于 diff 计算/显示，绝不碰存储 blob 与 restore 的原始字节**（restore 必须保字节）。效果：纯行尾风格差异 → 0 diff（而非 cc-pane 的假阳性全爆红），真实内容变更照常呈现。
+- **铁律（写给后续 diff/文本比较代码）**：任何「按行比较」前先归一化换行（除非刻意要呈现行尾差异）；区分「行数统计路径」（str::lines 语义，剥 \r 无碍）与「content 生成路径」（要明确剥哪些字符并与基线一致）。
+- **流程教训**：对抗审查 agent 为实证 bug 会**往工作树写 probe 测试文件**（`*probe*_test.go`）。这些是 workflow scratch，不要提交；审查完成后清理（`rm internal/<pkg>/*probe*test.go`）再重跑测试。后续审查类 workflow 的 prompt 应注明「只读审查、勿写文件」或预期清理。

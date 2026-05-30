@@ -647,6 +647,12 @@
 - **⏳ 对抗审查 workflow `w05btokta`（wf_e4f728f5-11b）在跑**：3 lens（cc-pane 保真 / 边界 off-by-one / 换行·rune·diffmatchpatch）→ refute-by-default 验证。这是本会话最算法敏感的代码，ultracode 下值得对抗验证。完成后处理确认的真问题。
 - **Local History 后端基本完整**（7 unit：基座+标签+restore+查询+pruning/config+压缩+diff，27 测）。剩 Wails 服务层（按项目缓存 Store + 文件监听 fsnotify + gitx auto-label 钩子 + bindings）—— 前端消费方/视觉门控。
 
+### ▶ 续：diff 对抗审查结果 + CRLF 修复（同 /loop 自主续）
+- **审查 workflow `w05btokta` 完成**（13 agents，审 10 条发现 → refute-by-default 验证 → **确认 2 条，实为同根因**）：① (medium) 跨换行风格 diff(CRLF vs LF) 时行级 diff 把 `"a\r\n"≠"a\n"` 判整行替换，而 splitDiffBlock 又剥掉 `\r` 使两侧 content 逐字相同 → UI「全爆红却看不出哪变、inline 空」；`GetVersionDiff`(存储版本 vs 工作树) 在 Windows-CRLF↔编辑器/Git-LF 场景极易触发。② (low) splitDiffBlock 剥 `\r` 偏离 cc-pane `trim_end_matches('\n')`（只剥 \n 保留 \r）+ splitLines 注释混淆。
+- **修复 `03f3171`**：ComputeDiff 行级 diff 前 `normalizeNewlines(\r\n/孤立\r→\n)`，仅作用于 diff 计算/显示、**绝不碰存储 blob 与 restore 原始字节**——一举解决两条，且**有意改进 cc-pane**（similar 换行敏感会假阳性全爆红）。splitDiffBlock 不再单独剥 \r，splitLines 注释澄清仅用于行数统计。+TestComputeDiffNewlineNormalization。localhistory **28 测** dev+prod 全绿。清理了审查 agent 留下的 probe 文件。记 findings J13。
+- **审查另证**：「CRLF↔LF 整块判变更」本身 cc-pane(similar) 也有（继承行为，非移植 bug），但 cc-pane 保留 \r 故 inline 至少高亮 \r；本仓归一化后更优（纯行尾差异 0 diff）。验证者实测复现两条、对照 Rust 源 + deepwiki 确认 similar tokenize_lines 保留 \r\n。
+- **Local History 后端完成（含 diff，28 测，已对抗验证 + 修复）**。下一单元倾向：Wails 服务层（前端消费方/视觉门控）或转其他可测后端 / 早期子系统——属方向选择，近期或再设检查点。
+
 ## 会话 26 — Phase 3 provider 表单条件云字段（3b，provider feature 完整）（2026-05-30，autonomous /loop）
 
 ### 做了什么
