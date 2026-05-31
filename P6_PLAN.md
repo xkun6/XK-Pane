@@ -127,6 +127,7 @@ shared-MCP（npx mcp-proxy）；cc-memory-mcp（独立 stdio + Memory DB）；IM
    - (X) **自我编排核心**（P6b→P6c→P6d）：让 pane 里的 Agent 能开/读写别的 Agent + hook 回报。是 cc-pane 的 headline。
    - (Y) **直奔 MC PE**（P6a→P6e）：跳过编排工具/hook，最快到你的 Minecraft 落点（但 P6e XL、Win32 重，且要先 spike P6a 打通 MCP）。
    - 二者都依赖 P6a 地基；可先做 X 再做 Y，或反之。
+   - ✅ **2026-05-31 拍板：X（自我编排）** —— P6b（MCP 注入到被启动 CLI）→ P6c（编排工具）→ P6d（cli-hook）优先；MC PE/P6e 留作 X 完成后的后续阶段。
 3. **bind 地址**：建议 `127.0.0.1`（本轮不做 WSL/SSH，更安全）；要支持 WSL 回连才用 `0.0.0.0`（macOS 防火墙弹窗 + 暴露面大）。
 4. **hook 二进制打包**：建议方案 A `cmd/xkpane-cli-hook` 独立二进制（干净、复用 internal）；方案 B argv[0] 分流塞主 exe（少一个二进制但耦合 + GUI 子系统无 stdout 麻烦）。
 5. **`get_session_output` 缓冲**：本轮做轻量 tail 环形缓冲，还是把它并进「会话回放 ReplayBuffer」一起做（那块本是 P5 推迟项）。
@@ -148,3 +149,4 @@ shared-MCP（npx mcp-proxy）；cc-memory-mcp（独立 stdio + Memory DB）；IM
 - 2026-05-31：6-agent 研究产出本计划；待用户拍板 §5 决策点后进入 P6a。
 - 2026-05-31（拍板 + P6a 落地）：用户拍板「先只做 P6a 地基（spike 验证），两个 SDK 都试」。spike（`cmd/mcp-spike`，throwaway，`4fbc574`）实测两个 SDK 协议层均通（官方走 SSE、mark3labs 走纯 JSON）；**真实 Claude CLI 连通确认 ping 工具 → 选定官方 `go-sdk v1.6.1`**。P6a 落地（`abb74cf`）：`internal/services/orchestrator` 地基（127.0.0.1:0 HTTP + 32-hex token + `/api/health` + `/mcp` StreamableHTTPHandler + Bearer/`?token=`/Accept 中间件 + `health` 工具 + 写 `mcp-orchestrator.json`）+ `storage.UserDataDir()` + `terminal.SetOrchestrator` + app fail-open 接线；删 spike + `go mod tidy` 去 mark3labs。次要决策按默认：bind `127.0.0.1` / 端口随机 / hook 独立二进制（P6d）/ `get_session_output` 轻量缓冲（P6c）。**下一步**：用户手测 P6a（`wails3 dev` 后把 Claude 连到 `%AppData%\XK-Pane\mcp-orchestrator.json`、调 `health` 工具）通过 → 再定 §5 决策 2 的 X（自我编排 P6b→d）/ Y（直奔 MC PE P6e）方向。
 - 2026-05-31（P6a 调整：配置落点 + skills 归属）：用户手测前提出「跟 cc-pane 不同」——`mcp-orchestrator.json` **不写 %AppData%**，改写**可执行文件所在目录**（"软件目录"；dev=`bin\`〔已 .gitignore 忽略〕、prod=安装目录）。落地：`orchestrator.configDir()`=`filepath.Dir(os.Executable())`，去掉对 `storage.UserDataDir()` 的依赖；「orchestrator started」日志加 `config=<完整路径>` 字段便于发现；回收 P6a 新增的导出 `storage.UserDataDir()`（改回仅未导出 `userDataDir`）。**另定**：后续被启动 CLI 的 skills / 每会话 MCP 注入落到**被启动项目的 `.claude/`**（`<proj>/.claude/skills`、`<proj>/.claude/mcp-*.json`），不再用 `~/.claude/skills`（P6b/P6d 落实，§5 决策点据此细化）。手测路径相应改为 `bin\mcp-orchestrator.json`（以后端日志 `config=` 字段为准）。
+- 2026-05-31（方向拍板）：§5 决策 2 定为 **X（自我编排）**。下一步进 **P6b**：把 orchestrator 端点（terminal 已存的 port/token）经 `resolveLaunch` 填入 `cliadapters.Context` 并翻转 `SkipMCP=false`，让被启动的 Claude/Codex 自带 ccpanes MCP（per-session 配置写 `<被启动项目>/.claude/`）；再 P6c 编排工具、P6d cli-hook。
