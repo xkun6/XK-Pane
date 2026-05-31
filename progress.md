@@ -1124,3 +1124,18 @@ P6b 手测通过（claude/codex 都能看到 ccpanes MCP）后，用户要求把
 - env 前缀 CC_PANES_*→XKPANE_*：buildEnv 注入的 XKPANE_API_PORT/TOKEN/BASE_URL/PTY_SESSION_ID/CLI_TOOL + codex bearer_token_env_var=XKPANE_API_TOKEN。codex_test 守门用例同步。
 - 有意偏离 cc-pane（buildEnv 注释标注）。不动 .xkpanes 本地历史目录、orchestrator serverInfo.name=xkpane-orchestrator。go build/vet/test/gofmt 全绿，无 bindings 变更。**用户确认改名 OK**。
 - **下一步 P6c**：核心编排工具（launch_task/list_sessions/write_to_session/get_session_output/kill_session…），其中 get_session_output 需 per-session 输出环形缓冲（终端现直喂 xterm 未缓冲）。
+
+## 会话（2026-05-31）— P6c 核心编排工具（自我编排闭环，2 单元，后端闭环完整，待手测）
+承上 P6b 改名手测通过 → 用户拍板「轻量 tail 环形缓冲 + 完整闭环」。先精读 cc-pane orchestrator_service.rs 全部编排工具（launch_task/list_*/get_session_output/write/submit/kill_session，带 file:line）+ OutputBuffer/strip_ansi/dead_buffers/submit 时序/is_project_registered 真身，确认每个工具语义与 XK 现有 service 兜底面，再动手。
+
+### P6c-1 终端输出环形缓冲（`a325139`）
+忠实移植 cc-pane OutputBuffer。新建 `outputbuffer.go`：outputBuffer（head 偏移 deque，摊还 O(1) 淘汰 + 过半压实）；push = stripANSI（CSI/OSC/字符集/孤立 ESC 状态机）+ `\r\n,\r`→`\n` 归一 + partial 行累积（>4KB 强制 flush）+ isSpinnerLine 过滤（忠实 cc-pane **窄**语义：仅「词 / 词… / 词+纯数字」算 spinner，`(12s)` 带括号不算）+ 连续空行压缩 + 行/字节双限淘汰（live 20000 行/20MB）；getRecent(n)/shrink。`terminal.go`：session 加 outBuf + lastOutputMs；readLoop 输出时 push + 记时刻；waitLoop 退出后 retireBuffer（shrink 到 dead 20000 行/10MB 转 deadBuffers）；SessionOutput（live→dead 懒清理 deadRetention=5min）+ SessionSnapshots（活跃会话 status=active + lastOutputAt）。14 单测。
+
+### P6c-2 orchestrator MCP 编排工具（`23d7956`）
+`orchestrator.go`：Deps + 接口（Terminal/Projects/Workspaces，`*terminal/*project/*workspace.Service` 满足，窄接口便于测试）；New(Deps) + AttachApp（emit orchestrator:launch）；buildMCPHandler 转方法调 registerTools。`orchestrator_tools.go`（新）9 工具：**launch_task**（prompt/resumeId 互斥 + 白名单校验〔normalizePath 比对 DB+工作空间项目〕 + workspace_name→path 解析 + terminal.CreateSession〔默认 claude、120x30〕 + emit orchestrator:launch）/ list_projects（DB+工作空间去重）/ list_workspaces / list_sessions / get_session_status / get_session_output（live→dead 5min）/ write_to_session（原始字节，发控制字符）/ submit_to_session（去换行→写→computeEnterDelay〔200+len/512*30，封顶 5s〕→Enter）/ kill_session。错误以「错误: …」文本作正常结果返回（对齐 cc-pane，不返 Go error）。`events.go` 注册 orchestrator:launch + payload；`app.go` orchestrator.New(Deps{termSvc/projSvc/wsSvc}) + AttachApp。helper 单测（normalizePath/baseName/computeEnterDelay/isProjectRegistered with fakes）。
+
+### ✅ P6c 后端闭环完整（待手测）
+- **闭环**：pane A 的 Claude → `launch_task(project, prompt)` 开 pane B 跑另一 CLI → `submit_to_session`/`get_session_output` 读写监控 → `kill_session` 收工。一个主 Agent 调度一队子 Agent。
+- **验证**：go build/vet ./internal/... + orchestrator/terminal 测试全绿 + gofmt 干净。terminal 新增导出方法（SessionOutput/SessionSnapshots）+ events 新事件 → bindings 下次 `wails3 dev` 自动重生（前端暂不消费，不阻塞）。
+- **未做**：task 级状态跟踪（get_task_status + tasks map）、长 prompt 外部化为文件（safety net）、create_runtime_config/list_panes/trigger_notification（依赖缺失 service）、**P6c-3 前端 orchestrator:launch listener 开新 Tab**（需评估「后端先建会话、前端附着既有 session」可行性——XK 通常前端建会话；当前 launch_task 开的会话在后端跑、可经 get_session_output 读，但前端无可见 Tab）。
+- **待用户 `wails3 dev` 手测**（⚠️ 改后端必完全重启）：在 pane 里让 Claude 调 `mcp__panes__list_projects` 看已注册项目 → `mcp__panes__launch_task(project_path=<已注册>, prompt="…")` → `mcp__panes__list_sessions` 见新 sessionId → `mcp__panes__get_session_output(session_id=…)` 读到子会话输出 → `mcp__panes__submit_to_session` 发指令 → `mcp__panes__kill_session` 终止。注意 launch_task 的 project_path 必须已在 XK 注册（否则「未注册」报错）。
