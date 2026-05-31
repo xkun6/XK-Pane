@@ -90,8 +90,12 @@ Section
     !insertmacro wails.webview2runtime
 
     SetOutPath $INSTDIR
-    
+
     !insertmacro wails.files
+
+    # cli-hook sidecar：与主 exe 同目录安装（projecthooks.resolveHookBinary 据此发现）。
+    # 由 task build:hook 预先编到 bin/（create:nsis:installer 的 deps build → build:hook）。
+    File "..\..\..\bin\xkpane-cli-hook.exe"
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"

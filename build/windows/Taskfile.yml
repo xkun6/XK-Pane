@@ -44,6 +44,12 @@ tasks:
           DEV:
             ref: .DEV
       - task: common:generate:icons
+      # cli-hook 随包：与主 exe 同目录（NSIS 经 wails.files 打进安装目录）。
+      - task: common:build:hook
+        vars:
+          GOOS: windows
+          ARCH:
+            ref: .ARCH
     preconditions:
       - sh: '{{if eq .OBFUSCATED "true"}}command -v garble >/dev/null 2>&1{{else}}true{{end}}'
         msg: "garble is required for obfuscated builds. Install it with: go install mvdan.cc/garble@v0.16.0 (requires Go 1.24+). See https://github.com/burrowers/garble/releases for version/toolchain compatibility."

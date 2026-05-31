@@ -33,6 +33,8 @@ tasks:
   dev:
     summary: Runs the application in development mode
     cmds:
+      # 先编 cli-hook 到 bin/（wails3 dev 不会编它；projecthooks.resolveHookBinary 据主 exe 同目录发现）。
+      - task: common:build:hook
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 
   setup:docker:

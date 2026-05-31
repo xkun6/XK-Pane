@@ -7,6 +7,20 @@ tasks:
     cmds:
       - go mod tidy
 
+  build:hook:
+    summary: Builds the xkpane-cli-hook sidecar binary into BIN_DIR
+    # 独立 cli-hook 二进制（P6d）。被启动 CLI 在生命周期事件 spawn 它回连 orchestrator。
+    # dev 与 production 都需它落在主 exe 同目录（bin/ → 安装目录），projecthooks.resolveHookBinary 据此发现。
+    # 注：改了 cmd/xkpane-cli-hook 后须重跑本任务（dev 的 wails3 dev 不会自动重编 hook）。
+    cmds:
+      - go build -buildvcs=false -o "{{.BIN_DIR}}/xkpane-cli-hook{{if eq .GOOS_EFF "windows"}}.exe{{end}}" ./cmd/xkpane-cli-hook
+    vars:
+      GOOS_EFF: '{{.GOOS | default OS}}'
+    env:
+      GOOS: '{{.GOOS_EFF}}'
+      GOARCH: '{{.ARCH | default ARCH}}'
+      CGO_ENABLED: '0'
+
   install:frontend:deps:
     summary: Install frontend dependencies
     cmds:
