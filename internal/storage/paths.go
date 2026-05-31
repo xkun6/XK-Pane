@@ -65,13 +65,6 @@ func userDataDir() (string, error) {
 	}
 }
 
-// UserDataDir 返回平台规范的用户数据根目录（固定，不随用户切换数据库路径变化）。
-// 供需要在 app 数据目录写固定产物的模块用（如 orchestrator 的 mcp-orchestrator.json，
-// 须放在 cli-hook / 被启动 CLI 能稳定发现的位置）。目录可能尚未创建，调用方按需 MkdirAll。
-func UserDataDir() (string, error) {
-	return userDataDir()
-}
-
 // DefaultDBPath 返回平台默认数据库文件完整路径。
 // 该路径所在目录可能尚不存在；调用者通过 ensureDir 创建。
 func DefaultDBPath() (string, error) {

@@ -7,7 +7,8 @@
 //   - Bearer 鉴权中间件，复刻 cc-pane 两个 CLI 兼容补丁：?token= query 后备（Claude Issue #7290）、
 //     Accept: text/event-stream 注入（Codex 缺此头会被 406）
 //   - 一个 trivial `health` MCP 工具（验证 tools/list + tools/call 闭环）
-//   - 启动后把 {url, token} 写到 app 数据目录的 mcp-orchestrator.json（供被启动 CLI / 未来 cli-hook 发现）
+//   - 启动后把 {url, token} 写到可执行文件所在目录（"软件目录"）的 mcp-orchestrator.json，供被启动 CLI /
+//     未来 cli-hook 发现（刻意不放 %AppData%：用户要求配置与软件/项目同处。skills / 每会话注入走被启动项目的 .claude/）
 //
 // 真正的编排工具（launch_task / list_sessions / write_to_session …）在 P6c 接 terminal/project/workspace。
 // MCP server 库选型经 P6a spike 实测真实 Claude 连通后定为官方 go-sdk v1.6.1。
@@ -28,7 +29,6 @@ import (
 	"sync"
 	"time"
 
-	"xkpane/internal/storage"
 	"xkpane/internal/utils/filex"
 	"xkpane/internal/utils/logx"
 
@@ -101,11 +101,14 @@ func (s *Service) Start() error {
 		}
 	}()
 
-	if err := writeConfig(port, token); err != nil {
+	cfgPath, err := writeConfig(port, token)
+	if err != nil {
 		logx.For("orchestrator").Warn("write mcp-orchestrator.json failed", "err", err)
 	}
 	logx.For("orchestrator").Info("orchestrator started",
-		"port", port, "url", fmt.Sprintf("http://127.0.0.1:%d/mcp", port))
+		"port", port,
+		"url", fmt.Sprintf("http://127.0.0.1:%d/mcp", port),
+		"config", cfgPath)
 	return nil
 }
 
@@ -176,15 +179,29 @@ func genToken() string {
 	return hex.EncodeToString(b)
 }
 
-// writeConfig 把本地 MCP 端点写到 app 数据目录的 mcp-orchestrator.json（filex 原子写，配置写铁律）。
-func writeConfig(port int, token string) error {
-	dir, err := storage.UserDataDir()
+// configDir 返回 mcp-orchestrator.json 的落盘目录 = 可执行文件所在目录（"软件目录"）。
+// 刻意不走 storage.UserDataDir（%AppData%）：用户要求 MCP 配置与软件/项目同处、便于发现与连接
+// （dev 下即 bin\，已被 .gitignore 忽略；prod 即安装目录）。skills / 每会话注入则落到被启动项目的
+// .claude/（P6b/P6d）。
+func configDir() (string, error) {
+	exe, err := os.Executable()
 	if err != nil {
-		return err
+		return "", err
+	}
+	return filepath.Dir(exe), nil
+}
+
+// writeConfig 把本地 MCP 端点写到 configDir()/mcp-orchestrator.json（filex 原子写，配置写铁律），
+// 返回写入的完整路径供日志暴露（方便用户找到并把 CLI 连上去）。
+func writeConfig(port int, token string) (string, error) {
+	dir, err := configDir()
+	if err != nil {
+		return "", err
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
+		return "", err
 	}
+	path := filepath.Join(dir, configFileName)
 	cfg := map[string]any{
 		"mcpServers": map[string]any{
 			"ccpanes": map[string]any{
@@ -196,7 +213,10 @@ func writeConfig(port int, token string) error {
 	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
-		return err
+		return "", err
 	}
-	return filex.WriteAtomic(filepath.Join(dir, configFileName), data, 0o644)
+	if err := filex.WriteAtomic(path, data, 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
 }
