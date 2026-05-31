@@ -50,6 +50,8 @@ const (
 	// 正常情况下 reader 会在 PTY EOF 时自然退出，远早于此超时。超时则强制 Close 兜底，
 	// 避免孤儿孙进程占住 PTY 导致 reader 永不返回、会话永久驻留。
 	drainGraceTimeout = 2 * time.Second
+	// deadRetention 是会话退出后输出缓冲在 dead-buffers 里的保留时长（移植 cc-pane 5 分钟）。
+	deadRetention = 5 * time.Minute
 )
 
 // ProviderResolver 据 providerId 解析启动所需：Tier-A 启动 env + Tier-B adapter
@@ -84,6 +86,17 @@ type Service struct {
 
 	mu       sync.Mutex
 	sessions map[string]*session
+
+	// deadBuffers 保存已退出会话的输出缓冲，供 get_session_output 在退出后短时间（deadRetention）回看。
+	// 懒清理：SessionOutput 读 dead 时顺带剔除过期条目（移植 cc-pane dead_buffers）。
+	deadMu      sync.Mutex
+	deadBuffers map[string]*deadBuffer
+}
+
+// deadBuffer 是已退出会话的输出缓冲快照 + 退出时刻（用于 deadRetention 过期判定）。
+type deadBuffer struct {
+	buf       *outputBuffer
+	createdAt time.Time
 }
 
 // SetProviderResolver 注入 provider 解析器（app 装配阶段调，镜像 AttachApp 模式）。
@@ -131,15 +144,19 @@ type session struct {
 	batcherDone chan struct{}
 
 	firstOutput atomic.Bool
+	// outBuf 累积本会话纯文本输出（ANSI 已剥离）供 get_session_output；lastOutputMs 记最近输出时刻（unix ms）。
+	outBuf       *outputBuffer
+	lastOutputMs atomic.Int64
 }
 
 // New 构造终端服务。registry 提供 CLI 工具命令拼装（Phase 1 cliadapters）。
 // app 引用通过 AttachApp 在 application.New 之后回填（与 subprocess service 一致）。
 func New(registry *cliadapters.Registry) *Service {
 	return &Service{
-		registry: registry,
-		logger:   logx.For("terminal"),
-		sessions: make(map[string]*session),
+		registry:    registry,
+		logger:      logx.For("terminal"),
+		sessions:    make(map[string]*session),
+		deadBuffers: make(map[string]*deadBuffer),
 	}
 }
 
@@ -237,6 +254,7 @@ func (s *Service) CreateSession(ctx context.Context, spec CreateSpec) (string, e
 		batchCh:     make(chan string, batchChanCap),
 		readerDone:  make(chan struct{}),
 		batcherDone: make(chan struct{}),
+		outBuf:      newOutputBuffer(liveOutputMaxLines, liveOutputMaxBytes),
 	}
 
 	s.mu.Lock()
@@ -297,6 +315,69 @@ func (s *Service) List(_ context.Context) ([]SessionInfo, error) {
 		out = append(out, SessionInfo{ID: sess.id, PID: sess.pid, Cwd: sess.cwd, CliTool: sess.cliTool})
 	}
 	return out, nil
+}
+
+// SessionOutput 是 get_session_output 的返回：会话最近 N 行纯文本（ANSI 已剥离）。
+type SessionOutput struct {
+	SessionID string   `json:"sessionId"`
+	Lines     []string `json:"lines"`
+}
+
+// SessionSnapshot 是 list_sessions / get_session_status 的单会话视图（活跃会话）。
+type SessionSnapshot struct {
+	ID           string `json:"id"`
+	PID          int    `json:"pid"`
+	Cwd          string `json:"cwd"`
+	CliTool      string `json:"cliTool"`
+	Status       string `json:"status"`       // 活跃会话恒 "active"（XK 暂不推断 idle/waiting）
+	LastOutputAt int64  `json:"lastOutputAt"` // 最近输出时刻 unix ms；无输出则为创建后的 0
+}
+
+// SessionSnapshots 返回当前活跃会话快照（含 status + 最近输出时刻），供 orchestrator
+// list_sessions / get_session_status。已退出会话不在此列（其输出仍可经 SessionOutput 读 dead-buffers）。
+func (s *Service) SessionSnapshots() []SessionSnapshot {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]SessionSnapshot, 0, len(s.sessions))
+	for _, sess := range s.sessions {
+		out = append(out, SessionSnapshot{
+			ID:           sess.id,
+			PID:          sess.pid,
+			Cwd:          sess.cwd,
+			CliTool:      sess.cliTool,
+			Status:       "active",
+			LastOutputAt: sess.lastOutputMs.Load(),
+		})
+	}
+	return out
+}
+
+// SessionOutput 读会话最近 lines 行纯文本（lines<=0 = 全部）。先查活跃会话，未命中则查
+// dead-buffers（退出后 deadRetention 内可读，懒清理过期条目）。均未命中返回 error。
+func (s *Service) SessionOutput(sessionID string, lines int) (SessionOutput, error) {
+	if sess, ok := s.get(sessionID); ok {
+		return SessionOutput{SessionID: sessionID, Lines: sess.outBuf.getRecent(lines)}, nil
+	}
+	s.deadMu.Lock()
+	defer s.deadMu.Unlock()
+	now := time.Now()
+	for id, d := range s.deadBuffers {
+		if now.Sub(d.createdAt) >= deadRetention {
+			delete(s.deadBuffers, id)
+		}
+	}
+	if d, ok := s.deadBuffers[sessionID]; ok {
+		return SessionOutput{SessionID: sessionID, Lines: d.buf.getRecent(lines)}, nil
+	}
+	return SessionOutput{}, fmt.Errorf("terminal: session %q not found or expired", sessionID)
+}
+
+// retireBuffer 把已退出会话的输出缓冲缩到 dead 上限后存入 dead-buffers（带退出时刻）。
+func (s *Service) retireBuffer(sess *session) {
+	sess.outBuf.shrink(deadOutputMaxLines, deadOutputMaxBytes)
+	s.deadMu.Lock()
+	s.deadBuffers[sess.id] = &deadBuffer{buf: sess.outBuf, createdAt: time.Now()}
+	s.deadMu.Unlock()
 }
 
 func (s *Service) get(id string) (*session, bool) {
@@ -394,6 +475,8 @@ func (s *Service) readLoop(sess *session) {
 			var data string
 			data, carry = utf8SafeProcess(buf[:n], carry)
 			if data != "" {
+				sess.outBuf.push(data)              // 累积纯文本供 get_session_output
+				sess.lastOutputMs.Store(nowMilli()) // 最近输出时刻（list_sessions/status 用）
 				if sess.firstOutput.CompareAndSwap(false, true) {
 					s.emitEvent(events.TerminalStatus, events.TerminalStatusPayload{
 						SessionID:    sess.id,
@@ -480,6 +563,7 @@ func (s *Service) waitLoop(sess *session) {
 	<-sess.batcherDone
 
 	s.remove(sess.id)
+	s.retireBuffer(sess) // 输出缓冲转 dead-buffers，供退出后 deadRetention 内回看
 
 	s.logger.Info("session exited", "session", sess.id, "exitCode", exitCode)
 	s.emitEvent(events.TerminalExit, events.TerminalExitPayload{
