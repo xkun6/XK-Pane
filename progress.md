@@ -1002,3 +1002,33 @@ SessionsView + **resume 透传链**（critic 核实 = 前端 **6 处链路**，�
 - **依赖**：新增 fsnotify；bep/debounce v1.2.1 已 indirect 提 direct。
 - **8 个拍板点**（D4-1~D4-8）默认已写入计划，开工前需用户确认 **D4-4（watcher 启动时机）** 与 **D4-6（LH 页是否重新上 Sidebar，注意刚移除过 history 位）**。
 - 单元切分：P4a-1 事件+watcher 骨架 → P4a-2 管线 → P4b 暴露 API → P4c-1 页骨架 → P4c-2 时间线+4-tab → P4c-3 标签+操作+live 刷新。
+
+---
+
+## 会话（2026-05-31）— P4 Local History 忠实化（自动捕获 watcher + 4-tab UI，6 单元 / 6 提交，全绿，待用户手测）
+
+承上 P4_PLAN/P4_HANDOFF → 全自动实现 P4，**8 个拍板点用户已锁定**：D4-1 独立包 `lhwatcher` / D4-2 bep/debounce 500ms / D4-3 双管齐下(debounce+per-project 写锁) / D4-4 扫已登记项目仅启已初始化 LH + SaveConfig/launchProject 补启 / D4-5 复用 IgnorePatterns + `.xkpanes` 硬过滤 / D4-6 LH 页重上 Sidebar primary(`history`) / D4-7 加 fsnotify / D4-8 读 .git/HEAD + watch HEAD 检测切换 3s 静默。本期只做整页（P4c），文件级 Dialog 入口留 P4d。
+
+### P4a-1 事件 + watcher 骨架（`3b1ff98`）
+`events.go` 注册 `localhistory:changed` + `LocalHistoryChangedPayload`。新建 `internal/services/lhwatcher`（D4-1）：`ignore.go` 忠实移植 cc-pane `matches_pattern`（`dir/**` 精确前缀防 `target2` 误匹配 / `*.ext` / 普通）+ `.xkpanes` 硬过滤防自噬（含单测）；`watcher.go` Manager 生命周期（New/AttachApp/StartRegistered/EnsureWatching/StopWatching/StopAll）+ projectWatcher（fsnotify 递归监控，忽略感知目录跳过 + 顶层 `.git` 监控做分支检测；`readCurrentBranch` 读 `.git/HEAD` 支持 worktree `gitdir:`；500ms trailing-edge debounce）；`shouldWatch` 守门仅 `.xkpanes/history` 存在且 `config.enabled`（D4-4）。`app.go` projSvc/wsSvc 提为变量 + 创建 lhWatcher + AttachApp + 启动扫描已登记项目 + 退出 StopAll。go.mod 加 fsnotify v1.10.1、bep/debounce 提 direct。
+
+### P4a-2 watcher 管线（`a49de20`）
+`localhistorysvc`（单写者 D4-3）：per-project 写锁 `writeLocks`，所有写方法（SnapshotFile/Restore*/AutoLabel/DeleteLabel/SaveConfig/Cleanup/SaveWatched/SaveDeletion）先取锁串行（与 gitsvc AutoLabel 共用）；新增 `SaveWatched`（变更，节流去重）+ `SaveDeletion`（取删前最新内容存 is_deleted 快照，不节流）+ `SetConfigHook`。`lhwatcher/pipeline.go` 忠实移植 `history_service.rs:268-548`：分支切换检测（每事件读 HEAD，切换→打 `branch_switch` auto 标签 + 设 3s 静默窗口）；flush 静默窗口丢弃文件事件，否则过滤（ignore→目录→符号链接越界→大小→二进制）后保存 + 删除快照走 SaveDeletion + Emit `localhistory:changed`。`terminal` 加 `SetSessionStartHook`（CreateSession 后异步补启 watcher，launchProject 时机）；`localhistory` 导出 `IsBinary`；app.go 接线 SetConfigHook(enable→Ensure/disable→Stop) + SetSessionStartHook。watcher 纯函数单测：debounce 合并 / 分支静默丢弃 / 过滤管线 / 删除快照 / readCurrentBranch(普通·detached·worktree)。
+
+### P4b 暴露后端 API + bindings（`d867b2a`）
+`localhistorysvc` 增 `PutLabel`（手动打标签，写锁）+ `GetFileBranches`（分支筛选，读）。`wails3 generate bindings`（5 events / 104 methods；function-type 警告为 SetConfigHook 等 wiring 方法预期）。前端 `LocalHistoryService` 补 DTO（LabelSource/LabelFileSnapshot/HistoryLabel + toLabel）+ 9 方法（listVersions/listDeletedFiles/versionContent/versionsDiff/getFileBranches/listLabels/putLabel/restoreToLabel/deleteLabel）。
+
+### P4c-1 HistoryPage 骨架 + 阶段1 文件列表（`800b954`）
+`pages/HistoryPage/`（View 阶段1列表 + 阶段2占位 / useHistoryPage 项目选择 + GetRecentChanges 按文件去重聚合 + 请求令牌 / styles 全套 / skeleton / index）。lang `{zh-CN,en-US}` 恢复旧 `history.*` 58 键并扩展为完整 4-tab 全集（两 locale key 对齐）。`historyFormat`（formatTime/formatSize 纯展示无 i18n）。routes 注册 `history`（HistoryRounded，primary，keepAlive，D4-6 重上 Sidebar）+ i18n `route.history` + App register + services 桶补 DTO + shared/events 加 LocalHistoryChanged。
+
+### P4c-2 版本时间线 + 4-tab + 分支筛选（`3e634bc`）
+useHistoryPage 阶段2：selectFile 异步加载（ListVersions 倒序 + GetFileBranches + ListLabels）默认选最新版按 diff；selectVersion/setViewMode/setBranchFilter 按 tab 加载 diff(相邻版本/最早↔工作树)/content；versionLabels useMemo（版本→标签 badge）；filteredVersions 分支过滤；diff 请求令牌；restoreDeleted/restoreToLabel(NativeDialogs confirm)。View：左 260px 时间线（倒序/时间/大小/分支+标签 badge/选中高亮/上下键导航）+ 右 4-tab（diff 复用 DiffView / content `<pre>` / deleted 列表+恢复 / project-restore 标签列表+恢复到快照）+ 分支筛选下拉（多分支且 diff/content 显示）；来源彩色 badge 取 theme.palette.foundation。
+
+### P4c-3 标签 UI + 操作区 + live 刷新（`7d0ba9b`）
+`useLocalHistoryChangeEvent`（订阅 `localhistory:changed` 按 projectPath 过滤 live 刷新）。useHistoryPage 扩展：addTag(TextInputDialog→PutLabel，source=user/type=manual/crypto.randomUUID) / restoreVersion(单文件回滚) / snapshot(手动快照，去重返回 null 提示) / config 编辑+saveConfig(触发后端 ConfigHook 启停 watcher) / stats / cleanup(confirm) / reloadSilent(watcher 命中静默重拉，保留选中)。View：版本右键/「打标签」按钮 → TextInputDialog；「回滚到此版本」按钮；底部操作区（手动快照 + 配置面板 开关/数值/MB 换算/忽略规则 textarea/保存 + 统计 + 清理）。
+
+### ✅ P4 完成（待用户手测）
+- **验证**：go build . + go vet ./internal/... ✅ / go test（lhwatcher 含 ignore+debounce+分支静默+过滤+删除+readCurrentBranch、localhistorysvc、localhistory、terminal）✅ / `wails3 generate bindings`（5 events / 104 methods）✅ / pnpm typecheck ✅ / pnpm build ✅ / pnpm test（37 vitest）✅。
+- **铁律核对**：SQLite-only（LH 每项目 `.xkpanes` 独立库）；写配置 filex / 日志 logx / 子进程 procx 沿用；对话框走 NativeDialogs + 文本录入 TextInputDialog；图标全 `@mui/icons-material *Rounded`（无 emoji/Unicode/第三方/内联 SVG）；人类可见串全走 `t()` + 新页配 lang 并 App 注册；取色全 `theme.palette.foundation.*`（无硬编码十六进制）；圆角 按钮 6/容器 8；事件名集中 `internal/events`；MVVM(View 无 bindings → useHistoryPage 无 JSX/无 t() 经 LocalHistoryService → @bindings)；导航 `navigate('history')`；后端业务 service 不 capture `*storage.DB`（LH 每项目独立 Store 经 svc 缓存 + 写锁）。
+- **未做（留后续）**：P4d 文件级历史 Dialog 入口（工作空间树 / Git 右键「查看历史」）；watcher 启动扫描只扫已登记项目（新建未登记项目需经 SaveConfig/launchProject 补启）。
+- **待用户 `wails3 dev` 手测**：见 P4_HANDOFF.md「待手测清单」。
