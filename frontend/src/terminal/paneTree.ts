@@ -9,6 +9,8 @@ import type {
   SplitPane,
   Tab,
   TerminalPaneLeaf,
+  TerminalPaneNode,
+  TerminalPaneSplit,
 } from './types';
 
 /** 生成带前缀的唯一 id。 */
@@ -112,6 +114,52 @@ export function findParent(
 export function collectPanels(node: PaneNode): Panel[] {
   if (node.type === 'panel') return [node];
   return node.children.flatMap(collectPanels);
+}
+
+// ── 单个 Tab 内的「终端分屏树」助手（忠实移植 cc-pane usePanesStore 同名函数）──
+
+/** 递归查找单个 Tab 内的终端分屏节点（leaf / split）。 */
+export function findTerminalPane(node: TerminalPaneNode, paneId: string): TerminalPaneNode | null {
+  if (node.id === paneId) return node;
+  if (node.type === 'split') {
+    for (const child of node.children) {
+      const found = findTerminalPane(child, paneId);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/** 查找终端分屏节点的父 split 与其下标；根节点返回 {parent:null,index:-1}。 */
+export function findTerminalPaneParent(
+  node: TerminalPaneNode,
+  paneId: string,
+  parent: TerminalPaneSplit | null = null,
+): { parent: TerminalPaneSplit | null; index: number } | null {
+  if (node.id === paneId) {
+    return { parent, index: parent ? parent.children.indexOf(node) : -1 };
+  }
+  if (node.type === 'split') {
+    for (let i = 0; i < node.children.length; i++) {
+      const child = node.children[i];
+      if (!child) continue; // noUncheckedIndexedAccess 守门
+      const result = findTerminalPaneParent(child, paneId, node);
+      if (result) return result;
+    }
+  }
+  return null;
+}
+
+/** 收集一个终端分屏树里的所有 leaf（含持有的 sessionId）。 */
+export function collectTerminalLeaves(node?: TerminalPaneNode): TerminalPaneLeaf[] {
+  if (!node) return [];
+  if (node.type === 'leaf') return [node];
+  return node.children.flatMap(collectTerminalLeaves);
+}
+
+/** 克隆一个 leaf 作为新分屏：新 id、清空 sessionId，保留 cliTool/workspacePath/resumeId 以启同类终端。 */
+export function cloneTerminalLeaf(source: TerminalPaneLeaf): TerminalPaneLeaf {
+  return { ...source, id: generateId('terminal-pane'), sessionId: null };
 }
 
 /**

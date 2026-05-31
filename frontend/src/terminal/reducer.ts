@@ -6,24 +6,27 @@
 //
 // 已移植的外层操作：split / closePane / addTab / closeTab / selectTab / setActivePane /
 // resizePanes / setTabSession（生命周期回填钩子）+ 拖拽三件套 reorderTabs / moveTab /
-// moveTabToEdge（P5 Tab 拖拽：任意 Tab 拖到任意面板的边 → 在其旁拆出新面板；泛化了
-// cc-pane splitAndMoveTab 的「同面板右/下拆分」到「任意源 + 任意目标面板 + 四条边」）。
+// moveTabToEdge（P5 Tab 拖拽：任意 Tab 拖到任意面板的边 → 在其旁拆出新面板）+ 内层终端分屏
+// splitTerminalPane / closeTerminalPane / resizeTerminalPanes / setActiveTerminalPane（单 Tab 内多 PTY）。
 // 刻意未移植（依赖未落地子系统，勿现在硬塞——CLAUDE.md 简洁铁律）：
 //   - closedTabs 可恢复快照 + syncPtyRegistryUnregister（会话回放/恢复子功能，后续）
 //   - pinned 校验（UI 细节，后续）
-//   - 内层 terminalPane 分屏 splitTerminalPane / closeTerminalPane（单 Tab 内分屏，后续）
 
 import {
+  cloneTerminalLeaf,
   collectPanels,
+  collectTerminalLeaves,
   createEmptyPanel,
   createPanel,
   createTab,
   findPane,
   findParent,
   findTabLocation,
+  findTerminalPane,
+  findTerminalPaneParent,
   generateId,
 } from './paneTree';
-import type { CliTool, PaneEdge, PaneNode, Panel, SplitDirection } from './types';
+import type { CliTool, PaneEdge, PaneNode, Panel, SplitDirection, Tab } from './types';
 
 export interface TerminalTreeState {
   rootPane: PaneNode;
@@ -58,8 +61,14 @@ export type TerminalAction =
       targetPaneId: string;
       edge: PaneEdge;
     }
+  // —— P5 内层终端分屏（单 Tab 内多 PTY；操作其 terminalRootPane 子树）——
+  | { type: 'splitTerminalPane'; tabId: string; terminalPaneId: string; direction: SplitDirection }
+  | { type: 'closeTerminalPane'; tabId: string; terminalPaneId: string }
+  | { type: 'resizeTerminalPanes'; tabId: string; terminalPaneId: string; sizes: number[] }
+  | { type: 'setActiveTerminalPane'; tabId: string; terminalPaneId: string }
   // setTabSession 按 tabId 全树查找（不再依赖 paneId）—— Tab 可经 moveTab 跨面板迁移。
-  | { type: 'setTabSession'; tabId: string; sessionId: string };
+  // terminalPaneId 缺省回填活动 leaf；内层分屏后由 reconcile 指定具体 leaf。
+  | { type: 'setTabSession'; tabId: string; sessionId: string; terminalPaneId?: string };
 
 const DIRECTION_MAP: Record<SplitDirection, 'horizontal' | 'vertical'> = {
   right: 'horizontal',
@@ -87,6 +96,21 @@ function normalizePaneTree(root: PaneNode): PaneNode {
       ? root.sizes.map((size) => (size / total) * 100)
       : root.children.map(() => 100 / root.children.length);
   return root;
+}
+
+// 内层分屏后保持 Tab 级状态与「活动 leaf」一致：activeTerminalPaneId 指向存在的 leaf，
+// 且 Tab 级 sessionId 镜像活动 leaf 的 sessionId（PanelView 当前按 tab.sessionId 渲染，需同步）。
+// 对齐 cc-pane syncTabTerminalState 的核心（XK 无 provider/ssh 等 Phase 3/4 字段，故只同步 session）。
+function syncTabActiveLeaf(tab: Tab): void {
+  if (!tab.terminalRootPane) return;
+  const leaves = collectTerminalLeaves(tab.terminalRootPane);
+  if (leaves.length === 0) return;
+  const active =
+    (tab.activeTerminalPaneId
+      ? leaves.find((l) => l.id === tab.activeTerminalPaneId)
+      : undefined) ?? leaves[0]!;
+  tab.activeTerminalPaneId = active.id;
+  tab.sessionId = active.sessionId;
 }
 
 /** 初始状态：单个空面板（无 Tab），活动面板即该面板。终端页打开即空态，由 WorkspaceTree 启动会话。 */
@@ -375,16 +399,119 @@ export function terminalTreeReducer(
       return { rootPane: normalizePaneTree(nextRoot), activePaneId: newPane.id };
     }
 
+    case 'splitTerminalPane': {
+      // 在单个 Tab 内把某终端 leaf 拆成两个（克隆出新 leaf，新 leaf 起同类终端）—— 忠实移植 usePanesStore。
+      const root = structuredClone(state.rootPane);
+      const loc = findTabLocation(root, action.tabId);
+      if (!loc) return state;
+      const tab = loc.tab;
+      if (!tab.terminalRootPane) return state;
+      const target = findTerminalPane(tab.terminalRootPane, action.terminalPaneId);
+      if (!target || target.type !== 'leaf') return state;
+
+      const newLeaf = cloneTerminalLeaf(target);
+      const splitDirection = DIRECTION_MAP[action.direction];
+      const pr = findTerminalPaneParent(tab.terminalRootPane, action.terminalPaneId);
+      if (!pr || pr.parent === null) {
+        tab.terminalRootPane = {
+          type: 'split',
+          id: generateId('terminal-split'),
+          direction: splitDirection,
+          children: [target, newLeaf],
+          sizes: [50, 50],
+        };
+      } else if (pr.parent.direction === splitDirection) {
+        pr.parent.children.splice(pr.index + 1, 0, newLeaf);
+        const newSize = 100 / pr.parent.children.length;
+        pr.parent.sizes = pr.parent.children.map(() => newSize);
+      } else {
+        pr.parent.children[pr.index] = {
+          type: 'split',
+          id: generateId('terminal-split'),
+          direction: splitDirection,
+          children: [target, newLeaf],
+          sizes: [50, 50],
+        };
+      }
+      tab.activeTerminalPaneId = newLeaf.id;
+      syncTabActiveLeaf(tab);
+      return { ...state, rootPane: root };
+    }
+
+    case 'closeTerminalPane': {
+      // 关闭单个 Tab 内的一个终端 leaf（折叠单子 split）—— 忠实移植 usePanesStore；至少留一个 leaf。
+      const root = structuredClone(state.rootPane);
+      const loc = findTabLocation(root, action.tabId);
+      if (!loc) return state;
+      const tab = loc.tab;
+      if (!tab.terminalRootPane) return state;
+      if (collectTerminalLeaves(tab.terminalRootPane).length <= 1) return state;
+      const pr = findTerminalPaneParent(tab.terminalRootPane, action.terminalPaneId);
+      if (!pr || pr.parent === null) return state;
+
+      const parent = pr.parent;
+      parent.children.splice(pr.index, 1);
+      parent.sizes.splice(pr.index, 1);
+      if (parent.children.length === 1) {
+        const gp = findTerminalPaneParent(tab.terminalRootPane, parent.id);
+        if (!gp || gp.parent === null) {
+          tab.terminalRootPane = parent.children[0]!;
+        } else {
+          gp.parent.children[gp.index] = parent.children[0]!;
+        }
+      } else {
+        const total = parent.sizes.reduce((a, b) => a + b, 0);
+        parent.sizes =
+          total > 0
+            ? parent.sizes.map((s) => (s / total) * 100)
+            : parent.sizes.map(() => 100 / parent.sizes.length);
+      }
+      const nextLeaves = collectTerminalLeaves(tab.terminalRootPane);
+      tab.activeTerminalPaneId = nextLeaves[Math.min(pr.index, nextLeaves.length - 1)]?.id;
+      syncTabActiveLeaf(tab);
+      return { ...state, rootPane: root };
+    }
+
+    case 'resizeTerminalPanes': {
+      const root = structuredClone(state.rootPane);
+      const loc = findTabLocation(root, action.tabId);
+      if (!loc || !loc.tab.terminalRootPane) return state;
+      const node = findTerminalPane(loc.tab.terminalRootPane, action.terminalPaneId);
+      if (!node || node.type !== 'split') return state;
+      node.sizes = [...action.sizes];
+      return { ...state, rootPane: root };
+    }
+
+    case 'setActiveTerminalPane': {
+      const root = structuredClone(state.rootPane);
+      const loc = findTabLocation(root, action.tabId);
+      if (!loc) return state;
+      const tab = loc.tab;
+      if (!tab.terminalRootPane) return state;
+      if (!findTerminalPane(tab.terminalRootPane, action.terminalPaneId)) return state;
+      tab.activeTerminalPaneId = action.terminalPaneId;
+      syncTabActiveLeaf(tab);
+      return { ...state, rootPane: root };
+    }
+
     case 'setTabSession': {
       // 按 tabId 全树定位（不依赖 paneId）—— Tab 经 moveTab 迁移后旧 paneId 失效，
       // 按 tabId 查当前 pane 才能正确回填，避免 session 泄漏（cc-pane updateTabSession 即如此）。
       const root = structuredClone(state.rootPane);
       const loc = findTabLocation(root, action.tabId);
       if (!loc) return state;
-      loc.tab.sessionId = action.sessionId;
-      // MVP：terminalRootPane 为单 leaf，回填其 sessionId（Tab 级与 leaf 级协同）。
-      if (loc.tab.terminalRootPane && loc.tab.terminalRootPane.type === 'leaf') {
-        loc.tab.terminalRootPane.sessionId = action.sessionId;
+      const tab = loc.tab;
+      if (tab.terminalRootPane) {
+        // 回填到指定 leaf（reconcile 按 leaf 创建会话时指定）；缺省回填活动 leaf。
+        const leaves = collectTerminalLeaves(tab.terminalRootPane);
+        const targetId = action.terminalPaneId ?? tab.activeTerminalPaneId;
+        const leaf =
+          (targetId ? leaves.find((l) => l.id === targetId) : undefined) ??
+          (tab.terminalRootPane.type === 'leaf' ? tab.terminalRootPane : leaves[0]);
+        if (leaf && leaf.type === 'leaf') leaf.sessionId = action.sessionId;
+        syncTabActiveLeaf(tab);
+      } else {
+        tab.sessionId = action.sessionId;
       }
       return { ...state, rootPane: root };
     }

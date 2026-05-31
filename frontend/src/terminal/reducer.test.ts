@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { collectPanels } from './paneTree';
+import { collectPanels, collectTerminalLeaves } from './paneTree';
 import {
   createInitialTreeState,
   terminalTreeReducer,
   type TerminalTreeState,
 } from './reducer';
-import type { Panel, SplitPane } from './types';
+import type { Panel, SplitPane, Tab, TerminalPaneSplit } from './types';
 
 // ── 测试辅助 ──
 
@@ -585,5 +585,156 @@ describe('深层与多子分屏', () => {
     expect(inner.sizes).toEqual([25, 75]);
     expect(rootSplit(s3).id).toBe(outerId);
     expect(rootSplit(s3).sizes).toEqual([50, 50]); // 外层未受影响
+  });
+});
+
+// ── P5 内层终端分屏（单 Tab 内多 PTY）──
+
+describe('内层终端分屏', () => {
+  function oneTab(): { state: TerminalTreeState; tabId: string; leafId: string } {
+    let s = createInitialTreeState();
+    const pid = rootPanel(s).id;
+    s = terminalTreeReducer(s, {
+      type: 'addTab',
+      paneId: pid,
+      opts: { projectId: 'p', projectPath: '/a', cliTool: 'claude' },
+    });
+    const tab = rootPanel(s).tabs[0]!;
+    return { state: s, tabId: tab.id, leafId: tab.activeTerminalPaneId! };
+  }
+  function tabById(s: TerminalTreeState, tabId: string): Tab {
+    const t = collectPanels(s.rootPane)
+      .flatMap((p) => p.tabs)
+      .find((x) => x.id === tabId);
+    if (!t) throw new Error('tab not found');
+    return t;
+  }
+
+  it('splitTerminalPane：单 leaf → split[原, 新]，新 leaf 激活，克隆保留 cliTool 且清空 session', () => {
+    const { state, tabId, leafId } = oneTab();
+    const s1 = terminalTreeReducer(state, {
+      type: 'splitTerminalPane',
+      tabId,
+      terminalPaneId: leafId,
+      direction: 'right',
+    });
+    const tab = tabById(s1, tabId);
+    expect(tab.terminalRootPane?.type).toBe('split');
+    expect((tab.terminalRootPane as TerminalPaneSplit).direction).toBe('horizontal');
+    const leaves = collectTerminalLeaves(tab.terminalRootPane);
+    expect(leaves).toHaveLength(2);
+    const newLeaf = leaves.find((l) => l.id !== leafId)!;
+    expect(tab.activeTerminalPaneId).toBe(newLeaf.id);
+    expect(newLeaf.cliTool).toBe('claude');
+    expect(newLeaf.sessionId).toBeNull();
+  });
+
+  it('splitTerminalPane 同方向再拆 → 合并进同一 split（3 leaf 不嵌套）', () => {
+    const { state, tabId, leafId } = oneTab();
+    const s1 = terminalTreeReducer(state, {
+      type: 'splitTerminalPane',
+      tabId,
+      terminalPaneId: leafId,
+      direction: 'right',
+    });
+    const active1 = tabById(s1, tabId).activeTerminalPaneId!;
+    const s2 = terminalTreeReducer(s1, {
+      type: 'splitTerminalPane',
+      tabId,
+      terminalPaneId: active1,
+      direction: 'right',
+    });
+    const tab = tabById(s2, tabId);
+    expect((tab.terminalRootPane as TerminalPaneSplit).children).toHaveLength(3);
+    expect(collectTerminalLeaves(tab.terminalRootPane)).toHaveLength(3);
+  });
+
+  it('closeTerminalPane：2 leaf 关 1 → 折叠回单 leaf；单 leaf 时拒绝', () => {
+    const { state, tabId, leafId } = oneTab();
+    expect(
+      terminalTreeReducer(state, { type: 'closeTerminalPane', tabId, terminalPaneId: leafId }),
+    ).toBe(state);
+    const s1 = terminalTreeReducer(state, {
+      type: 'splitTerminalPane',
+      tabId,
+      terminalPaneId: leafId,
+      direction: 'down',
+    });
+    const newLeaf = collectTerminalLeaves(tabById(s1, tabId).terminalRootPane).find(
+      (l) => l.id !== leafId,
+    )!;
+    const s2 = terminalTreeReducer(s1, {
+      type: 'closeTerminalPane',
+      tabId,
+      terminalPaneId: newLeaf.id,
+    });
+    const tab = tabById(s2, tabId);
+    expect(tab.terminalRootPane?.type).toBe('leaf');
+    expect(collectTerminalLeaves(tab.terminalRootPane)).toHaveLength(1);
+  });
+
+  it('setActiveTerminalPane：切活动 leaf，tab.sessionId 镜像该 leaf', () => {
+    const { state, tabId, leafId } = oneTab();
+    const sA = terminalTreeReducer(state, {
+      type: 'setTabSession',
+      tabId,
+      sessionId: 'sess-A',
+      terminalPaneId: leafId,
+    });
+    const sSplit = terminalTreeReducer(sA, {
+      type: 'splitTerminalPane',
+      tabId,
+      terminalPaneId: leafId,
+      direction: 'right',
+    });
+    expect(tabById(sSplit, tabId).sessionId).toBeNull(); // 活动=新 leaf（无 session）
+    const sBack = terminalTreeReducer(sSplit, {
+      type: 'setActiveTerminalPane',
+      tabId,
+      terminalPaneId: leafId,
+    });
+    expect(tabById(sBack, tabId).activeTerminalPaneId).toBe(leafId);
+    expect(tabById(sBack, tabId).sessionId).toBe('sess-A');
+  });
+
+  it('setTabSession 指定 terminalPaneId 回填到具体 leaf（不影响其它 leaf）', () => {
+    const { state, tabId, leafId } = oneTab();
+    const s1 = terminalTreeReducer(state, {
+      type: 'splitTerminalPane',
+      tabId,
+      terminalPaneId: leafId,
+      direction: 'right',
+    });
+    const newLeafId = collectTerminalLeaves(tabById(s1, tabId).terminalRootPane).find(
+      (l) => l.id !== leafId,
+    )!.id;
+    const s2 = terminalTreeReducer(s1, {
+      type: 'setTabSession',
+      tabId,
+      sessionId: 'sess-old',
+      terminalPaneId: leafId,
+    });
+    const leaves = collectTerminalLeaves(tabById(s2, tabId).terminalRootPane);
+    expect(leaves.find((l) => l.id === leafId)!.sessionId).toBe('sess-old');
+    expect(leaves.find((l) => l.id === newLeafId)!.sessionId).toBeNull();
+    expect(tabById(s2, tabId).sessionId).toBeNull(); // 活动仍是新 leaf
+  });
+
+  it('resizeTerminalPanes：设置内层 split 占比', () => {
+    const { state, tabId, leafId } = oneTab();
+    const s1 = terminalTreeReducer(state, {
+      type: 'splitTerminalPane',
+      tabId,
+      terminalPaneId: leafId,
+      direction: 'right',
+    });
+    const splitId = (tabById(s1, tabId).terminalRootPane as TerminalPaneSplit).id;
+    const s2 = terminalTreeReducer(s1, {
+      type: 'resizeTerminalPanes',
+      tabId,
+      terminalPaneId: splitId,
+      sizes: [30, 70],
+    });
+    expect((tabById(s2, tabId).terminalRootPane as TerminalPaneSplit).sizes).toEqual([30, 70]);
   });
 });
