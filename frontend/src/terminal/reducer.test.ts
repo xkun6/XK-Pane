@@ -220,7 +220,7 @@ describe('resizePanes', () => {
 });
 
 describe('setTabSession', () => {
-  it('回填 Tab 级与单 leaf 的 sessionId', () => {
+  it('回填 Tab 级与单 leaf 的 sessionId（按 tabId 全树定位）', () => {
     const base = createInitialTreeState();
     const pid = rootPanel(base).id;
     const s0 = terminalTreeReducer(base, {
@@ -231,7 +231,6 @@ describe('setTabSession', () => {
     const tabId = rootPanel(s0).tabs[0]!.id;
     const s1 = terminalTreeReducer(s0, {
       type: 'setTabSession',
-      paneId: pid,
       tabId,
       sessionId: 'sess-123',
     });
@@ -243,6 +242,160 @@ describe('setTabSession', () => {
     }
     // 原状态未被改动
     expect(rootPanel(s0).tabs[0]!.sessionId).toBeNull();
+  });
+
+  it('tabId 不存在 → 原样返回', () => {
+    const s0 = createInitialTreeState();
+    const s1 = terminalTreeReducer(s0, { type: 'setTabSession', tabId: 'nope', sessionId: 'x' });
+    expect(s1).toBe(s0);
+  });
+});
+
+// ── P5 拖拽：reorderTabs / moveTab / splitAndMoveTab ──
+
+describe('reorderTabs', () => {
+  // 在单面板里放 3 个 Tab，返回 [面板 id, [tabId...]]。
+  function threeTabs(): { state: TerminalTreeState; pid: string; ids: string[] } {
+    let s = createInitialTreeState();
+    const pid = rootPanel(s).id;
+    for (const p of ['a', 'b', 'c']) {
+      s = terminalTreeReducer(s, { type: 'addTab', paneId: pid, opts: { projectId: p, projectPath: `/${p}` } });
+    }
+    return { state: s, pid, ids: rootPanel(s).tabs.map((t) => t.id) };
+  }
+
+  it('把首个 Tab 移到末位 → 顺序变 [b,c,a]', () => {
+    const { state, pid, ids } = threeTabs();
+    const s1 = terminalTreeReducer(state, { type: 'reorderTabs', paneId: pid, fromIndex: 0, toIndex: 2 });
+    expect(rootPanel(s1).tabs.map((t) => t.id)).toEqual([ids[1], ids[2], ids[0]]);
+  });
+
+  it('fromIndex === toIndex → 原样返回（同引用）', () => {
+    const { state, pid } = threeTabs();
+    const s1 = terminalTreeReducer(state, { type: 'reorderTabs', paneId: pid, fromIndex: 1, toIndex: 1 });
+    expect(s1).toBe(state);
+  });
+
+  it('越界下标 → 原样返回', () => {
+    const { state, pid } = threeTabs();
+    expect(terminalTreeReducer(state, { type: 'reorderTabs', paneId: pid, fromIndex: 0, toIndex: 9 })).toBe(state);
+    expect(terminalTreeReducer(state, { type: 'reorderTabs', paneId: pid, fromIndex: -1, toIndex: 0 })).toBe(state);
+  });
+});
+
+describe('moveTab', () => {
+  // 构造 hsplit[A, B]：A 含 2 Tab（a1/a2）；B 含 1 Tab（split 自动建的默认空 Tab）。
+  function twoPanesWithTabs() {
+    let s = createInitialTreeState();
+    const a = rootPanel(s).id;
+    s = terminalTreeReducer(s, { type: 'addTab', paneId: a, opts: { projectId: 'a1', projectPath: '/a1' } });
+    s = terminalTreeReducer(s, { type: 'addTab', paneId: a, opts: { projectId: 'a2', projectPath: '/a2' } });
+    s = terminalTreeReducer(s, { type: 'split', paneId: a, direction: 'right' });
+    const b = s.activePaneId;
+    const aPanel = panels(s).find((p) => p.id === a)!;
+    const bPanel = panels(s).find((p) => p.id === b)!;
+    return { state: s, a, b, aTabs: aPanel.tabs.map((t) => t.id), bTabs: bPanel.tabs.map((t) => t.id) };
+  }
+
+  it('跨面板移动：Tab 从 A 进 B 并激活，B 设为活动面板', () => {
+    const { state, a, b, aTabs } = twoPanesWithTabs();
+    const moved = aTabs[0]!;
+    const s1 = terminalTreeReducer(state, { type: 'moveTab', fromPaneId: a, toPaneId: b, tabId: moved });
+    const aPanel = panels(s1).find((p) => p.id === a)!;
+    const bPanel = panels(s1).find((p) => p.id === b)!;
+    expect(aPanel.tabs.map((t) => t.id)).not.toContain(moved);
+    expect(bPanel.tabs.map((t) => t.id)).toContain(moved);
+    expect(bPanel.activeTabId).toBe(moved);
+    expect(s1.activePaneId).toBe(b);
+    // 源面板活动 Tab 修正为剩余的
+    expect(aPanel.activeTabId).toBe(aPanel.tabs[0]!.id);
+  });
+
+  it('toIndex 指定插入位置', () => {
+    const { state, a, b, aTabs, bTabs } = twoPanesWithTabs();
+    const moved = aTabs[1]!;
+    const s1 = terminalTreeReducer(state, { type: 'moveTab', fromPaneId: a, toPaneId: b, tabId: moved, toIndex: 0 });
+    const bPanel = panels(s1).find((p) => p.id === b)!;
+    expect(bPanel.tabs.map((t) => t.id)).toEqual([moved, bTabs[0]]);
+  });
+
+  it('移走 B 唯一的 Tab → B 被掏空 → 折叠回单面板 A，活动面板=A', () => {
+    const { state, a, b, bTabs } = twoPanesWithTabs();
+    const moved = bTabs[0]!;
+    const s1 = terminalTreeReducer(state, { type: 'moveTab', fromPaneId: b, toPaneId: a, tabId: moved });
+    expect(s1.rootPane.type).toBe('panel'); // 折叠
+    expect(rootPanel(s1).id).toBe(a);
+    expect(s1.activePaneId).toBe(a);
+    expect(rootPanel(s1).tabs.map((t) => t.id)).toContain(moved);
+    expect(rootPanel(s1).activeTabId).toBe(moved);
+    // B 已不存在
+    expect(panels(s1).some((p) => p.id === b)).toBe(false);
+  });
+
+  it('源/目标面板不存在 → 原样返回', () => {
+    const { state, a } = twoPanesWithTabs();
+    expect(
+      terminalTreeReducer(state, { type: 'moveTab', fromPaneId: a, toPaneId: 'nope', tabId: 'x' }),
+    ).toBe(state);
+  });
+});
+
+describe('splitAndMoveTab', () => {
+  function paneWithTwoTabs() {
+    let s = createInitialTreeState();
+    const a = rootPanel(s).id;
+    s = terminalTreeReducer(s, { type: 'addTab', paneId: a, opts: { projectId: 'a1', projectPath: '/a1' } });
+    s = terminalTreeReducer(s, { type: 'addTab', paneId: a, opts: { projectId: 'a2', projectPath: '/a2' } });
+    return { state: s, a, ids: rootPanel(s).tabs.map((t) => t.id) };
+  }
+
+  it('向右拆分并移 Tab → 根变水平 split[源, 新]，新面板含被移 Tab 且被激活', () => {
+    const { state, a, ids } = paneWithTwoTabs();
+    const moved = ids[1]!;
+    const s1 = terminalTreeReducer(state, { type: 'splitAndMoveTab', paneId: a, tabId: moved, direction: 'right' });
+    expect(s1.rootPane.type).toBe('split');
+    const sp = rootSplit(s1);
+    expect(sp.direction).toBe('horizontal');
+    expect(sp.children).toHaveLength(2);
+    const src = sp.children[0] as Panel;
+    const dst = sp.children[1] as Panel;
+    expect(src.id).toBe(a);
+    expect(src.tabs.map((t) => t.id)).not.toContain(moved);
+    expect(dst.tabs.map((t) => t.id)).toEqual([moved]);
+    expect(dst.activeTabId).toBe(moved);
+    expect(s1.activePaneId).toBe(dst.id);
+  });
+
+  it('面板只有 1 个 Tab → 拒绝（原样返回，绝不移出唯一 Tab）', () => {
+    let s = createInitialTreeState();
+    const a = rootPanel(s).id;
+    s = terminalTreeReducer(s, { type: 'addTab', paneId: a, opts: { projectId: 'a1', projectPath: '/a1' } });
+    const only = rootPanel(s).tabs[0]!.id;
+    const s1 = terminalTreeReducer(s, { type: 'splitAndMoveTab', paneId: a, tabId: only, direction: 'right' });
+    expect(s1).toBe(s);
+  });
+});
+
+describe('setTabSession 跨 moveTab 后仍能回填（隐患回归）', () => {
+  it('Tab 移到新面板后，按 tabId 回填落到当前 pane（不 no-op）', () => {
+    // A 含 2 Tab，B 含 1 Tab；把 A 的一个 Tab 移到 B，再对其回填 sessionId。
+    let s = createInitialTreeState();
+    const a = rootPanel(s).id;
+    s = terminalTreeReducer(s, { type: 'addTab', paneId: a, opts: { projectId: 'a1', projectPath: '/a1' } });
+    s = terminalTreeReducer(s, { type: 'addTab', paneId: a, opts: { projectId: 'a2', projectPath: '/a2' } });
+    s = terminalTreeReducer(s, { type: 'split', paneId: a, direction: 'right' });
+    const b = s.activePaneId;
+    s = terminalTreeReducer(s, { type: 'addTab', paneId: b, opts: { projectId: 'b1', projectPath: '/b1' } });
+    const movedTab = panels(s).find((p) => p.id === a)!.tabs[0]!.id;
+    s = terminalTreeReducer(s, { type: 'moveTab', fromPaneId: a, toPaneId: b, tabId: movedTab });
+
+    const s2 = terminalTreeReducer(s, { type: 'setTabSession', tabId: movedTab, sessionId: 'sess-moved' });
+    const bPanel = panels(s2).find((p) => p.id === b)!;
+    const tab = bPanel.tabs.find((t) => t.id === movedTab)!;
+    expect(tab.sessionId).toBe('sess-moved');
+    if (tab.terminalRootPane?.type === 'leaf') {
+      expect(tab.terminalRootPane.sessionId).toBe('sess-moved');
+    }
   });
 });
 

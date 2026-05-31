@@ -113,3 +113,16 @@ export function collectPanels(node: PaneNode): Panel[] {
   if (node.type === 'panel') return [node];
   return node.children.flatMap(collectPanels);
 }
+
+/**
+ * 全树按 tabId 定位其所在 Panel 与 Tab（cc-pane `findTabLocation` 等价）。
+ * 用于 setTabSession 等「只知 tabId、不知当前 pane」的场景 —— Tab 经 moveTab 跨面板迁移后，
+ * 旧 paneId 已失效，必须按 tabId 重新定位，否则回填落到旧 pane 会 no-op（session 泄漏）。
+ */
+export function findTabLocation(node: PaneNode, tabId: string): { panel: Panel; tab: Tab } | null {
+  for (const panel of collectPanels(node)) {
+    const tab = panel.tabs.find((item) => item.id === tabId);
+    if (tab) return { panel, tab };
+  }
+  return null;
+}

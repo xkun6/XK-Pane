@@ -69,8 +69,14 @@ export interface TerminalContextValue {
   closePanel: (paneId: string) => void;
   /** 调整某 split 节点的子面板占比。 */
   resizePanels: (paneId: string, sizes: number[]) => void;
-  /** 回填某 Tab 的活动 PTY 会话 id（供生命周期 effect 在 create 完成后调用）。 */
-  setTabSession: (paneId: string, tabId: string, sessionId: string) => void;
+  /** 同面板内重排 Tab（拖拽落到同面板另一 Tab 上）。 */
+  reorderTabs: (paneId: string, fromIndex: number, toIndex: number) => void;
+  /** 跨面板移动 Tab（拖到另一面板）；toIndex 缺省追加到末尾；源面板掏空则折叠。 */
+  moveTab: (fromPaneId: string, toPaneId: string, tabId: string, toIndex?: number) => void;
+  /** 拆分源面板并把指定 Tab 移入新面板（拖到面板边缘触发）；绝不移出唯一 Tab。 */
+  splitAndMoveTab: (paneId: string, tabId: string, direction: SplitDirection) => void;
+  /** 回填某 Tab 的活动 PTY 会话 id（供生命周期 effect 在 create 完成后调用，按 tabId 全树定位）。 */
+  setTabSession: (tabId: string, sessionId: string) => void;
 }
 
 const TerminalContext = createContext<TerminalContextValue | null>(null);
@@ -149,9 +155,23 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
     (paneId: string, sizes: number[]) => dispatch({ type: 'resizePanes', paneId, sizes }),
     [],
   );
+  const reorderTabs = useCallback(
+    (paneId: string, fromIndex: number, toIndex: number) =>
+      dispatch({ type: 'reorderTabs', paneId, fromIndex, toIndex }),
+    [],
+  );
+  const moveTab = useCallback(
+    (fromPaneId: string, toPaneId: string, tabId: string, toIndex?: number) =>
+      dispatch({ type: 'moveTab', fromPaneId, toPaneId, tabId, toIndex }),
+    [],
+  );
+  const splitAndMoveTab = useCallback(
+    (paneId: string, tabId: string, direction: SplitDirection) =>
+      dispatch({ type: 'splitAndMoveTab', paneId, tabId, direction }),
+    [],
+  );
   const setTabSession = useCallback(
-    (paneId: string, tabId: string, sessionId: string) =>
-      dispatch({ type: 'setTabSession', paneId, tabId, sessionId }),
+    (tabId: string, sessionId: string) => dispatch({ type: 'setTabSession', tabId, sessionId }),
     [],
   );
 
@@ -190,10 +210,9 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
             (x) => x.tabId === t.tabId && x.sessionId === null,
           );
           if (stillNeeds && aliveRef.current) {
-            // 用捕获的 t.paneId 回填 —— 当前安全：reducer 未实现 moveTab/reorderTabs（Tab 不会换 pane）。
-            // TODO(移植 moveTab 时)：Tab 可跨 pane 迁移后，须按 tabId 查当前 pane 再回填，否则
-            // setTabSession 落到旧 paneId 会 no-op 并泄漏该 session（reconcile 评审 wf_651d3b47 指出）。
-            dispatch({ type: 'setTabSession', paneId: t.paneId, tabId: t.tabId, sessionId });
+            // 按 tabId 回填（setTabSession 已改为全树按 tabId 定位）—— P5 moveTab 落地后 Tab 可
+            // 跨 pane 迁移，捕获的旧 t.paneId 可能失效；按 tabId 查当前 pane 才不会 no-op 泄漏。
+            dispatch({ type: 'setTabSession', tabId: t.tabId, sessionId });
           } else {
             void TerminalService.kill(sessionId).catch(() => {});
           }
@@ -226,6 +245,9 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
       splitPanel,
       closePanel,
       resizePanels,
+      reorderTabs,
+      moveTab,
+      splitAndMoveTab,
       setTabSession,
     }),
     [
@@ -239,6 +261,9 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
       splitPanel,
       closePanel,
       resizePanels,
+      reorderTabs,
+      moveTab,
+      splitAndMoveTab,
       setTabSession,
     ],
   );

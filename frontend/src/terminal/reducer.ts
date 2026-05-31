@@ -4,12 +4,12 @@
 // 移植手法 = clone-then-mutate：对 rootPane 做 structuredClone 后，套用 cc-pane 的可变逻辑，
 // 再返回新树。这样 1:1 复刻 immer 的可变语义，同时保持 reducer 为纯函数（可 Vitest 覆盖）。
 //
-// 仅移植 Phase 2 MVP 所需的外层操作：split / closePane / addTab / closeTab / selectTab /
-// setActivePane / resizePanes / setTabSession（生命周期回填钩子）。
+// 已移植的外层操作：split / closePane / addTab / closeTab / selectTab / setActivePane /
+// resizePanes / setTabSession（生命周期回填钩子）+ 拖拽三件套 reorderTabs / moveTab /
+// splitAndMoveTab（P5 Tab 拖拽，随 TabBar @dnd-kit 单元）。
 // 刻意未移植（依赖未落地子系统，勿现在硬塞——CLAUDE.md 简洁铁律）：
-//   - closedTabs 可恢复快照 + syncPtyRegistryUnregister（Phase 3 会话恢复 + 生命周期 effect）
+//   - closedTabs 可恢复快照 + syncPtyRegistryUnregister（会话回放/恢复子功能，后续）
 //   - pinned 校验（UI 细节，后续）
-//   - moveTab / reorderTabs / splitAndMoveTab（拖拽，随 TabBar 单元）
 //   - 内层 terminalPane 分屏 splitTerminalPane / closeTerminalPane（单 Tab 内分屏，后续）
 
 import {
@@ -19,9 +19,10 @@ import {
   createTab,
   findPane,
   findParent,
+  findTabLocation,
   generateId,
 } from './paneTree';
-import type { CliTool, PaneNode, SplitDirection } from './types';
+import type { CliTool, PaneNode, Panel, SplitDirection } from './types';
 
 export interface TerminalTreeState {
   rootPane: PaneNode;
@@ -46,7 +47,12 @@ export type TerminalAction =
   | { type: 'selectTab'; paneId: string; tabId: string }
   | { type: 'setActivePane'; paneId: string }
   | { type: 'resizePanes'; paneId: string; sizes: number[] }
-  | { type: 'setTabSession'; paneId: string; tabId: string; sessionId: string };
+  // —— P5 拖拽三件套 ——
+  | { type: 'reorderTabs'; paneId: string; fromIndex: number; toIndex: number }
+  | { type: 'moveTab'; fromPaneId: string; toPaneId: string; tabId: string; toIndex?: number }
+  | { type: 'splitAndMoveTab'; paneId: string; tabId: string; direction: SplitDirection }
+  // setTabSession 按 tabId 全树查找（不再依赖 paneId）—— Tab 可经 moveTab 跨面板迁移。
+  | { type: 'setTabSession'; tabId: string; sessionId: string };
 
 const DIRECTION_MAP: Record<SplitDirection, 'horizontal' | 'vertical'> = {
   right: 'horizontal',
@@ -218,16 +224,128 @@ export function terminalTreeReducer(
       return { ...state, rootPane: root };
     }
 
-    case 'setTabSession': {
+    case 'reorderTabs': {
+      // 同面板内重排（拖拽落到同面板另一 Tab 上）—— 忠实移植 usePanesStore.reorderTabs。
+      const { fromIndex, toIndex } = action;
+      if (fromIndex === toIndex) return state;
       const root = structuredClone(state.rootPane);
       const pane = findPane(root, action.paneId);
       if (!pane || pane.type !== 'panel') return state;
-      const tab = pane.tabs.find((t) => t.id === action.tabId);
-      if (!tab) return state;
-      tab.sessionId = action.sessionId;
+      if (fromIndex < 0 || fromIndex >= pane.tabs.length) return state;
+      if (toIndex < 0 || toIndex >= pane.tabs.length) return state;
+      const [moved] = pane.tabs.splice(fromIndex, 1);
+      pane.tabs.splice(toIndex, 0, moved!);
+      return { ...state, rootPane: root };
+    }
+
+    case 'moveTab': {
+      // 跨面板移动一个 Tab —— 忠实移植 usePanesStore.moveTab（含「源面板掏空 → 折叠」，
+      // 但不做 closedTabs 快照：那属会话回放子功能，本期未落地）。
+      const { fromPaneId, toPaneId, tabId, toIndex } = action;
+      const root = structuredClone(state.rootPane);
+      const fromPane = findPane(root, fromPaneId);
+      const toPane = findPane(root, toPaneId);
+      if (!fromPane || fromPane.type !== 'panel') return state;
+      if (!toPane || toPane.type !== 'panel') return state;
+      const tabIndex = fromPane.tabs.findIndex((t) => t.id === tabId);
+      if (tabIndex === -1) return state;
+
+      const [tab] = fromPane.tabs.splice(tabIndex, 1);
+      const insertAt =
+        toIndex !== undefined && toIndex >= 0
+          ? Math.min(toIndex, toPane.tabs.length)
+          : toPane.tabs.length;
+      toPane.tabs.splice(insertAt, 0, tab!);
+      toPane.activeTabId = tab!.id;
+
+      // 修正源面板活动 Tab（仅跨面板时；同面板即重排，活动态已由上一行定为被移 Tab）。
+      if (fromPane !== toPane && fromPane.tabs.length > 0) {
+        const newIdx = Math.min(tabIndex, fromPane.tabs.length - 1);
+        fromPane.activeTabId = fromPane.tabs[newIdx]!.id;
+      }
+
+      let nextRoot: PaneNode = root;
+      // 源面板被掏空（且非同一面板）→ 从父 split 摘除 + 重整 sizes + 折叠单子 split。
+      // 活动面板保持指向目标面板（区别于 closePane 的「焦点落到兄弟」语义）。
+      if (fromPane !== toPane && fromPane.tabs.length === 0) {
+        const pr = findParent(root, fromPaneId);
+        if (pr && pr.parent) {
+          const parent = pr.parent;
+          parent.children.splice(pr.index, 1);
+          parent.sizes.splice(pr.index, 1);
+          const total = parent.sizes.reduce((a, b) => a + b, 0);
+          parent.sizes =
+            total > 0
+              ? parent.sizes.map((s) => (s / total) * 100)
+              : parent.sizes.map(() => 100 / parent.sizes.length);
+        }
+        nextRoot = normalizePaneTree(root);
+      }
+      return { rootPane: nextRoot, activePaneId: toPaneId };
+    }
+
+    case 'splitAndMoveTab': {
+      // 拆分源面板并把指定 Tab 移入新面板 —— 忠实移植 usePanesStore.splitAndMoveTab。
+      // 绝不移出面板唯一的 Tab（否则源面板空了又要折叠，等价无意义的纯分屏）。
+      const { paneId, tabId, direction } = action;
+      const root = structuredClone(state.rootPane);
+      const sourcePane = findPane(root, paneId);
+      if (!sourcePane || sourcePane.type !== 'panel') return state;
+      if (sourcePane.tabs.length <= 1) return state;
+      const tabIndex = sourcePane.tabs.findIndex((t) => t.id === tabId);
+      if (tabIndex === -1) return state;
+
+      const [tab] = sourcePane.tabs.splice(tabIndex, 1);
+      if (sourcePane.activeTabId === tabId) {
+        const newIdx = Math.min(tabIndex, sourcePane.tabs.length - 1);
+        sourcePane.activeTabId = sourcePane.tabs[newIdx]!.id;
+      }
+
+      const newPane: Panel = {
+        type: 'panel',
+        id: generateId('pane'),
+        tabs: [tab!],
+        activeTabId: tab!.id,
+      };
+      const splitDirection = DIRECTION_MAP[direction];
+      const parentResult = findParent(root, paneId);
+      if (!parentResult) return state;
+
+      let nextRoot: PaneNode = root;
+      if (parentResult.parent === null) {
+        nextRoot = {
+          type: 'split',
+          id: generateId('split'),
+          direction: splitDirection,
+          children: [sourcePane, newPane],
+          sizes: [50, 50],
+        };
+      } else if (parentResult.parent.direction === splitDirection) {
+        parentResult.parent.children.splice(parentResult.index + 1, 0, newPane);
+        const newSize = 100 / parentResult.parent.children.length;
+        parentResult.parent.sizes = parentResult.parent.children.map(() => newSize);
+      } else {
+        parentResult.parent.children[parentResult.index] = {
+          type: 'split',
+          id: generateId('split'),
+          direction: splitDirection,
+          children: [sourcePane, newPane],
+          sizes: [50, 50],
+        };
+      }
+      return { rootPane: nextRoot, activePaneId: newPane.id };
+    }
+
+    case 'setTabSession': {
+      // 按 tabId 全树定位（不依赖 paneId）—— Tab 经 moveTab 迁移后旧 paneId 失效，
+      // 按 tabId 查当前 pane 才能正确回填，避免 session 泄漏（cc-pane updateTabSession 即如此）。
+      const root = structuredClone(state.rootPane);
+      const loc = findTabLocation(root, action.tabId);
+      if (!loc) return state;
+      loc.tab.sessionId = action.sessionId;
       // MVP：terminalRootPane 为单 leaf，回填其 sessionId（Tab 级与 leaf 级协同）。
-      if (tab.terminalRootPane && tab.terminalRootPane.type === 'leaf') {
-        tab.terminalRootPane.sessionId = action.sessionId;
+      if (loc.tab.terminalRootPane && loc.tab.terminalRootPane.type === 'leaf') {
+        loc.tab.terminalRootPane.sessionId = action.sessionId;
       }
       return { ...state, rootPane: root };
     }
