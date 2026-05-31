@@ -19,6 +19,11 @@ const (
 	// Orchestrator 编排事件（后端 MCP launch_task → 前端开新面板附着已建会话）。
 	// payload 见 OrchestratorLaunchPayload；前端 listener 见 P6c-3。
 	OrchestratorLaunch = "orchestrator:launch"
+
+	// cli-hook 回报事件（被启动 CLI 的 SessionStart hook → POST /api/terminal/session-started
+	// → orchestrator 转发）。payload 见 OrchestratorSessionStartedPayload。P6d-3：本轮仅
+	// log + emit（XK 暂无 LaunchCwd 消费方，不回填 launch_history；前端订阅留后续）。
+	OrchestratorSessionStarted = "orchestrator:session-started"
 )
 
 // TerminalOutputPayload 是 TerminalOutput 事件载荷。
@@ -64,6 +69,16 @@ type OrchestratorLaunchPayload struct {
 	CliTool       string `json:"cliTool,omitempty"`
 }
 
+// OrchestratorSessionStartedPayload 是 OrchestratorSessionStarted 事件载荷。
+// 由被启动 CLI 的 session-start hook 经 REST 上报，orchestrator 据此转发给前端。
+type OrchestratorSessionStartedPayload struct {
+	PtySessionID    string `json:"ptySessionId"`
+	ResumeSessionID string `json:"resumeSessionId,omitempty"`
+	CliTool         string `json:"cliTool,omitempty"`
+	RuntimeKind     string `json:"runtimeKind,omitempty"`
+	Cwd             string `json:"cwd,omitempty"`
+}
+
 // Register 在 application 初始化前注册所有强类型事件，
 // Wails 的 binding 生成器会据此为前端生成类型化 API。
 func Register() {
@@ -73,4 +88,5 @@ func Register() {
 	application.RegisterEvent[TerminalExitPayload](TerminalExit)
 	application.RegisterEvent[LocalHistoryChangedPayload](LocalHistoryChanged)
 	application.RegisterEvent[OrchestratorLaunchPayload](OrchestratorLaunch)
+	application.RegisterEvent[OrchestratorSessionStartedPayload](OrchestratorSessionStarted)
 }

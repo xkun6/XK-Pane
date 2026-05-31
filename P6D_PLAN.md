@@ -113,10 +113,11 @@ cc-pane 的 cli-hook = 一个**独立 exe**，被在 pane 里跑的 Claude/Codex
 - 接线：`terminal.CreateSession` 启动 claude/reclaude/codex 前调 `projecthooks.Sync*`（failure 仅 warn）。
 - **验证**：启 claude → `<proj>/.claude/settings.local.json` 出现 2 条 hooks；启 codex → `<proj>/.codex/hooks.json` + config.toml 出现 session-start。单测：sync 写入/重复剔除/关闭移除（claude+codex 各一组）。
 
-### P6d-3 — orchestrator REST `/api/terminal/session-started` + launch_cwd 回填落库（M）
-- orchestrator `Service` 加 `rateLimiter`（10s≤20）+ 抽 `verifyToken`/`checkRate`；mux 加 `POST /api/terminal/session-started`（内联鉴权+限流）。
-- `launchhistory.UpdateSessionStarted(ctx, ptySessionID, resumeSessionID, cliTool, runtimeKind, cwd)` **按 pty_session_id 关联**（见 D6d-1）：更新最近一条匹配 PtySessionID 的 launch_history 的 LaunchCwd/ResumeSessionID/ClaudeSessionID。前端 `Record` 补传 `ptySessionId`（model 已有列，RecordSpec/前端 DTO 加字段）。
-- **验证**（**改后端必完全重启 dev**）：pane 内启 claude → hook 触发 → app.log 见 `session-started cwd=...` → launch_history 行 LaunchCwd 被回填。
+### P6d-3 — orchestrator REST `/api/terminal/session-started`（打通回路 + log/emit）（M）
+> **二次拍板**：实现中发现 ①XK 无 LaunchCwd 消费方（纯 schema 字段）②前端 `launchProject` 记 launch_history 时会话尚未创建（sessionId 由后续 reconcile effect 异步产生），**前端记账拿不到 pty_session_id**。按 pty_session_id 回填 launch_history 要么搬记账到后端（中等重构、为没人读的数据），故拍板：**只打通回路 + log/emit，不动 launch_history**。
+- orchestrator `Service` 加 `rateLimiter`（10s≤20，`ratelimit.go`）+ `verifyToken`（常量时间）；mux 加 `POST /api/terminal/session-started`（内联鉴权+限流，`rest.go`）→ logx 记录 + emit `orchestrator:session-started`（`events.go` 新事件 + payload）。
+- **不动 launch_history**（无消费方）、**不改前端**（前端订阅事件留后续）。launch_cwd 落库等有 resume-by-cwd 消费方时再做。
+- **验证**：go build/vet/test（rateLimiter 窗口、handler 401/200-emit/400）全绿。手测：pane 内启 claude → hook 触发 → app.log 见 `session-started 上报 cwd=...`。
 
 ### P6d-4 — notify 通道（Wails 桌面通知 service + `/api/notifications/trigger`）（M）【依赖 D6d-4】
 - 新 `internal/services/notification`：包装 Wails `notifications.NotificationService` + dedupe（10s）+ (可选) only_when_unfocused（查窗口聚焦）。Wails service 注册（`SendNotification` 可被前端调）。

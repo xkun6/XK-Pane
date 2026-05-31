@@ -83,13 +83,18 @@ type Service struct {
 
 	deps Deps
 
+	// rl 限 REST handler 的请求频率（10s≤20，对齐 cc-pane）。
+	rl *rateLimiter
+
 	// emit 把事件推给前端（orchestrator:launch）；nil 时丢弃（未 AttachApp / 单测）。
 	emitMu sync.RWMutex
 	emit   func(name string, payload any)
 }
 
 // New 构造一个未启动的 orchestrator 服务。deps 为编排工具的下游依赖（terminal/project/workspace）。
-func New(deps Deps) *Service { return &Service{deps: deps} }
+func New(deps Deps) *Service {
+	return &Service{deps: deps, rl: newRateLimiter(restRateWindowSecs*time.Second, restRateMaxReq)}
+}
 
 // AttachApp 回填 app 引用，让编排工具能 Emit orchestrator:launch 给前端（app 装配阶段调，镜像 terminal）。
 func (s *Service) AttachApp(app *application.App) {
@@ -138,6 +143,9 @@ func (s *Service) Start() error {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 	})
+	// REST 业务回调（cli-hook 回连）。各 handler 内联 verify_token + rate_limit（对齐 cc-pane，
+	// REST 不走 MCP 中间件）。P6d-3：session-started 回报（log + emit）。
+	mux.HandleFunc("POST /api/terminal/session-started", s.handleSessionStarted)
 	// 同一个鉴权后的 MCP handler 实例同时挂精确路径与子树（容忍尾斜杠）。
 	mux.Handle("/mcp", mcpHandler)
 	mux.Handle("/mcp/", mcpHandler)
