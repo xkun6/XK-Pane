@@ -4,6 +4,8 @@
 // 所需子集：recentChanges（跨文件最近变更）/ snapshotFile（手动快照）/ restoreVersion（回滚）。
 // diff 查看（getVersionDiff / getVersionsDiff）+ 版本列表 + 标签管理留后续单元（diff 渲染较重）。
 import { Service as Binding } from '@bindings/xkpane/internal/services/localhistorysvc';
+// 值导入 HistoryLabel 模型类：putLabel 用 new LabelModel(...) 构造，确保形状与后端绑定一致。
+import { HistoryLabel as LabelModel } from '@bindings/xkpane/internal/localhistory/models';
 import type {
   RecentChange as RawRecent,
   FileVersion as RawVersion,
@@ -13,6 +15,8 @@ import type {
   InlineChange as RawInline,
   HistoryConfig as RawConfig,
   HistoryStats as RawStats,
+  HistoryLabel as RawLabel,
+  LabelFileSnapshot as RawLabelSnap,
 } from '@bindings/xkpane/internal/localhistory/models';
 
 // 一条最近变更（跨文件）。labelName 空 = 该版本无关联标签。
@@ -53,6 +57,32 @@ export interface HistoryStats {
   versionCount: number;
   fileCount: number;
   totalBlobSize: number; // blobs 目录总字节
+}
+
+// 标签来源（彩色 badge + 文案）。对齐 cc-pane Label.source 取值。
+export type LabelSource =
+  | 'git_commit'
+  | 'claude_session'
+  | 'user'
+  | 'build'
+  | 'restore'
+  | 'branch_switch';
+
+// 标签关联的「文件 → 版本」引用。
+export interface LabelFileSnapshot {
+  filePath: string;
+  versionId: string;
+}
+
+// 一个标签（组合视图：元数据 + 文件快照列表）。对齐后端 localhistory.HistoryLabel。
+export interface HistoryLabel {
+  id: string;
+  name: string;
+  labelType: string; // "auto" | "manual"
+  source: string; // 见 LabelSource
+  timestamp: string; // RFC3339
+  branch: string;
+  fileSnapshots: LabelFileSnapshot[];
 }
 
 // —— diff DTO（对齐后端 localhistory.DiffResult；changeType snake_case 枚举）——
@@ -180,6 +210,22 @@ function toStats(s: RawStats): HistoryStats {
   };
 }
 
+function toLabelSnap(s: RawLabelSnap): LabelFileSnapshot {
+  return { filePath: s.filePath ?? '', versionId: s.versionId ?? '' };
+}
+
+function toLabel(l: RawLabel): HistoryLabel {
+  return {
+    id: l.id ?? '',
+    name: l.name ?? '',
+    labelType: l.labelType ?? '',
+    source: l.source ?? '',
+    timestamp: l.timestamp ?? '',
+    branch: l.branch ?? '',
+    fileSnapshots: (l.fileSnapshots ?? []).map(toLabelSnap),
+  };
+}
+
 export const LocalHistoryService = {
   // 最近版本变更（跨文件，最新在前）；limit<=0 后端取默认 50。
   async recentChanges(projectPath: string, limit: number): Promise<RecentChange[]> {
@@ -198,9 +244,64 @@ export const LocalHistoryService = {
     await Binding.RestoreVersion(projectPath, filePath, versionId, branch);
   },
 
+  // 列出某文件的所有版本（后端按 id 升序 = 时序；UI 通常 reverse 成最新在上）。
+  async listVersions(projectPath: string, filePath: string): Promise<FileVersion[]> {
+    const rows = await Binding.ListVersions(projectPath, filePath);
+    return (rows ?? []).map(toVersion);
+  },
+
+  // 列出「最新版本为删除标记」的文件（已删但有历史可恢复）。
+  async listDeletedFiles(projectPath: string): Promise<FileVersion[]> {
+    const rows = await Binding.ListDeletedFiles(projectPath);
+    return (rows ?? []).map(toVersion);
+  },
+
+  // 取某版本的文本内容（gzip 兼容读）。
+  async versionContent(projectPath: string, filePath: string, versionId: string): Promise<string> {
+    return Binding.GetVersionContent(projectPath, filePath, versionId);
+  },
+
   // 某版本与当前工作树文件的 diff（工作树文件不存在视为空 = 删除全部）。
   async versionDiff(projectPath: string, filePath: string, versionId: string): Promise<DiffResult> {
     return toDiff(await Binding.GetVersionDiff(projectPath, filePath, versionId));
+  },
+
+  // 两个版本之间的 diff（相邻版本比较用）。
+  async versionsDiff(
+    projectPath: string,
+    filePath: string,
+    oldVersionId: string,
+    newVersionId: string,
+  ): Promise<DiffResult> {
+    return toDiff(await Binding.GetVersionsDiff(projectPath, filePath, oldVersionId, newVersionId));
+  },
+
+  // 某文件有版本记录的所有分支（分支筛选下拉数据源）；无历史 → 空数组。
+  async getFileBranches(projectPath: string, filePath: string): Promise<string[]> {
+    const rows = await Binding.GetFileBranches(projectPath, filePath);
+    return (rows ?? []).filter((b): b is string => typeof b === 'string');
+  },
+
+  // 列出所有标签（timestamp 倒序），含各自文件快照。
+  async listLabels(projectPath: string): Promise<HistoryLabel[]> {
+    const rows = await Binding.ListLabels(projectPath);
+    return (rows ?? []).map(toLabel);
+  },
+
+  // upsert 一个标签（手动打标签）。前端构造（source='user' / labelType='manual'）。
+  async putLabel(projectPath: string, label: HistoryLabel): Promise<void> {
+    await Binding.PutLabel(projectPath, new LabelModel(label));
+  },
+
+  // 把某标签捕获的所有文件快照恢复到工作树，返回成功恢复的相对路径列表（恢复前自动打 Before-Rollback 标签）。
+  async restoreToLabel(projectPath: string, labelId: string, branch: string): Promise<string[]> {
+    const rows = await Binding.RestoreToLabel(projectPath, labelId, branch);
+    return (rows ?? []).filter((p): p is string => typeof p === 'string');
+  },
+
+  // 删除标签及其快照。
+  async deleteLabel(projectPath: string, labelId: string): Promise<void> {
+    await Binding.DeleteLabel(projectPath, labelId);
   },
 
   // 读项目历史配置；无历史项目返回默认配置（后端不创建 .xkpanes/）。

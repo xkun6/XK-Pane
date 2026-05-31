@@ -282,6 +282,33 @@ func (s *Service) DeleteLabel(ctx context.Context, projectPath, labelID string) 
 	return st.DeleteLabel(ctx, labelID)
 }
 
+// PutLabel upsert 一个标签并整体替换其文件快照（手动打标签，4-tab 标签 UI 用）。对齐 cc-pane
+// put_label：前端构造 HistoryLabel（source="user" / labelType="manual" / 单个 fileSnapshot），
+// id / timestamp 由前端生成（uuid + RFC3339）。写操作，走 per-project 写锁。
+func (s *Service) PutLabel(ctx context.Context, projectPath string, label localhistory.HistoryLabel) error {
+	lk := s.writeLock(projectPath)
+	lk.Lock()
+	defer lk.Unlock()
+	st, err := s.store(projectPath)
+	if err != nil {
+		return err
+	}
+	return st.PutLabel(ctx, label)
+}
+
+// GetFileBranches 返回某文件有版本记录的所有分支（去重升序），供分支筛选下拉。对齐 cc-pane
+// get_file_branches。读操作，不锁。项目无历史 → 空切片。
+func (s *Service) GetFileBranches(ctx context.Context, projectPath, filePath string) ([]string, error) {
+	if !localhistory.Exists(projectPath) {
+		return []string{}, nil
+	}
+	st, err := s.store(projectPath)
+	if err != nil {
+		return nil, err
+	}
+	return st.GetFileBranches(ctx, filePath)
+}
+
 // GetConfig 返回项目历史配置。项目尚无历史存储（Exists==false）时返回**默认配置**且
 // **不创建** .xkpanes/ —— 仅查看配置不应在磁盘落地历史目录（仅 SnapshotFile/SaveConfig 等
 // 显式动作才创建）。前端「数据存储 / 本地历史」面板据此展示默认值。
