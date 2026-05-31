@@ -3,6 +3,7 @@ import { I18nProvider, registerFoundationLocales } from '@/i18n';
 import { registerHomePageLocales } from '@/pages/HomePage/lang';
 import { registerSettingsPageLocales } from '@/pages/SettingsPage/lang';
 import { registerGitPageLocales } from '@/pages/GitPage';
+import { registerHistoryPageLocales } from '@/pages/HistoryPage';
 import { registerWorkspaceTreeLocales } from '@/components/WorkspaceTree';
 import { registerPaneTreeLocales } from '@/components/PaneTree';
 import { PreferencesProvider } from '@/preferences';
@@ -26,6 +27,7 @@ registerFoundationLocales();
 registerHomePageLocales();
 registerSettingsPageLocales();
 registerGitPageLocales();
+registerHistoryPageLocales();
 registerWorkspaceTreeLocales();
 registerPaneTreeLocales();
 

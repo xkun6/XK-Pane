@@ -30,6 +30,9 @@ export {
   type DiffChangeType,
   type HistoryConfig,
   type HistoryStats,
+  type HistoryLabel,
+  type LabelFileSnapshot,
+  type LabelSource,
 } from './localhistory/LocalHistoryService';
 export {
   ProviderService,

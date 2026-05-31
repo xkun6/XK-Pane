@@ -2,9 +2,11 @@ import HomeRoundedIcon from '@mui/icons-material/HomeRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
+import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import { lazy } from 'react';
 import { HomePage } from '@/pages/HomePage/HomePage';
 import { GitPage } from '@/pages/GitPage';
+import { HistoryPage, HistoryPageSkeleton } from '@/pages/HistoryPage';
 import { HomePageSkeleton } from '@/pages/HomePage/HomePage.skeleton';
 import { SettingsPageSkeleton } from '@/pages/SettingsPage/SettingsPage.skeleton';
 import { TerminalPageSkeleton } from '@/pages/TerminalPage/TerminalPage.skeleton';
@@ -63,6 +65,16 @@ export const routes: RouteDefinition[] = [
     icon: AccountTreeRoundedIcon,
     element: <GitPage />,
     slot: 'primary',
+  },
+  {
+    id: 'history',
+    labelKey: 'route.history',
+    label: 'History',
+    icon: HistoryRoundedIcon,
+    element: <HistoryPage />,
+    fallback: <HistoryPageSkeleton />,
+    slot: 'primary',
+    keepAlive: true, // 保活：保留所选项目 / 文件 / 时间线滚动（自动捕获时 live 刷新）
   },
   {
     id: 'settings',
