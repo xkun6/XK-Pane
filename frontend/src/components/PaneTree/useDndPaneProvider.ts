@@ -3,9 +3,12 @@
 // 仅消费 useTerminal()（Context，非 bindings）+ paneTree 纯函数；不返回 JSX。
 import { useCallback, useState } from 'react';
 import {
+  closestCenter,
+  pointerWithin,
   PointerSensor,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
@@ -39,6 +42,29 @@ function asTabData(data: unknown): DndTabData | null {
   const d = data as DndTabData | undefined;
   return d && d.type === 'tab' ? d : null;
 }
+
+/**
+ * 面板树拖拽碰撞检测：
+ *  ① 仅当指针精确落在「源 Tab **自己面板**的」边缘区时，采纳边缘分屏（pointerWithin）。
+ *  ② 其余一律在 Tab 容器中按 closestCenter 取最近 Tab —— 宽容好命中，支撑同面板重排 +
+ *     跨面板合并（拖到目标面板任意位置都并入其最近的 Tab）。
+ * 不用全局 pointerWithin：它要求指针精确落在目标 Tab rect 内，跨面板合并极难命中（曾致「合并不了」）。
+ * 跨面板的边缘区（paneId≠源）不视作边缘命中，自然落到 ②→合并，而非静默无反应。
+ */
+export const paneCollisionDetection: CollisionDetection = (args) => {
+  const sourcePaneId = (args.active.data.current as DndTabData | undefined)?.paneId;
+  const ownEdgeHits = pointerWithin(args).filter((collision) => {
+    const container = args.droppableContainers.find((dc) => dc.id === collision.id);
+    const data = container?.data.current as DndEdgeData | undefined;
+    return data?.type === 'paneEdge' && data.paneId === sourcePaneId;
+  });
+  if (ownEdgeHits.length > 0) return ownEdgeHits;
+
+  const tabContainers = args.droppableContainers.filter(
+    (dc) => (dc.data.current as DndTabData | undefined)?.type === 'tab',
+  );
+  return closestCenter({ ...args, droppableContainers: tabContainers });
+};
 
 export function useDndPaneProvider(): DndPaneModel {
   const { rootPane, reorderTabs, moveTab, splitAndMoveTab } = useTerminal();

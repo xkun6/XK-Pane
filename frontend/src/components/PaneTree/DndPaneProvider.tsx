@@ -1,7 +1,7 @@
 import { Box, useTheme } from '@mui/material';
-import { DndContext, DragOverlay, pointerWithin } from '@dnd-kit/core';
+import { DndContext, DragOverlay } from '@dnd-kit/core';
 import type { ReactNode } from 'react';
-import { useDndPaneProvider } from './useDndPaneProvider';
+import { paneCollisionDetection, useDndPaneProvider } from './useDndPaneProvider';
 import { dragOverlayStyles } from './PaneTree.styles';
 
 // 面板树拖拽上下文：包在整棵 PaneTree 外层，让 Tab 可在面板间拖拽（reorder / 跨面板 move）。
@@ -15,7 +15,7 @@ export const DndPaneProvider = ({ children }: { children: ReactNode }) => {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={pointerWithin}
+      collisionDetection={paneCollisionDetection}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
