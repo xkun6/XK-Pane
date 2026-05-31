@@ -29,15 +29,48 @@ import (
 	"xkpane/internal/localhistory"
 )
 
-// Service 维护每项目的 Store 缓存。
+// ConfigHook 在 SaveConfig 成功落盘后回调，让 lhwatcher 据新的 enabled 即时启 / 停该项目的
+// 自动捕获（app 层经 SetConfigHook 注入；不注入则为 no-op）。
+type ConfigHook func(ctx context.Context, projectPath string, enabled bool)
+
+// Service 维护每项目的 Store 缓存，以及每项目一把「写串行锁」。
+//
+// 写锁（决策 D4-3，单写者）：两个写者会动同一项目的 LH 仓——① gitsvc 的 AutoLabel（git
+// stash/pull/push 前，少量）；② lhwatcher 的 SaveWatched/SaveDeletion（自动捕获，频繁）；
+// ③ 前端手动 SnapshotFile/Restore/Cleanup 等。SaveVersion 的「查最新版 → 去重/节流判断 →
+// 插入」非原子，并发写同一文件可能各自通过去重检查、插入两条。故所有**写**方法先取该项目的
+// 写锁串行（debounce 已降频，写锁兜底）；**读**方法不锁（GORM 单连接 + WAL 已隔离读）。
 type Service struct {
 	mu     sync.Mutex
 	stores map[string]*localhistory.Store
+
+	lockMu     sync.Mutex
+	writeLocks map[string]*sync.Mutex
+
+	configHook ConfigHook
 }
 
 // New 创建 localhistorysvc。无 Holder 依赖（每项目独立 db）。
 func New() *Service {
-	return &Service{stores: make(map[string]*localhistory.Store)}
+	return &Service{
+		stores:     make(map[string]*localhistory.Store),
+		writeLocks: make(map[string]*sync.Mutex),
+	}
+}
+
+// SetConfigHook 注入「配置变更 → watcher 启停」回调（app 层连接 lhwatcher）。
+func (s *Service) SetConfigHook(h ConfigHook) { s.configHook = h }
+
+// writeLock 返回 projectPath 的写串行锁（按需创建）。所有写操作先取它。
+func (s *Service) writeLock(projectPath string) *sync.Mutex {
+	s.lockMu.Lock()
+	defer s.lockMu.Unlock()
+	m, ok := s.writeLocks[projectPath]
+	if !ok {
+		m = &sync.Mutex{}
+		s.writeLocks[projectPath] = m
+	}
+	return m
 }
 
 // store get-or-open：返回 projectPath 的缓存 Store，未缓存则 Open 并缓存。
@@ -68,6 +101,9 @@ func (s *Service) closeAll() {
 // SnapshotFile 读取工作树文件（filePath 为项目内相对路径）并存一个版本（手动快照，无节流）。
 // 内容未变会因去重返回 nil（前端据此判断「无变化」）。读文件失败透传。
 func (s *Service) SnapshotFile(ctx context.Context, projectPath, filePath, branch string) (*localhistory.FileVersion, error) {
+	lk := s.writeLock(projectPath)
+	lk.Lock()
+	defer lk.Unlock()
 	st, err := s.store(projectPath)
 	if err != nil {
 		return nil, err
@@ -78,6 +114,50 @@ func (s *Service) SnapshotFile(ctx context.Context, projectPath, filePath, branc
 		return nil, err
 	}
 	return st.SaveVersion(ctx, filePath, content, false, branch, 0)
+}
+
+// SaveWatched 是 lhwatcher 自动捕获「变更文件」的保存入口（带写锁 + 节流去重）。content 为文本
+// （watcher 已过滤二进制 / 超大 / 忽略项）；minIntervalSecs 来自项目 config（同文件同分支节流窗口）。
+// 内容未变 / 节流未到 → 因去重 / 节流返回 (nil, nil)。**非前端面向**（与 termSvc.AttachApp 同类，
+// 仅 Go 侧 watcher 调用；Wails 仍会生成绑定，前端忽略即可）。
+func (s *Service) SaveWatched(ctx context.Context, projectPath, filePath, content, branch string, minIntervalSecs int64) (*localhistory.FileVersion, error) {
+	lk := s.writeLock(projectPath)
+	lk.Lock()
+	defer lk.Unlock()
+	st, err := s.store(projectPath)
+	if err != nil {
+		return nil, err
+	}
+	return st.SaveVersion(ctx, filePath, []byte(content), false, branch, minIntervalSecs)
+}
+
+// SaveDeletion 是 lhwatcher 自动捕获「删除文件」的保存入口（带写锁，不受节流约束）。取该文件最新
+// 版本的内容，以 is_deleted=true 再存一版（对齐 cc-pane process_file_removed：删除快照保留删前内容，
+// 便于恢复）。从未跟踪过 / 最新版已是删除标记 → 返回 (nil, nil)。**非前端面向**（仅 watcher 调用）。
+func (s *Service) SaveDeletion(ctx context.Context, projectPath, filePath, branch string) (*localhistory.FileVersion, error) {
+	lk := s.writeLock(projectPath)
+	lk.Lock()
+	defer lk.Unlock()
+	st, err := s.store(projectPath)
+	if err != nil {
+		return nil, err
+	}
+	versions, err := st.ListVersions(ctx, filePath)
+	if err != nil {
+		return nil, err
+	}
+	if len(versions) == 0 {
+		return nil, nil // 从未跟踪过该文件，无删前内容可记
+	}
+	latest := versions[len(versions)-1] // ListVersions 按 id 升序，末尾即最新
+	if latest.IsDeleted {
+		return nil, nil // 已记过删除快照，不重复
+	}
+	content, err := st.GetVersionContent(ctx, filePath, latest.ID)
+	if err != nil {
+		return nil, err
+	}
+	return st.SaveVersion(ctx, filePath, content, true, branch, 0)
 }
 
 // GetRecentChanges 返回最近版本变更（跨文件，最新在前）；limit<=0 取默认 50。
@@ -150,6 +230,9 @@ func (s *Service) ListLabels(ctx context.Context, projectPath string) ([]localhi
 // RestoreVersion 把某文件恢复到指定版本（写回工作树）；恢复前自动打 Before-Restore 标签。
 // branch 由前端传入（来自 gitsvc.GetStatus().branch，""=未知 / 非 git 仓）。
 func (s *Service) RestoreVersion(ctx context.Context, projectPath, filePath, versionID, branch string) error {
+	lk := s.writeLock(projectPath)
+	lk.Lock()
+	defer lk.Unlock()
 	st, err := s.store(projectPath)
 	if err != nil {
 		return err
@@ -159,6 +242,9 @@ func (s *Service) RestoreVersion(ctx context.Context, projectPath, filePath, ver
 
 // RestoreToLabel 把某标签捕获的所有文件快照恢复到工作树，返回成功恢复的相对路径列表。
 func (s *Service) RestoreToLabel(ctx context.Context, projectPath, labelID, branch string) ([]string, error) {
+	lk := s.writeLock(projectPath)
+	lk.Lock()
+	defer lk.Unlock()
 	st, err := s.store(projectPath)
 	if err != nil {
 		return nil, err
@@ -174,6 +260,9 @@ func (s *Service) AutoLabel(ctx context.Context, projectPath, name, source, bran
 	if !localhistory.Exists(projectPath) {
 		return "", nil
 	}
+	lk := s.writeLock(projectPath)
+	lk.Lock()
+	defer lk.Unlock()
 	st, err := s.store(projectPath)
 	if err != nil {
 		return "", err
@@ -183,6 +272,9 @@ func (s *Service) AutoLabel(ctx context.Context, projectPath, name, source, bran
 
 // DeleteLabel 删除标签及其快照。
 func (s *Service) DeleteLabel(ctx context.Context, projectPath, labelID string) error {
+	lk := s.writeLock(projectPath)
+	lk.Lock()
+	defer lk.Unlock()
 	st, err := s.store(projectPath)
 	if err != nil {
 		return err
@@ -206,12 +298,25 @@ func (s *Service) GetConfig(_ context.Context, projectPath string) (localhistory
 
 // SaveConfig 原子写项目历史配置。此为**显式写操作**，会按需创建 .xkpanes/（用户主动配置即视为
 // 为该项目启用本地历史）。
-func (s *Service) SaveConfig(_ context.Context, projectPath string, cfg localhistory.HistoryConfig) error {
+func (s *Service) SaveConfig(ctx context.Context, projectPath string, cfg localhistory.HistoryConfig) error {
+	lk := s.writeLock(projectPath)
+	lk.Lock()
 	st, err := s.store(projectPath)
+	if err != nil {
+		lk.Unlock()
+		return err
+	}
+	err = st.SaveConfig(cfg)
+	lk.Unlock()
 	if err != nil {
 		return err
 	}
-	return st.SaveConfig(cfg)
+	// 落盘成功后通知 watcher 即时启 / 停（enabled=true 补启，false 停）。在锁外回调，避免 watcher
+	// 回调里若再触达本 service 的写路径造成自锁。
+	if s.configHook != nil {
+		s.configHook(ctx, projectPath, cfg.Enabled)
+	}
+	return nil
 }
 
 // Cleanup 按项目配置执行清理：过期版本（max_age_days）+ 每文件数量上限（max_versions_per_file）
@@ -221,6 +326,9 @@ func (s *Service) Cleanup(ctx context.Context, projectPath string) error {
 	if !localhistory.Exists(projectPath) {
 		return nil
 	}
+	lk := s.writeLock(projectPath)
+	lk.Lock()
+	defer lk.Unlock()
 	st, err := s.store(projectPath)
 	if err != nil {
 		return err

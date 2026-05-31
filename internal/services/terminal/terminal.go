@@ -65,6 +65,10 @@ type Service struct {
 	// nil 时跳过 provider 注入（与 ProviderID=="" 等效）。由 SetProviderResolver 注入。
 	resolveProvider ProviderResolver
 
+	// sessionStartHook 在会话成功创建后回调（参数 = 该会话的 ProjectPath = launchProject 目标）。
+	// 供 lhwatcher 在「启动项目」时补启自动捕获（决策 D4-4）；nil = 无（裸单测 / app 未接线）。
+	sessionStartHook func(projectPath string)
+
 	// emit 把事件推给前端；nil 时丢弃（unit test 或 app 未就绪）。
 	// 用字段而非直接持 *application.App，便于测试注入捕获回调。
 	emitMu sync.RWMutex
@@ -77,6 +81,11 @@ type Service struct {
 // SetProviderResolver 注入 provider 解析器（app 装配阶段调，镜像 AttachApp 模式）。
 func (s *Service) SetProviderResolver(r ProviderResolver) {
 	s.resolveProvider = r
+}
+
+// SetSessionStartHook 注入「会话启动 → 补启 Local History watcher」回调（app 装配阶段调）。
+func (s *Service) SetSessionStartHook(h func(projectPath string)) {
+	s.sessionStartHook = h
 }
 
 // session 是一次终端会话的内部状态。
@@ -209,6 +218,11 @@ func (s *Service) CreateSession(ctx context.Context, spec CreateSpec) (string, e
 	s.mu.Unlock()
 
 	s.logger.Info("session created", "session", id, "pid", sess.pid, "command", command, "cwd", spec.ProjectPath)
+
+	// 通知 watcher 在该项目补启自动捕获（launchProject 时机，决策 D4-4）。异步避免阻塞会话创建。
+	if hook := s.sessionStartHook; hook != nil {
+		go hook(spec.ProjectPath)
+	}
 
 	go s.batchLoop(sess)
 	go s.readLoop(sess)

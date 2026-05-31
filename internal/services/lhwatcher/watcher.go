@@ -41,10 +41,13 @@ const (
 // Saver 是 watcher 对 localhistorysvc 的窄依赖：读配置（启停判定 + 过滤）+ 保存版本 / 删除快照 +
 // 分支切换标签——全部经 localhistorysvc 的 per-project 写锁串行（单写者）。
 //
-// P4a-1（骨架）只用 GetConfig 做启停判定；保存与分支标签管线（SaveWatched / SaveDeletion /
-// AutoLabel）在 P4a-2 接入时再扩充本接口。
+// 由 localhistorysvc.Service 实现：GetConfig 读配置（启停判定 + 过滤参数），SaveWatched/
+// SaveDeletion/AutoLabel 都经其 per-project 写锁串行（与 gitsvc AutoLabel 共用，单写者）。
 type Saver interface {
 	GetConfig(ctx context.Context, projectPath string) (localhistory.HistoryConfig, error)
+	SaveWatched(ctx context.Context, projectPath, filePath, content, branch string, minIntervalSecs int64) (*localhistory.FileVersion, error)
+	SaveDeletion(ctx context.Context, projectPath, filePath, branch string) (*localhistory.FileVersion, error)
+	AutoLabel(ctx context.Context, projectPath, name, source, branch string) (string, error)
 }
 
 // Manager 管理所有项目的 watcher（启停 + 生命周期）。
@@ -159,6 +162,7 @@ func (m *Manager) emitChanged(name string, payload any) {
 type projectWatcher struct {
 	mgr            *Manager
 	projectPath    string
+	realRoot       string   // canonicalize(projectPath)，符号链接越界保护用（withinRoot）
 	ignorePatterns []string // watch-add 阶段跳过目录用；保存时过滤每 flush 再读最新配置
 
 	fsw       *fsnotify.Watcher
@@ -179,9 +183,14 @@ func (m *Manager) newProjectWatcher(projectPath string) *projectWatcher {
 	if cfg, err := m.saver.GetConfig(context.Background(), projectPath); err == nil {
 		patterns = cfg.IgnorePatterns
 	}
+	realRoot := projectPath
+	if rr, err := filepath.EvalSymlinks(projectPath); err == nil {
+		realRoot = rr
+	}
 	return &projectWatcher{
 		mgr:            m,
 		projectPath:    projectPath,
+		realRoot:       realRoot,
 		ignorePatterns: patterns,
 		pendingChanged: make(map[string]struct{}),
 		pendingDeleted: make(map[string]struct{}),
@@ -264,6 +273,10 @@ func (pw *projectWatcher) loop() {
 // handleEvent 把一个 fsnotify 事件映射成「变更 / 删除」记入 pending 集，并触发 debounce。
 // 分支切换检测与过滤 / 保存在 flush（debounce 后）统一做。
 func (pw *projectWatcher) handleEvent(ev fsnotify.Event) {
+	// 分支切换检测：每个事件读 .git/HEAD，切换则打 branch_switch 标签 + 设 3s 静默（见 pipeline.go）。
+	// 放在记入 pending 之前——这样紧随 checkout 的文件事件会被静默窗口在 flush 时丢弃。
+	pw.checkBranchSwitch()
+
 	rel, ok := pw.relPath(ev.Name)
 	if !ok {
 		return
@@ -275,20 +288,29 @@ func (pw *projectWatcher) handleEvent(ev fsnotify.Event) {
 			return
 		}
 	}
-	pw.stateMu.Lock()
 	switch {
 	case ev.Op&(fsnotify.Remove|fsnotify.Rename) != 0:
-		delete(pw.pendingChanged, rel)
-		pw.pendingDeleted[rel] = struct{}{}
+		pw.recordPending(rel, true)
 	case ev.Op&(fsnotify.Create|fsnotify.Write) != 0:
-		delete(pw.pendingDeleted, rel)
-		pw.pendingChanged[rel] = struct{}{}
+		pw.recordPending(rel, false)
 	default:
-		pw.stateMu.Unlock()
 		return // Chmod 等其它事件忽略
 	}
-	pw.stateMu.Unlock()
 	pw.debounced(pw.flush)
+}
+
+// recordPending 把一次「变更 / 删除」记入 debounce 窗口的 pending 集（同路径后到覆盖先到：
+// 变更后删除→只剩删除；删除后又变更→只剩变更）。
+func (pw *projectWatcher) recordPending(rel string, isDelete bool) {
+	pw.stateMu.Lock()
+	defer pw.stateMu.Unlock()
+	if isDelete {
+		delete(pw.pendingChanged, rel)
+		pw.pendingDeleted[rel] = struct{}{}
+	} else {
+		delete(pw.pendingDeleted, rel)
+		pw.pendingChanged[rel] = struct{}{}
+	}
 }
 
 // relPath 把 fsnotify 的绝对路径转项目内相对路径（正斜杠）。越界 / 无关返回 false。
@@ -302,21 +324,6 @@ func (pw *projectWatcher) relPath(name string) (string, bool) {
 		return "", false
 	}
 	return rel, true
-}
-
-// flush 在 debounce 窗口静默后触发（bep/debounce 的尾边缘回调，运行在其内部 goroutine）。
-//
-// P4a-1（骨架）：只取走 pending 集并记录捕获到的变更——验证「编辑文件后后端日志出现捕获」。
-// 真正的过滤 / 保存版本 / 删除快照 / 分支切换静默 / Emit 事件在 P4a-2 接入（见 watcher_pipeline.go）。
-func (pw *projectWatcher) flush() {
-	changed, deleted := pw.drainPending()
-	if len(changed) == 0 && len(deleted) == 0 {
-		return
-	}
-	branch := readCurrentBranch(pw.projectPath)
-	pw.mgr.log.Info("captured file events (skeleton, not yet saved)",
-		"project", pw.projectPath, "branch", branch,
-		"changed", changed, "deleted", deleted)
 }
 
 // drainPending 取走并清空当前 pending 集（在 stateMu 下）。

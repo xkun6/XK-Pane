@@ -74,6 +74,10 @@ type DiffResult struct {
 	Truncated bool       `json:"truncated"`
 }
 
+// IsBinary 是 isBinary 的导出包装，供 lhwatcher 在保存前做二进制过滤（单一事实源，对齐 diff 引擎
+// 的判定，避免 watcher 自带一份易漂移的副本）。
+func IsBinary(content []byte) bool { return isBinary(content) }
+
 // isBinary 检测内容是否二进制：先看 BOM（有 BOM 即文本），再看首 8KB 是否含 \0。对齐 cc-pane。
 func isBinary(content []byte) bool {
 	if len(content) == 0 {

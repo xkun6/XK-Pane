@@ -116,6 +116,19 @@ func Run(assets embed.FS) error {
 	subSvc.AttachApp(app)
 	termSvc.AttachApp(app)
 	lhWatcher.AttachApp(app) // watcher 经此向前端 Emit localhistory:changed（live 刷新）
+	// Local History 启停补启接线（决策 D4-4）：
+	//   - SaveConfig(enabled=true) 即时启 / (false) 即时停该项目 watcher；
+	//   - 启动项目（terminal.CreateSession）时若已启用本地历史则补启 watcher。
+	lhSvc.SetConfigHook(func(ctx context.Context, projectPath string, enabled bool) {
+		if enabled {
+			lhWatcher.EnsureWatching(ctx, projectPath)
+		} else {
+			lhWatcher.StopWatching(projectPath)
+		}
+	})
+	termSvc.SetSessionStartHook(func(projectPath string) {
+		lhWatcher.EnsureWatching(context.Background(), projectPath)
+	})
 	// 连接 Git → Local History：stash/pull/push 前给项目历史打 auto 标签（localhistorysvc 内
 	// 已守门：仅对已在用 Local History 的项目生效，不会为纯 git 操作凭空创建 .xkpanes/）。
 	gitSvc.SetAutoLabeler(func(ctx context.Context, repoPath, name, source, branch string) error {
