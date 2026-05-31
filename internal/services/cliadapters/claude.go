@@ -46,17 +46,6 @@ func (a *ClaudeAdapter) Detect() ToolInfo {
 	return out
 }
 
-// generateMCPConfig 是 Phase 5 hook 点：orchestrator 落地后在此写 per-session mcp-*.json
-// （合并 ~/.claude.json 用户全局 MCP + shared HTTP + ccpanes 端点），返回配置文件路径。
-// Phase 1 无 orchestrator（port/token 必为空），恒返回 ""，不写文件。
-// TODO(phase5): 移植 cc-pane claude::generate_mcp_config。
-func (a *ClaudeAdapter) generateMCPConfig(ctx *Context) string {
-	if ctx.OrchestratorPort == 0 || ctx.OrchestratorToken == "" {
-		return ""
-	}
-	return "" // TODO(phase5)
-}
-
 // BuildCommand 拼装 claude 启动命令。参数顺序：--resume → --add-dir → --mcp-config →
 // --append-system-prompt → `-- <prompt>`（位置参数必须在所有 flag 之后，`--` 防误解析）。
 func (a *ClaudeAdapter) BuildCommand(ctx *Context) (CommandResult, error) {
@@ -71,7 +60,7 @@ func (a *ClaudeAdapter) BuildCommand(ctx *Context) (CommandResult, error) {
 	}
 	args = append(args, buildAddDirArgs(ctx)...)
 	if !ctx.SkipMCP {
-		if cfg := a.generateMCPConfig(ctx); cfg != "" {
+		if cfg := generateClaudeMCPConfig(ctx); cfg != "" {
 			args = append(args, "--mcp-config", cfg)
 		}
 	}
@@ -87,10 +76,10 @@ func (a *ClaudeAdapter) BuildCommand(ctx *Context) (CommandResult, error) {
 		command, args = windowsNpmShimInvocation(path, args)
 	}
 
+	// CC_PANES_* 会话/orchestrator env 由 terminal.buildEnv 统一注入（对齐 cc-pane terminal_service）。
 	return CommandResult{
 		Command:   command,
 		Args:      args,
 		EnvRemove: []string{"CLAUDECODE"},
-		EnvInject: orchestratorEnv(ctx),
 	}, nil
 }

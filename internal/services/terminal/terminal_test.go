@@ -30,7 +30,7 @@ func TestUTF8SafeProcessAllValid(t *testing.T) {
 
 // 末尾是不完整多字节序列 → emit 有效前缀，截断字节进 carry；下一次拼回还原完整字符。
 func TestUTF8SafeProcessIncompleteTailCarried(t *testing.T) {
-	full := []byte("ab世") // '世' = E4 B8 96（3 字节）
+	full := []byte("ab世")  // '世' = E4 B8 96（3 字节）
 	split := len(full) - 1 // 砍掉最后一字节，制造不完整尾部
 
 	out1, carry := utf8SafeProcess(full[:split], nil)
@@ -84,11 +84,11 @@ func TestIsIncompleteTrailing(t *testing.T) {
 		in   []byte
 		want bool
 	}{
-		{"two-byte lead missing continuation", []byte{0xC3}, true},        // 2 字节序列只给了起始
+		{"two-byte lead missing continuation", []byte{0xC3}, true}, // 2 字节序列只给了起始
 		{"three-byte lead one of two continuation", []byte{0xE4, 0xB8}, true},
-		{"len>=need (full 3-byte seq)", []byte{0xE4, 0xB8, 0x96}, false},  // 字节数已够 → 非「截断待补」
-		{"invalid lead byte", []byte{0xFF}, false},                        // 0xFF 非合法起始
-		{"bad continuation", []byte{0xE4, 0x20}, false},                   // 续字节非 10xxxxxx
+		{"len>=need (full 3-byte seq)", []byte{0xE4, 0xB8, 0x96}, false}, // 字节数已够 → 非「截断待补」
+		{"invalid lead byte", []byte{0xFF}, false},                       // 0xFF 非合法起始
+		{"bad continuation", []byte{0xE4, 0x20}, false},                  // 续字节非 10xxxxxx
 		{"empty", nil, false},
 	}
 	for _, c := range cases {
@@ -131,7 +131,7 @@ func failingCmd(code int) *exec.Cmd {
 // --- buildEnv ---
 
 func TestBuildEnvInjectsTermAndSessionID(t *testing.T) {
-	env := buildEnv("sess-123", "claude", nil, map[string]string{"FOO": "bar"}, nil)
+	env := buildEnv("sess-123", "claude", 0, "", nil, map[string]string{"FOO": "bar"}, nil)
 	m := envToMap(env)
 	if m["CC_PANES_PTY_SESSION_ID"] != "sess-123" {
 		t.Errorf("session id = %q, want sess-123", m["CC_PANES_PTY_SESSION_ID"])
@@ -152,7 +152,7 @@ func TestBuildEnvInjectsTermAndSessionID(t *testing.T) {
 
 func TestBuildEnvRemoveAndOverride(t *testing.T) {
 	t.Setenv("XKPANE_TEST_REMOVE_ME", "present")
-	env := buildEnv("s", "none", nil, map[string]string{"TERM": "override-term"}, []string{"XKPANE_TEST_REMOVE_ME"})
+	env := buildEnv("s", "none", 0, "", nil, map[string]string{"TERM": "override-term"}, []string{"XKPANE_TEST_REMOVE_ME"})
 	m := envToMap(env)
 	if _, ok := m["XKPANE_TEST_REMOVE_ME"]; ok {
 		t.Errorf("envRemove did not remove the variable")
@@ -211,9 +211,31 @@ func TestResolveLaunchWithProvider(t *testing.T) {
 		t.Errorf("providerEnv not threaded: %v", providerEnv)
 	}
 	// buildEnv 合并后，Tier-A env 落入最终环境
-	env := envToMap(buildEnv("id", "none", providerEnv, nil, nil))
+	env := envToMap(buildEnv("id", "none", 0, "", providerEnv, nil, nil))
 	if env["ANTHROPIC_API_KEY"] != "k" || env["ANTHROPIC_BASE_URL"] != "u" {
 		t.Errorf("provider env not merged into final env: %v", env["ANTHROPIC_API_KEY"])
+	}
+}
+
+// orchestrator 就绪时 buildEnv 注入端点三件套；未就绪（port=0）一个都不注入。
+func TestBuildEnvInjectsOrchestratorEndpoint(t *testing.T) {
+	env := envToMap(buildEnv("s", "claude", 58387, "deadbeef", nil, nil, nil))
+	if env["CC_PANES_API_PORT"] != "58387" {
+		t.Errorf("CC_PANES_API_PORT = %q, want 58387", env["CC_PANES_API_PORT"])
+	}
+	if env["CC_PANES_API_TOKEN"] != "deadbeef" {
+		t.Errorf("CC_PANES_API_TOKEN = %q, want deadbeef", env["CC_PANES_API_TOKEN"])
+	}
+	if env["CC_PANES_API_BASE_URL"] != "http://127.0.0.1:58387" {
+		t.Errorf("CC_PANES_API_BASE_URL = %q", env["CC_PANES_API_BASE_URL"])
+	}
+
+	// 未就绪：三件套均不注入（fail-open）。
+	bare := envToMap(buildEnv("s", "claude", 0, "", nil, nil, nil))
+	for _, k := range []string{"CC_PANES_API_PORT", "CC_PANES_API_TOKEN", "CC_PANES_API_BASE_URL"} {
+		if _, ok := bare[k]; ok {
+			t.Errorf("orchestrator 未就绪不应注入 %s", k)
+		}
 	}
 }
 

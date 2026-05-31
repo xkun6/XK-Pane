@@ -47,15 +47,6 @@ func (a *ReclaudeAdapter) Detect() ToolInfo {
 	return out
 }
 
-// generateMCPConfig 同 ClaudeAdapter：Phase 5 hook 点，Phase 1 恒返回 ""。
-// TODO(phase5): 移植 cc-pane reclaude::generate_mcp_config。
-func (a *ReclaudeAdapter) generateMCPConfig(ctx *Context) string {
-	if ctx.OrchestratorPort == 0 || ctx.OrchestratorToken == "" {
-		return ""
-	}
-	return "" // TODO(phase5)
-}
-
 // BuildCommand 与 ClaudeAdapter 同构（参数顺序与 env 一致），仅可执行名为 reclaude。
 func (a *ReclaudeAdapter) BuildCommand(ctx *Context) (CommandResult, error) {
 	path, err := resolveClaudeLike("reclaude")
@@ -69,7 +60,7 @@ func (a *ReclaudeAdapter) BuildCommand(ctx *Context) (CommandResult, error) {
 	}
 	args = append(args, buildAddDirArgs(ctx)...)
 	if !ctx.SkipMCP {
-		if cfg := a.generateMCPConfig(ctx); cfg != "" {
+		if cfg := generateClaudeMCPConfig(ctx); cfg != "" {
 			args = append(args, "--mcp-config", cfg)
 		}
 	}
@@ -85,10 +76,10 @@ func (a *ReclaudeAdapter) BuildCommand(ctx *Context) (CommandResult, error) {
 		command, args = windowsNpmShimInvocation(path, args)
 	}
 
+	// CC_PANES_* 会话/orchestrator env 由 terminal.buildEnv 统一注入（对齐 cc-pane terminal_service）。
 	return CommandResult{
 		Command:   command,
 		Args:      args,
 		EnvRemove: []string{"CLAUDECODE"},
-		EnvInject: orchestratorEnv(ctx),
 	}, nil
 }

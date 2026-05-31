@@ -7,10 +7,11 @@
 // 移植范围（Phase 1）与刻意延后项：
 //   - 移植：types / 接口 / Registry / 8 个 BuildCommand / 路径字段铁律（D7）/
 //     可执行解析 + Windows npm shim / Detect（LookPath + 版本探测）。
-//   - 延后：claude/reclaude 的 generate_mcp_config（写 mcp-*.json，依赖 Phase 5
-//     orchestrator 的 port/token）；codex disable_unlisted_mcp 的 ~/.codex/config.toml
-//     解析（默认关，Phase 5 才置真）；项目 hooks 机制（依赖尚未移植的 cc-panes-cli-hook
-//     二进制 + 已确认延后的 IM 桥接）。相关 hook 点以 TODO(phase5)/TODO(hooks) 标注。
+//   - P6b 落地：claude/reclaude 的 generate_mcp_config（orchestrator 就绪时写
+//     <proj>/.claude/mcp-<sid>.json，合并 ~/.claude.json 用户全局 mcpServers + ccpanes 端点）；
+//     codex pushMcpOverrides 转真（SkipMCP 由 terminal 据 orchestrator 就绪翻转）。
+//   - 仍延后：codex disable_unlisted_mcp 的 ~/.codex/config.toml 解析（默认关）；shared MCP
+//     （npx mcp-proxy 桥，SharedMCPURLs 恒空）；项目 hooks 机制（依赖 cc-panes-cli-hook 二进制，P6d）。
 //
 // 路径字段铁律（D7，移植时 1:1 保留）：
 //   - ProjectPath = PTY 的 cwd，永远等于用户操作目标，决定 cwd 只能用它。
@@ -20,12 +21,17 @@ package cliadapters
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"os"
 	"os/exec"
-	"strconv"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"xkpane/internal/utils/filex"
+	"xkpane/internal/utils/logx"
 	"xkpane/internal/utils/procx"
 )
 
@@ -78,9 +84,9 @@ type Context struct {
 	SkipMCP            bool
 	AppendSystemPrompt string // "" = 无
 	InitialPrompt      string // 初始用户 prompt，作为位置参数；"" = 无
-	OrchestratorPort   int    // Orchestrator HTTP 端口；0 = 无（Phase 5）
-	OrchestratorToken  string // Orchestrator Bearer Token；"" = 无（Phase 5）
-	DataDir            string // 数据目录（写 MCP / adapter 配置文件用）
+	OrchestratorPort   int    // Orchestrator HTTP 端口；0 = 无（未就绪 → SkipMCP fail-open）
+	OrchestratorToken  string // Orchestrator Bearer Token；"" = 无（未就绪 → SkipMCP fail-open）
+	DataDir            string // 数据目录（保留字段，per-session MCP 配置已改落 <proj>/.claude/）
 
 	// 共享 MCP Server URL 映射（name → http url）。Phase 5。
 	SharedMCPURLs map[string]string
@@ -116,7 +122,7 @@ type base struct {
 	caps Capabilities
 }
 
-func (b *base) Info() ToolInfo         { return b.info }
+func (b *base) Info() ToolInfo             { return b.info }
 func (b *base) Capabilities() Capabilities { return b.caps }
 
 // Detect 默认实现：PATH 解析可执行 + 跑 version_args 取版本。Claude/Reclaude 覆盖以走自定义解析。
@@ -179,17 +185,95 @@ func buildAddDirArgs(ctx *Context) []string {
 	return nil
 }
 
-// orchestratorEnv 拼装 claude/reclaude 注入的 orchestrator 环境变量。
-// CC_PANES_PTY_SESSION_ID 永远注入；port/token 仅在 Phase 5 提供时注入。
-func orchestratorEnv(ctx *Context) map[string]string {
-	env := map[string]string{
-		"CC_PANES_PTY_SESSION_ID": ctx.SessionID,
+// generateClaudeMCPConfig 是 claude/reclaude 共享的 per-session MCP 配置生成（移植 cc-pane
+// claude::generate_mcp_config）。orchestrator 就绪（port/token 非空）时，往【被启动项目的 .claude/】
+// 写 mcp-<session>.json，返回配置文件绝对路径供 --mcp-config；未就绪或写失败返回 ""（调用方据此
+// 不加 --mcp-config，fail-open 裸跑）。
+//
+// 内容：合并 ~/.claude.json 用户全局 mcpServers（低优先级，shared 命中则跳过）+ shared MCP（HTTP）
+// + ccpanes 端点（最高优先级，覆盖同名）。ccpanes token 经 header 与 ?token= 双通道（Claude Issue #7290 后备）。
+//
+// 落点偏离 cc-pane（其写 data_dir）：用户要求 per-session 注入落到被启动项目的 .claude/（与 skills 同处）。
+// shared MCP（npx mcp-proxy 桥）本轮推迟，SharedMCPURLs 恒空。
+func generateClaudeMCPConfig(ctx *Context) string {
+	if ctx.OrchestratorPort == 0 || ctx.OrchestratorToken == "" {
+		return ""
 	}
-	if ctx.OrchestratorPort != 0 {
-		env["CC_PANES_API_PORT"] = strconv.Itoa(ctx.OrchestratorPort)
+	dir := filepath.Join(ctx.ProjectPath, ".claude")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		logx.For("cliadapters").Warn("mcp config: ensure .claude dir", "dir", dir, "err", err)
+		return ""
 	}
-	if ctx.OrchestratorToken != "" {
-		env["CC_PANES_API_TOKEN"] = ctx.OrchestratorToken
+	fileName := fmt.Sprintf("mcp-%s.json", ctx.SessionID)
+	configPath := filepath.Join(dir, fileName)
+	cleanupStaleMCPConfigs(dir, fileName)
+
+	servers := map[string]any{}
+	// 合并用户全局 ~/.claude.json mcpServers（低优先级）；shared 命中跳过（本轮 shared 恒空）。
+	for name, cfg := range readUserGlobalMCPServers() {
+		if _, ok := ctx.SharedMCPURLs[name]; ok {
+			continue
+		}
+		servers[name] = cfg
 	}
-	return env
+	// shared MCP（HTTP 模式），本轮恒空。
+	for name, url := range ctx.SharedMCPURLs {
+		servers[name] = map[string]any{"type": "http", "url": url}
+	}
+	// ccpanes 端点（最高优先级，覆盖同名）。
+	servers["ccpanes"] = map[string]any{
+		"type":    "http",
+		"url":     fmt.Sprintf("http://127.0.0.1:%d/mcp?token=%s", ctx.OrchestratorPort, ctx.OrchestratorToken),
+		"headers": map[string]string{"Authorization": "Bearer " + ctx.OrchestratorToken},
+	}
+
+	data, err := json.MarshalIndent(map[string]any{"mcpServers": servers}, "", "  ")
+	if err != nil {
+		return ""
+	}
+	if err := filex.WriteAtomic(configPath, data, 0o644); err != nil {
+		logx.For("cliadapters").Warn("mcp config: write", "path", configPath, "err", err)
+		return ""
+	}
+	return configPath
+}
+
+// readUserGlobalMCPServers 读 ~/.claude.json 的 mcpServers（移植 cc-pane read_user_global_mcp_servers）。
+// 任何错误（无 home / 无文件 / 解析失败 / 无 mcpServers）返回 nil。RawMessage 保留用户配置原样。
+func readUserGlobalMCPServers() map[string]json.RawMessage {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	data, err := filex.ReadLimit(filepath.Join(home, ".claude.json"), 64<<20)
+	if err != nil {
+		return nil
+	}
+	var parsed struct {
+		MCPServers map[string]json.RawMessage `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return nil
+	}
+	return parsed.MCPServers
+}
+
+// cleanupStaleMCPConfigs 删除 dir 里 >1h 的旧 mcp-*.json（保留 current），防 per-session 文件堆积。
+func cleanupStaleMCPConfigs(dir, current string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-time.Hour)
+	for _, e := range entries {
+		name := e.Name()
+		if name == current || !strings.HasPrefix(name, "mcp-") || !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || !info.ModTime().Before(cutoff) {
+			continue
+		}
+		_ = os.Remove(filepath.Join(dir, name))
+	}
 }

@@ -22,6 +22,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -102,6 +103,14 @@ func (s *Service) SetOrchestrator(port int, token string) {
 	s.orchPort = port
 	s.orchToken = token
 	s.orchMu.Unlock()
+}
+
+// orchestratorEndpoint 返回已注入的 orchestrator MCP 端点（port/token）；(0,"") = 未就绪。
+// port/token 在 app 装配阶段一次性 set，之后不变。
+func (s *Service) orchestratorEndpoint() (int, string) {
+	s.orchMu.RLock()
+	defer s.orchMu.RUnlock()
+	return s.orchPort, s.orchToken
 }
 
 // session 是一次终端会话的内部状态。
@@ -202,7 +211,8 @@ func (s *Service) CreateSession(ctx context.Context, spec CreateSpec) (string, e
 		return "", err
 	}
 
-	env := buildEnv(id, spec.CliTool, providerEnv, envInject, envRemove)
+	orchPort, orchToken := s.orchestratorEndpoint()
+	env := buildEnv(id, spec.CliTool, orchPort, orchToken, providerEnv, envInject, envRemove)
 
 	pt, err := ptyx.Spawn(context.Background(), ptyx.Spec{
 		Command: command,
@@ -343,16 +353,20 @@ func (s *Service) resolveLaunch(ctx context.Context, id string, spec CreateSpec)
 		return "", nil, nil, nil, nil, fmt.Errorf("terminal: unknown cli tool %q", toolID)
 	}
 
+	// orchestrator 就绪（port/token 非空）才注入 ccpanes MCP（翻转 SkipMCP）。未就绪 fail-open 裸跑，
+	// 避免 adapter 生成依赖未落地端口的配置。claude/reclaude 写 <proj>/.claude/mcp-<sid>.json；
+	// codex 经 -c mcp_servers.ccpanes.url + bearer_token_env_var=CC_PANES_API_TOKEN（env 由 buildEnv 注入）。
+	orchPort, orchToken := s.orchestratorEndpoint()
 	cctx := &cliadapters.Context{
-		SessionID:     id,
-		ProjectPath:   spec.ProjectPath,
-		WorkspacePath: spec.WorkspacePath,
-		InitialPrompt: spec.InitialPrompt,
-		ResumeID:      spec.ResumeID, // 透传给 adapter → claude/codex/reclaude resume
-		Provider:      cli,           // Tier-B：glm/cursor/kimi 据此自注入
-		// TODO(phase5): orchestrator port·token / MCP 注入。
-		// 当前无 orchestrator，强制 SkipMCP 避免 adapter 生成依赖未落地端口的 MCP 配置。
-		SkipMCP: true,
+		SessionID:         id,
+		ProjectPath:       spec.ProjectPath,
+		WorkspacePath:     spec.WorkspacePath,
+		InitialPrompt:     spec.InitialPrompt,
+		ResumeID:          spec.ResumeID, // 透传给 adapter → claude/codex/reclaude resume
+		Provider:          cli,           // Tier-B：glm/cursor/kimi 据此自注入
+		OrchestratorPort:  orchPort,
+		OrchestratorToken: orchToken,
+		SkipMCP:           orchPort == 0 || orchToken == "",
 	}
 	res, err := adapter.BuildCommand(cctx)
 	if err != nil {
@@ -498,10 +512,14 @@ func nowMilli() int64 { return time.Now().UnixMilli() }
 // 注入 TERM/COLORTERM（Release .app 从 Finder 启动不继承终端环境）与 CC_PANES_* 标识，
 // 合并 provider 的 Tier-A env，再叠加 adapter 的 envInject，最后移除 adapter 声明的 envRemove。
 //
+// orchestrator 端点 env（CC_PANES_API_PORT/TOKEN/BASE_URL）在此对所有本地 CLI 会话统一注入
+// （对齐 cc-pane terminal_service line 1192-1204，不在 adapter 里）：codex 经
+// bearer_token_env_var=CC_PANES_API_TOKEN 读 token，cli-hook（P6d）经 BASE_URL 回连。
+//
 // 合并顺序（与 cc-pane terminal_service 一致）：base → providerEnv(Tier-A) →
 // adapter inject(Tier-B) → remove。故 adapter 自注入覆盖 provider 同名键（如 glm ZAI_*
 // 两层都设、值相同，无害）。
-func buildEnv(sessionID, toolID string, providerEnv, inject map[string]string, remove []string) []string {
+func buildEnv(sessionID, toolID string, orchPort int, orchToken string, providerEnv, inject map[string]string, remove []string) []string {
 	m := make(map[string]string)
 	for _, kv := range os.Environ() {
 		if k, v, ok := strings.Cut(kv, "="); ok {
@@ -519,6 +537,12 @@ func buildEnv(sessionID, toolID string, providerEnv, inject map[string]string, r
 	m["CC_PANES_PTY_SESSION_ID"] = sessionID
 	if toolID != "" && toolID != "none" {
 		m["CC_PANES_CLI_TOOL"] = toolID
+	}
+	// orchestrator MCP 端点（仅就绪时注入，本地全工具统一）。codex bearer / cli-hook 回连依赖此组。
+	if orchPort != 0 && orchToken != "" {
+		m["CC_PANES_API_PORT"] = strconv.Itoa(orchPort)
+		m["CC_PANES_API_TOKEN"] = orchToken
+		m["CC_PANES_API_BASE_URL"] = fmt.Sprintf("http://127.0.0.1:%d", orchPort)
 	}
 	for k, v := range providerEnv { // Tier-A provider env（adapter inject 之前）
 		m[k] = v
