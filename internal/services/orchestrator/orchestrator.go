@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"xkpane/internal/services/notification"
 	"xkpane/internal/services/terminal"
 	"xkpane/internal/storage"
 	"xkpane/internal/utils/filex"
@@ -56,11 +57,17 @@ type Workspaces interface {
 	List(ctx context.Context) ([]storage.Workspace, error)
 }
 
+// Notifier 是桌面通知触发能力（*notification.Service 满足）。nil = 不支持 /api/notifications/trigger。
+type Notifier interface {
+	Trigger(req notification.Request) (notification.Result, error)
+}
+
 // Deps 是 orchestrator 编排工具的下游依赖（app 装配阶段注入既有 service）。
 type Deps struct {
 	Terminal   Terminal
 	Projects   Projects
 	Workspaces Workspaces
+	Notifier   Notifier // P6d-4：cli-hook notify → /api/notifications/trigger
 }
 
 // orchestratorVersion 报给 MCP 客户端的 server 版本（与应用版本解耦，独立演进）。
@@ -146,6 +153,7 @@ func (s *Service) Start() error {
 	// REST 业务回调（cli-hook 回连）。各 handler 内联 verify_token + rate_limit（对齐 cc-pane，
 	// REST 不走 MCP 中间件）。P6d-3：session-started 回报（log + emit）。
 	mux.HandleFunc("POST /api/terminal/session-started", s.handleSessionStarted)
+	mux.HandleFunc("POST /api/notifications/trigger", s.handleTriggerNotification)
 	// 同一个鉴权后的 MCP handler 实例同时挂精确路径与子树（容忍尾斜杠）。
 	mux.Handle("/mcp", mcpHandler)
 	mux.Handle("/mcp/", mcpHandler)

@@ -18,6 +18,7 @@ import (
 	"xkpane/internal/services/launchhistory"
 	"xkpane/internal/services/lhwatcher"
 	"xkpane/internal/services/localhistorysvc"
+	"xkpane/internal/services/notification"
 	"xkpane/internal/services/orchestrator"
 	"xkpane/internal/services/preferences"
 	"xkpane/internal/services/project"
@@ -33,6 +34,7 @@ import (
 	"xkpane/internal/utils/logx"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 )
 
 // Run 创建 Wails 应用、注册服务、打开主窗口并启动事件循环。
@@ -86,6 +88,10 @@ func Run(assets embed.FS) error {
 	wsSvc := workspace.New(holder)
 	// Local History 自动捕获 watcher（决策 D4-1 独立包）。依赖 lhSvc（窄接口 Saver：读配置 + 保存）。
 	lhWatcher := lhwatcher.New(lhSvc)
+	// 桌面通知（P6d-4）：Wails 通知 service 单例（须注册进 Services 跑 Windows ServiceStartup，
+	// 注册 toast GUID/激活器）+ XK notification 服务（读 app_settings 开关 + 去重 + 聚焦判定）。
+	wailsNotifier := notifications.New()
+	notifSvc := notification.New(holder, wailsNotifier)
 
 	app := application.New(application.Options{
 		Name:        "XK-Pane",
@@ -106,6 +112,7 @@ func Run(assets embed.FS) error {
 			application.NewService(clitools.New(cliRegistry)),
 			application.NewService(wsSvc),
 			application.NewService(sessionscan.New()),
+			application.NewService(wailsNotifier), // Wails 通知 service（跑 ServiceStartup 注册 toast）
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -143,7 +150,9 @@ func Run(assets embed.FS) error {
 		return provider.ResolveLaunchEnv(ctx, holder.Current().GORM, providerID)
 	})
 
-	app.Window.NewWithOptions(windowOptions())
+	mainWindow := app.Window.NewWithOptions(windowOptions())
+	// 通知 only_when_unfocused 判定：注入主窗口聚焦查询（解耦 notification service 与 Wails 窗口 API）。
+	notifSvc.SetFocusCheck(func() bool { return mainWindow.IsFocused() })
 
 	// —— MCP/Orchestrator 地基（P6a）：本地 HTTP+MCP server，让 pane 内 CLI 经 MCP 反向调用宿主。——
 	// 启动失败 fail-open（CLI 裸跑无 MCP 注入，不阻断应用启动）；端口/token 注入 terminal 供 P6b 生成 MCP 配置。
@@ -151,6 +160,7 @@ func Run(assets embed.FS) error {
 		Terminal:   termSvc,
 		Projects:   projSvc,
 		Workspaces: wsSvc,
+		Notifier:   notifSvc,
 	})
 	orchSvc.AttachApp(app) // 编排工具经此 Emit orchestrator:launch 给前端
 	if err := orchSvc.Start(); err != nil {

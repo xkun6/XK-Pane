@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"xkpane/internal/events"
+	"xkpane/internal/services/notification"
 	"xkpane/internal/utils/logx"
 )
 
@@ -81,4 +82,34 @@ func (s *Service) handleSessionStarted(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
+// handleTriggerNotification 接收 cli-hook notify 的触发：校验 token + 限流 → notification.Trigger。
+func (s *Service) handleTriggerNotification(w http.ResponseWriter, r *http.Request) {
+	if !s.verifyToken(r) {
+		writeJSONError(w, http.StatusUnauthorized, "Invalid or missing Bearer token")
+		return
+	}
+	if !s.rl.allow() {
+		writeJSONError(w, http.StatusTooManyRequests, "Rate limit exceeded")
+		return
+	}
+	if s.deps.Notifier == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "notification service unavailable")
+		return
+	}
+
+	var req notification.Request
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	result, err := s.deps.Notifier.Trigger(req)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(result)
 }

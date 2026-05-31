@@ -119,11 +119,12 @@ cc-pane 的 cli-hook = 一个**独立 exe**，被在 pane 里跑的 Claude/Codex
 - **不动 launch_history**（无消费方）、**不改前端**（前端订阅事件留后续）。launch_cwd 落库等有 resume-by-cwd 消费方时再做。
 - **验证**：go build/vet/test（rateLimiter 窗口、handler 401/200-emit/400）全绿。手测：pane 内启 claude → hook 触发 → app.log 见 `session-started 上报 cwd=...`。
 
-### P6d-4 — notify 通道（Wails 桌面通知 service + `/api/notifications/trigger`）（M）【依赖 D6d-4】
-- 新 `internal/services/notification`：包装 Wails `notifications.NotificationService` + dedupe（10s）+ (可选) only_when_unfocused（查窗口聚焦）。Wails service 注册（`SendNotification` 可被前端调）。
-- orchestrator `POST /api/notifications/trigger`（鉴权+限流）→ notification.Trigger。
-- 设置：见 D6d-4（appsettings 加字段 vs 硬编码 enabled）。
-- **验证**：`xkpane-cli-hook notify --title X --body Y` → 桌面 toast。
+### P6d-4 — notify 通道（Wails 桌面通知 service + `/api/notifications/trigger`）（M，已落地）
+- 新 `internal/services/notification`：包装 Wails `notifications.NotificationService`（经 `sender` 窄接口便于测试）+ dedupe（10s）+ only_when_unfocused（注入 focusFn 回调，解耦 Wails 窗口 API）。规则对齐 cc-pane：enabled→only_when_unfocused→dedupe→send。**非 Wails service**（内部，orchestrator 依赖）；Wails `notifications.New()` 单例注册进 Services 以跑 Windows ServiceStartup（注册 toast GUID/激活器）。
+- 设置（D6d-4 A）：`AppSettings` 加 `NotificationEnabled`(默认 true)/`NotificationOnlyWhenUnfocused`(默认 false)；**不进前端 Snapshot**（无设置 UI），notification 服务经 holder 直读表（不 capture *DB）。
+- orchestrator `POST /api/notifications/trigger`（鉴权+限流；Notifier nil→503）→ notification.Trigger。app.go 注入 `mainWindow.IsFocused()` 作 focusFn。
+- 依赖：go-toast/v2 v2.0.3（wails 通知 windows 实现间接引入）。
+- **验证**：go build/vet/test 全绿（Trigger enabled/disabled/focus-skip/dedupe/per-call-override + rateLimiter）。手测：`xkpane-cli-hook notify --title X --body Y` → 桌面 toast（⚠️ dev 未安装态 Windows toast 可能不弹，见 §6 风险）。
 
 ### ~~P6d-5 — im-forward 数据面~~（**D6d-3 拍板取消**）
 本期完全不做 im-forward：不实现 im-forward 子命令、不注册该 hook、不建 `/api/im-bridge/ingest` 端点、不加 `im_bridge_events` 表。整个 IM 桥（含外部通道）留作未来独立阶段。

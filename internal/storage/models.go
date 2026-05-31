@@ -62,11 +62,17 @@ type Preference struct {
 //   - 这里的字段是已知有限集，schema 强校验
 //   - Preference 是开放键值，业务方可以随时塞新键
 type AppSettings struct {
-	ID            uint   `gorm:"primaryKey;check:id = 1"`
-	ThemeChoice   string `gorm:"size:64;not null;default:'system'"`
-	CustomTheme   string `gorm:"type:text"`                       // JSON: { mode, palette }
-	LocaleChoice  string `gorm:"size:32;not null;default:'auto'"` // 'auto' | LocaleCode
-	UpdatedAt     int64  `gorm:"autoUpdateTime:milli"`
+	ID           uint   `gorm:"primaryKey;check:id = 1"`
+	ThemeChoice  string `gorm:"size:64;not null;default:'system'"`
+	CustomTheme  string `gorm:"type:text"`                       // JSON: { mode, palette }
+	LocaleChoice string `gorm:"size:32;not null;default:'auto'"` // 'auto' | LocaleCode
+
+	// 通知设置（P6d-4 / D6d-4）：cli-hook notify → /api/notifications/trigger 时读取。
+	// 不进前端 appsettings Snapshot（无设置 UI），由 notification service 直接读本表。
+	NotificationEnabled           bool `gorm:"not null;default:true"`
+	NotificationOnlyWhenUnfocused bool `gorm:"not null;default:false"`
+
+	UpdatedAt int64 `gorm:"autoUpdateTime:milli"`
 }
 
 // modelObjs 把 ModelDescriptor 列表展开成 AutoMigrate 需要的 any 切片。
@@ -105,8 +111,9 @@ func ensureSingletonSettings(db *gorm.DB) error {
 		return nil
 	}
 	return db.Create(&AppSettings{
-		ID:           1,
-		ThemeChoice:  "system",
-		LocaleChoice: "auto",
+		ID:                  1,
+		ThemeChoice:         "system",
+		LocaleChoice:        "auto",
+		NotificationEnabled: true,
 	}).Error
 }
