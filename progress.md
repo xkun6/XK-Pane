@@ -1077,3 +1077,12 @@ reducer 注释已标 P5 边界「刻意未移植 moveTab/reorderTabs/splitAndMov
 - `06b6715` **跨面板合并失效**：P5b-2 把碰撞检测换成全局 `pointerWithin`，要求指针精确落在目标 Tab rect 内，跨面板合并几乎命不中 → 松手无反应。修：自定义 `paneCollisionDetection` —— 边缘区命中走分屏、其余在 Tab 容器里 `closestCenter` 取最近 Tab（宽容，支撑同面板重排 + 跨面板合并）。
 - `0222153` **任意 Tab 拖到任意面板任意边**（覆盖「仅同面板边缘」的初始取舍——用户明确要 VSCode 式）：`splitAndMoveTab` → **`moveTabToEdge`**(fromPaneId, tabId, targetPaneId, edge: left/right/top/bottom)，泛化为任意源 + 任意目标面板 + 四条边（left/top 插前、right/bottom 插后；跨面板源掏空则折叠；同面板仍禁移出唯一 Tab）。EdgeDropZone 改四条边（VSCode 十字布局，中心 50% 留给合并），高亮仅在「真会拆分」时显示；碰撞检测任意面板边缘均触发拆分。52 vitest（+4）。
 - **净效果**：拖任意 Tab 到任意面板——**中心→合并、四边→在该面板旁拆新面板**，源面板可为任意面板。「未做」里的「跨面板拖到目标面板边缘分屏」已落地。
+
+### P5c 终端收尾：内层分屏 reducer（休眠）+ TabBar 右键菜单（pin/重命名）
+用户看完全局地图后定方向（P5 终端 → MCP/Orchestrator → MC PE，依赖序）。就 P5 终端的「内层分屏触发」拍板：**拖动已能分屏故不要分屏按钮/内层分屏 UI，TabBar 加终端菜单含 pin/重命名即可**。
+- `269af07` **P5c-1 内层终端分屏 reducer 基础（休眠原语）**：paneTree 终端树助手(findTerminalPane/findTerminalPaneParent/collectTerminalLeaves/cloneTerminalLeaf) + reducer splitTerminalPane/closeTerminalPane/resizeTerminalPanes/setActiveTerminalPane + syncTabActiveLeaf + setTabSession 扩 optional terminalPaneId 按 leaf 回填；+6 单测。**按用户定调未接 UI/reconcile，作休眠原语留存**（日后想要内层分屏再接 P5c-2 reconcile + P5c-3 渲染；要清爽可 revert）。
+- `e4a35fc` **TabBar 菜单逻辑**：Tab.pinned + reducer togglePinTab/renameTab + closeTab 置顶守门；+3 单测。
+- `2da4320` **TabBar 右键菜单 UI**：右键 Tab → 重命名(TextInputDialog)/置顶·取消置顶/关闭(置顶隐藏)；pin 图标 PushPinRounded；TerminalContext 暴露 togglePin/renameTab；i18n terminal.tab 扩 menu/rename/pin/unpin。
+- **验证**：typecheck + 61 vitest + build 全绿；纯前端。
+- **P5 终端剩余**：仅「会话回放·跨重启恢复」（你选的，L–XL，下个）。内层分屏 UI 已按你定调撤下（reducer 休眠）。
+- **待手测**：右键任意 Tab → 重命名（弹框输入回车）/ 置顶（显 pin 图标、关闭按钮消失、不可关闭）/ 取消置顶 / 关闭。
