@@ -1145,3 +1145,13 @@ P6b 手测通过（claude/codex 都能看到 ccpanes MCP）后，用户要求把
 - 落地：被启动 CLI 在自己的 panes URL 自报 `?caller_tool=<tool>`（claude/reclaude 经 generateClaudeMCPConfig 加 callerTool 形参；codex 经 pushMcpOverrides url）→ orchestrator authMiddleware 把 query 桥接进请求头 `X-XKPane-Caller-Tool`（go-sdk handler 只见 header 不见 URL）→ launch_task 读 `req.Extra.Header` 作缺省 cli_tool（callerTool 辅助）。显式传参优先，无法识别才回落 claude。
 - 守门测试：codex url 自报 caller_tool=codex / authMiddleware 桥接 query→header / callerTool 读 header。全绿。
 - **此修正纳入本轮手测**（一次重启 dev 同时验证闭环 + 同源 + reclaude 场景）。**P6c-3 前端弹出可见 Tab 仍待手测通过后做**。
+
+### P6c-3 编排子会话前端弹出可见 Tab（`8a0d855`）
+用户要「launch_task 启动的子会话在前端弹出可见 Tab，这样更直观检测同源」。先用 Explore agent 摸清前端终端「建会话→绑 Tab→渲染」链路，**关键发现**：架构本就支持「附着既有 session」——Tab/leaf 的 `sessionId: string|null`，reconcile 的 `tabsNeedingSession` 仅对 `sessionId===null` 建会话；只要 Tab 带 sessionId 入树，reconcile 自动跳过、零重复 CreateSession。
+- 落地：`services/orchestrator/OrchestratorService.ts`（新，onLaunch 订阅 orchestrator:launch，事件订阅走 services 层）+ shared/events + barrel 补 OrchestratorLaunch；`paneTree.createTab` + `reducer.NewTabOptions/addTab` 加可选 sessionId（非空→leaf/Tab 直接绑定）；`TerminalContext`（TerminalProvider 全局常驻）内挂一次 onLaunch 订阅 → dispatch addTab(activePane, {projectPath, cliTool, title, sessionId})。TerminalView 经 tab.sessionId 订阅 terminal:output 无缝接现有 PTY 流。orphan 清理只杀曾在树中的会话、不误杀新附着会话（已核 reconcile 逻辑）。
+- 守门测试：addTab 带 sessionId → Tab+leaf 绑定。typecheck + 62 vitest + build 全绿。纯前端。
+- **已知限制**：附着前的早期输出不回放（raw VT ReplayBuffer 仍推迟）；子会话启动慢于附着，实测丢失极少。
+
+### ✅ P6c 全部完成（含同源 + 前端 Tab，待用户手测）
+- **完整链路**：reclaude 里的 Claude 调 `mcp__panes__launch_task`（不传 cli_tool）→ 后端同源继承 reclaude 建会话 + 广播 orchestrator:launch → 前端弹出可见 Tab（标题/进程 args 应见 reclaude）→ 编排者 `get_session_output`/`submit_to_session` 读写 → `kill_session`。
+- **待用户 `wails3 dev` 手测**（⚠️ 改后端必完全重启）：① reclaude/claude 各调 launch_task 不传 cli_tool → 看弹出 Tab 的进程是否同源（reclaude→reclaude、claude→claude）；② Tab 里能看到子会话实时输出；③ get_session_output/submit/kill 闭环；④ 关掉弹出的 Tab → 后端会话被 reconcile 清理。
