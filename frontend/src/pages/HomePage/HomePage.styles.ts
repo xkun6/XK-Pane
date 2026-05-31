@@ -9,11 +9,10 @@ export const homePageStyles = (theme: Theme): Record<string, SxProps<Theme>> => 
       display: 'flex',
       flexDirection: 'column',
       backgroundColor: fp.bg.content,
-      overflow: 'hidden',
+      // 滚动条归外层撑满宽度的 root（贴窗口右缘）；内容限宽交给 body，避免滚动条钉在 920px 内容块右缘。
+      overflowY: 'auto',
     },
     body: {
-      flex: 1,
-      overflowY: 'auto',
       px: 6,
       py: 5,
       display: 'flex',
