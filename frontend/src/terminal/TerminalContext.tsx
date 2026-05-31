@@ -61,6 +61,10 @@ export interface TerminalContextValue {
   closeTab: (paneId: string, tabId: string) => void;
   /** 激活某面板内的某 Tab（同时把该面板设为活动面板）。 */
   setActiveTab: (paneId: string, tabId: string) => void;
+  /** 置顶 / 取消置顶某 Tab（置顶 Tab 不可关闭）。 */
+  togglePin: (paneId: string, tabId: string) => void;
+  /** 重命名某 Tab（空标题忽略）。 */
+  renameTab: (paneId: string, tabId: string, title: string) => void;
   /** 设置活动面板。 */
   setActivePanel: (paneId: string) => void;
   /** 分屏：向右（左右）或向下（上下）拆出一个新面板。 */
@@ -137,6 +141,15 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
   );
   const setActiveTab = useCallback(
     (paneId: string, tabId: string) => dispatch({ type: 'selectTab', paneId, tabId }),
+    [],
+  );
+  const togglePin = useCallback(
+    (paneId: string, tabId: string) => dispatch({ type: 'togglePinTab', paneId, tabId }),
+    [],
+  );
+  const renameTab = useCallback(
+    (paneId: string, tabId: string, title: string) =>
+      dispatch({ type: 'renameTab', paneId, tabId, title }),
     [],
   );
   const setActivePanel = useCallback(
@@ -241,6 +254,8 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
       launchProject,
       closeTab,
       setActiveTab,
+      togglePin,
+      renameTab,
       setActivePanel,
       splitPanel,
       closePanel,
@@ -257,6 +272,8 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
       launchProject,
       closeTab,
       setActiveTab,
+      togglePin,
+      renameTab,
       setActivePanel,
       splitPanel,
       closePanel,

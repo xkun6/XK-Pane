@@ -1,9 +1,13 @@
-import { Box, useTheme } from '@mui/material';
+import { Box, ListItemIcon, ListItemText, Menu, MenuItem, useTheme } from '@mui/material';
 import AddRounded from '@mui/icons-material/AddRounded';
 import CloseRounded from '@mui/icons-material/CloseRounded';
+import DriveFileRenameOutlineRounded from '@mui/icons-material/DriveFileRenameOutlineRounded';
+import PushPinRounded from '@mui/icons-material/PushPinRounded';
 import { SortableContext, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { CSSProperties } from 'react';
+import { useState } from 'react';
+import type { CSSProperties, MouseEvent } from 'react';
+import { TextInputDialog } from '@/components/TextInputDialog';
 import { useT } from '@/i18n';
 import type { Tab } from '@/terminal';
 import { tabBarStyles, type TabBarSx } from './TabBar.styles';
@@ -17,9 +21,11 @@ export interface TabBarProps {
   onSelect: (tabId: string) => void;
   onClose: (tabId: string) => void;
   onAdd: () => void;
+  onTogglePin: (tabId: string) => void;
+  onRename: (tabId: string, title: string) => void;
 }
 
-// 单个可拖拽标签：外层为 @dnd-kit sortable 节点（承载 transform），内层为视觉 tab（选择/关闭）。
+// 单个可拖拽标签：外层为 @dnd-kit sortable 节点（承载 transform），内层为视觉 tab（选择/关闭/置顶图标/右键菜单）。
 // 拆成子组件是因为 useSortable 是 hook，不能在 map 回调里调用（忠实对应 cc-pane SortableTab）。
 function SortableTab({
   tab,
@@ -29,6 +35,7 @@ function SortableTab({
   closeLabel,
   onSelect,
   onClose,
+  onContextMenu,
   registerTabNode,
 }: {
   tab: Tab;
@@ -38,6 +45,7 @@ function SortableTab({
   closeLabel: string;
   onSelect: (tabId: string) => void;
   onClose: (tabId: string) => void;
+  onContextMenu: (event: MouseEvent, tabId: string) => void;
   registerTabNode: (tabId: string, node: HTMLDivElement | null) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -60,6 +68,7 @@ function SortableTab({
       sx={styles.dragWrap}
       {...attributes}
       {...listeners}
+      onContextMenu={(e) => onContextMenu(e, tab.id)}
     >
       <Box
         sx={[styles.tab, active ? styles.tabActive : styles.tabInactive]}
@@ -67,35 +76,62 @@ function SortableTab({
         aria-selected={active}
         onClick={() => onSelect(tab.id)}
       >
+        {tab.pinned && <PushPinRounded sx={styles.pinIcon} />}
         <Box component="span" sx={styles.title}>
           {tab.title}
         </Box>
-        <Box
-          className="tab-close"
-          sx={styles.closeBtn}
-          role="button"
-          aria-label={closeLabel}
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose(tab.id);
-          }}
-        >
-          <CloseRounded sx={{ fontSize: 14 }} />
-        </Box>
+        {!tab.pinned && (
+          <Box
+            className="tab-close"
+            sx={styles.closeBtn}
+            role="button"
+            aria-label={closeLabel}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose(tab.id);
+            }}
+          >
+            <CloseRounded sx={{ fontSize: 14 }} />
+          </Box>
+        )}
       </Box>
     </Box>
   );
 }
 
-// 标签条：选择 / 关闭 / 新建 + 活动态 + @dnd-kit 拖拽重排（同面板 reorder / 跨面板 move）。
-// 拖拽的 DndContext 在更高层（DndPaneProvider 包裹整棵 PaneTree）；本条只提供每面板的 SortableContext。
-// 延后：pin / 重命名 / 右键菜单；拖到面板边缘分屏（P5b-2）。
-export const TabBar = ({ paneId, tabs, activeTabId, onSelect, onClose, onAdd }: TabBarProps) => {
+// 标签条：选择 / 关闭 / 新建 + 活动态 + @dnd-kit 拖拽（同面板 reorder / 跨面板 move / 拖边缘分屏）
+// + 右键终端菜单（重命名 / 置顶 / 关闭）。置顶 Tab 显示 pin 图标且隐藏关闭按钮。
+// DndContext 在更高层（DndPaneProvider）；本条只提供每面板的 SortableContext。
+export const TabBar = ({
+  paneId,
+  tabs,
+  activeTabId,
+  onSelect,
+  onClose,
+  onAdd,
+  onTogglePin,
+  onRename,
+}: TabBarProps) => {
   const theme = useTheme();
   const styles = tabBarStyles(theme);
   const t = useT();
   const { scrollRef, registerTabNode } = useTabBar(activeTabId, tabs.length);
   const closeLabel = t('terminal.tab.close');
+
+  // 右键菜单锚定到鼠标位置（anchorPosition）；重命名走 TextInputDialog。
+  const [menu, setMenu] = useState<{ tabId: string; mouseX: number; mouseY: number } | null>(null);
+  const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
+
+  const menuTab = menu ? (tabs.find((tab) => tab.id === menu.tabId) ?? null) : null;
+  const renamingTab = renamingTabId
+    ? (tabs.find((tab) => tab.id === renamingTabId) ?? null)
+    : null;
+
+  const openMenu = (event: MouseEvent, tabId: string): void => {
+    event.preventDefault();
+    setMenu({ tabId, mouseX: event.clientX, mouseY: event.clientY });
+  };
+  const closeMenu = (): void => setMenu(null);
 
   return (
     <Box sx={styles.bar}>
@@ -111,6 +147,7 @@ export const TabBar = ({ paneId, tabs, activeTabId, onSelect, onClose, onAdd }: 
               closeLabel={closeLabel}
               onSelect={onSelect}
               onClose={onClose}
+              onContextMenu={openMenu}
               registerTabNode={registerTabNode}
             />
           ))}
@@ -119,6 +156,65 @@ export const TabBar = ({ paneId, tabs, activeTabId, onSelect, onClose, onAdd }: 
       <Box sx={styles.addBtn} role="button" aria-label={t('terminal.tab.new')} onClick={onAdd}>
         <AddRounded sx={{ fontSize: 18 }} />
       </Box>
+
+      <Menu
+        open={menu !== null}
+        onClose={closeMenu}
+        anchorReference="anchorPosition"
+        anchorPosition={menu ? { top: menu.mouseY, left: menu.mouseX } : undefined}
+      >
+        <MenuItem
+          onClick={() => {
+            if (menu) setRenamingTabId(menu.tabId);
+            closeMenu();
+          }}
+        >
+          <ListItemIcon>
+            <DriveFileRenameOutlineRounded fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>{t('terminal.tab.rename')}</ListItemText>
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (menu) onTogglePin(menu.tabId);
+            closeMenu();
+          }}
+        >
+          <ListItemIcon>
+            <PushPinRounded fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>{menuTab?.pinned ? t('terminal.tab.unpin') : t('terminal.tab.pin')}</ListItemText>
+        </MenuItem>
+        {!menuTab?.pinned && (
+          <MenuItem
+            onClick={() => {
+              if (menu) onClose(menu.tabId);
+              closeMenu();
+            }}
+          >
+            <ListItemIcon>
+              <CloseRounded fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{t('terminal.tab.close')}</ListItemText>
+          </MenuItem>
+        )}
+      </Menu>
+
+      {renamingTab && (
+        <TextInputDialog
+          open
+          title={t('terminal.tab.renameTitle')}
+          label={t('terminal.tab.renamePlaceholder')}
+          okLabel={t('common.save')}
+          cancelLabel={t('common.cancel')}
+          initialValue={renamingTab.title}
+          onSubmit={(value) => {
+            onRename(renamingTab.id, value);
+            setRenamingTabId(null);
+          }}
+          onClose={() => setRenamingTabId(null)}
+        />
+      )}
     </Box>
   );
 };

@@ -13,7 +13,7 @@ export const PanelView = ({ panel }: { panel: Panel }) => {
   const theme = useTheme();
   const styles = panelViewStyles(theme);
   const t = useT();
-  const { setActiveTab, closeTab, newTab } = useTerminal();
+  const { setActiveTab, closeTab, newTab, togglePin, renameTab } = useTerminal();
 
   if (panel.tabs.length === 0) {
     return (
@@ -47,6 +47,8 @@ export const PanelView = ({ panel }: { panel: Panel }) => {
         onSelect={(tabId) => setActiveTab(panel.id, tabId)}
         onClose={(tabId) => closeTab(panel.id, tabId)}
         onAdd={handleAdd}
+        onTogglePin={(tabId) => togglePin(panel.id, tabId)}
+        onRename={(tabId, title) => renameTab(panel.id, tabId, title)}
       />
       <Box sx={styles.content}>
         {panel.tabs.map((tab) => {

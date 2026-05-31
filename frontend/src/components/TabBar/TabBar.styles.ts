@@ -11,6 +11,7 @@ export interface TabBarSx {
   tab: S;
   tabActive: S;
   tabInactive: S;
+  pinIcon: S;
   title: S;
   closeBtn: S;
   addBtn: S;
@@ -68,6 +69,11 @@ export const tabBarStyles = (theme: Theme): TabBarSx => {
       backgroundColor: 'transparent',
       color: fp.text.secondary,
       '&:hover': { backgroundColor: fp.bg.hover, color: fp.text.primary },
+    },
+    pinIcon: {
+      fontSize: 13,
+      flexShrink: 0,
+      color: fp.accent,
     },
     title: {
       flex: 1,

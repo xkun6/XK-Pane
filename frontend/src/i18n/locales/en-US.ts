@@ -32,6 +32,12 @@ export const enUS: Locale = {
       tab: {
         new: 'New terminal',
         close: 'Close tab',
+        menu: 'Tab menu',
+        rename: 'Rename',
+        renameTitle: 'Rename tab',
+        renamePlaceholder: 'Tab name',
+        pin: 'Pin',
+        unpin: 'Unpin',
       },
     },
     common: {

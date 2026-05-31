@@ -39,6 +39,12 @@ export const zhCN: Locale = {
       tab: {
         new: '新建终端',
         close: '关闭标签',
+        menu: '标签菜单',
+        rename: '重命名',
+        renameTitle: '重命名标签',
+        renamePlaceholder: '标签名称',
+        pin: '置顶',
+        unpin: '取消置顶',
       },
     },
     common: {
