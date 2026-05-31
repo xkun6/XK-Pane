@@ -41,6 +41,8 @@ export interface NewTabOptions {
   title?: string;
   /** 恢复已有会话 id（明文 → CLI resume）；缺省 = 新会话。 */
   resumeId?: string;
+  /** 后端已创建的会话 id（编排 launch_task 场景）；非空 = 直接附着，reconcile 跳过建会话。 */
+  sessionId?: string;
 }
 
 export type TerminalAction =
@@ -217,6 +219,7 @@ export function terminalTreeReducer(
         workspacePath: action.opts.workspacePath,
         title: action.opts.title,
         resumeId: action.opts.resumeId,
+        sessionId: action.opts.sessionId,
       });
       pane.tabs.push(newTab);
       pane.activeTabId = newTab.id;

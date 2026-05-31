@@ -19,7 +19,7 @@ import {
   useRef,
   type ReactNode,
 } from 'react';
-import { LaunchHistoryService, TerminalService } from '@/services';
+import { LaunchHistoryService, OrchestratorService, TerminalService } from '@/services';
 import {
   createInitialTreeState,
   terminalTreeReducer,
@@ -194,6 +194,8 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
   const creatingRef = useRef<Set<string>>(new Set());
   // knownRef = 上一轮 reconcile 观察到的「树内会话集」；据此 diff 出被关闭的孤儿会话。
   const knownRef = useRef<Set<string>>(new Set());
+  // activePaneIdRef = 最新活跃面板 id（供「只挂一次」的编排订阅 effect 取当前值，避免重订阅）。
+  const activePaneIdRef = useRef(state.activePaneId);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -203,7 +205,27 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
   }, []);
   useEffect(() => {
     rootPaneRef.current = state.rootPane;
+    activePaneIdRef.current = state.activePaneId;
   });
+
+  // ── 编排：后端 MCP launch_task 建好会话后广播 orchestrator:launch → 开新 Tab 附着该 sessionId。
+  // 关键：Tab 直接带 sessionId 入树，reconcile 的 tabsNeedingSession（sessionId===null 才建）会跳过，
+  // 不会重复 CreateSession。挂一次（TerminalProvider 全局常驻，不漏事件）。
+  useEffect(() => {
+    return OrchestratorService.onLaunch((p) => {
+      dispatch({
+        type: 'addTab',
+        paneId: activePaneIdRef.current,
+        opts: {
+          projectId: '',
+          projectPath: p.projectPath,
+          cliTool: p.cliTool || undefined,
+          title: p.title || undefined,
+          sessionId: p.sessionId,
+        },
+      });
+    });
+  }, []);
 
   useEffect(() => {
     const tabs = collectTabsWithPane(state.rootPane);

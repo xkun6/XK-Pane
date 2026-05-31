@@ -80,3 +80,7 @@ export {
   type CliToolCapabilities,
 } from './clitools/CliToolService';
 export { SessionScanService, type ResumeSession } from './sessionscan/SessionScanService';
+export {
+  OrchestratorService,
+  type OrchestratorLaunchPayload,
+} from './orchestrator/OrchestratorService';

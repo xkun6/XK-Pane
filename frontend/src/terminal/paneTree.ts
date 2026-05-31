@@ -47,7 +47,14 @@ export function createEmptyPanel(): Panel {
 export function createTab(
   projectId: string,
   projectPath: string,
-  opts: { cliTool?: CliTool; workspacePath?: string; title?: string; resumeId?: string } = {},
+  opts: {
+    cliTool?: CliTool;
+    workspacePath?: string;
+    title?: string;
+    resumeId?: string;
+    /** 后端已建会话 id（编排 launch_task 场景）；非空 = leaf/Tab 直接绑定，reconcile 不再建会话。 */
+    sessionId?: string;
+  } = {},
 ): Tab {
   const name = projectPath.split(/[/\\]/).pop() || 'Terminal';
   let title = opts.title ?? name;
@@ -55,10 +62,11 @@ export function createTab(
     const toolLabel = opts.cliTool.charAt(0).toUpperCase() + opts.cliTool.slice(1);
     title = `${name} (${toolLabel})`;
   }
+  const sessionId = opts.sessionId ?? null;
   const leaf: TerminalPaneLeaf = {
     type: 'leaf',
     id: generateId('terminal-pane'),
-    sessionId: null,
+    sessionId,
     cliTool: opts.cliTool,
     workspacePath: opts.workspacePath,
     resumeId: opts.resumeId,
@@ -69,7 +77,7 @@ export function createTab(
     contentType: 'terminal',
     projectId,
     projectPath,
-    sessionId: null,
+    sessionId,
     cliTool: opts.cliTool,
     workspacePath: opts.workspacePath,
     resumeId: opts.resumeId,

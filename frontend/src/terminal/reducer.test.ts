@@ -67,6 +67,23 @@ describe('addTab', () => {
     });
     expect(s1).toBe(s0);
   });
+
+  // P6c-3：编排 launch_task 带后端已建 sessionId → Tab+leaf 直接绑定（reconcile 据
+  // sessionId!==null 跳过，不重复 CreateSession）。
+  it('带 sessionId 的 addTab 直接绑定 Tab 与 leaf（附着既有会话）', () => {
+    const s0 = createInitialTreeState();
+    const pid = rootPanel(s0).id;
+    const s1 = terminalTreeReducer(s0, {
+      type: 'addTab',
+      paneId: pid,
+      opts: { projectId: '', projectPath: '/a/p', cliTool: 'reclaude', sessionId: 'sess-xyz' },
+    });
+    const tab = rootPanel(s1).tabs.at(-1)!;
+    expect(tab.sessionId).toBe('sess-xyz');
+    expect(tab.cliTool).toBe('reclaude');
+    // leaf 也绑定（TerminalView 经活动 leaf 取 sessionId）。
+    expect(tab.terminalRootPane).toMatchObject({ type: 'leaf', sessionId: 'sess-xyz' });
+  });
 });
 
 describe('selectTab / setActivePane', () => {
