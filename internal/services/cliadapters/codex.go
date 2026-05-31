@@ -74,7 +74,8 @@ func (a *CodexAdapter) BuildCommand(ctx *Context) (CommandResult, error) {
 // pushMcpOverrides 注入 panes 端点 + 共享 MCP（仅在 orchestrator port/token 就绪时）。
 func pushMcpOverrides(args []string, ctx *Context) []string {
 	if ctx.OrchestratorPort != 0 && ctx.OrchestratorToken != "" {
-		url := fmt.Sprintf("http://127.0.0.1:%d/mcp?token=%s", ctx.OrchestratorPort, ctx.OrchestratorToken)
+		// caller_tool=codex 自报发起方，供 orchestrator launch_task 同源继承。
+		url := fmt.Sprintf("http://127.0.0.1:%d/mcp?token=%s&caller_tool=codex", ctx.OrchestratorPort, ctx.OrchestratorToken)
 		args = pushMcpURLOverride(args, "panes", url)
 		args = pushMcpBearerEnvOverride(args, "panes", "XKPANE_API_TOKEN")
 		args = pushMcpEnabledOverride(args, "panes", true)

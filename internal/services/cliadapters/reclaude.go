@@ -60,7 +60,7 @@ func (a *ReclaudeAdapter) BuildCommand(ctx *Context) (CommandResult, error) {
 	}
 	args = append(args, buildAddDirArgs(ctx)...)
 	if !ctx.SkipMCP {
-		if cfg := generateClaudeMCPConfig(ctx); cfg != "" {
+		if cfg := generateClaudeMCPConfig(ctx, "reclaude"); cfg != "" {
 			args = append(args, "--mcp-config", cfg)
 		}
 	}

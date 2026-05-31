@@ -195,7 +195,10 @@ func buildAddDirArgs(ctx *Context) []string {
 //
 // 落点偏离 cc-pane（其写 data_dir）：用户要求 per-session 注入落到被启动项目的 .claude/（与 skills 同处）。
 // shared MCP（npx mcp-proxy 桥）本轮推迟，SharedMCPURLs 恒空。
-func generateClaudeMCPConfig(ctx *Context) string {
+//
+// callerTool（claude/reclaude）经 panes URL 的 ?caller_tool= 自报「发起方 CLI」，供 orchestrator
+// launch_task 同源继承（reclaude 启动的子会话仍走 reclaude）。
+func generateClaudeMCPConfig(ctx *Context, callerTool string) string {
 	if ctx.OrchestratorPort == 0 || ctx.OrchestratorToken == "" {
 		return ""
 	}
@@ -223,7 +226,7 @@ func generateClaudeMCPConfig(ctx *Context) string {
 	// panes 端点（最高优先级，覆盖同名）。MCP server 名 = panes（与 cc-pane 的 ccpanes 区分，避免共存撞名）。
 	servers["panes"] = map[string]any{
 		"type":    "http",
-		"url":     fmt.Sprintf("http://127.0.0.1:%d/mcp?token=%s", ctx.OrchestratorPort, ctx.OrchestratorToken),
+		"url":     fmt.Sprintf("http://127.0.0.1:%d/mcp?token=%s&caller_tool=%s", ctx.OrchestratorPort, ctx.OrchestratorToken, callerTool),
 		"headers": map[string]string{"Authorization": "Bearer " + ctx.OrchestratorToken},
 	}
 

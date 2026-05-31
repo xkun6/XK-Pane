@@ -69,6 +69,10 @@ const orchestratorVersion = "0.1.0"
 // configFileName 落在 app 数据目录，记录本地 MCP 端点（被启动 CLI / cli-hook 据此回连）。
 const configFileName = "mcp-orchestrator.json"
 
+// callerToolHeader 承载「发起方 CLI 工具」（claude/reclaude/codex）。被启动 CLI 经 panes URL 的
+// ?caller_tool= 自报，authMiddleware 桥接进请求头，launch_task 据此同源继承缺省 cli_tool。
+const callerToolHeader = "X-XKPane-Caller-Tool"
+
 // Service 持有 HTTP+MCP server 的运行态（端口/token/server 句柄）。生命周期由 app 装配处管：
 // Start 后台起、Stop 优雅关。非 Wails service（无前端调用面，纯后端）——前端只读 UI 留后续单元。
 type Service struct {
@@ -206,6 +210,11 @@ func authMiddleware(token string, next http.Handler) http.Handler {
 		}
 		if !strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
 			r.Header.Set("Accept", "application/json, text/event-stream")
+		}
+		// 桥接「发起方 CLI」：?caller_tool= query → 请求头，供 tool handler 经 RequestExtra.Header 读取
+		// （go-sdk tool handler 只见 header，不见 URL）。launch_task 据此同源继承缺省 cli_tool。
+		if ct := r.URL.Query().Get("caller_tool"); ct != "" {
+			r.Header.Set(callerToolHeader, ct)
 		}
 		next.ServeHTTP(w, r)
 	})

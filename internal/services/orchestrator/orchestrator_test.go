@@ -94,6 +94,23 @@ func TestAuthMiddleware(t *testing.T) {
 	})
 }
 
+// 同源：?caller_tool= query 被桥接进请求头，供 tool handler 经 RequestExtra.Header 读取。
+func TestAuthMiddlewareBridgesCallerTool(t *testing.T) {
+	const tok = "deadbeefcafe0000"
+	var gotHeader string
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHeader = r.Header.Get(callerToolHeader)
+		w.WriteHeader(http.StatusOK)
+	})
+	h := authMiddleware(tok, next)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/mcp?token="+tok+"&caller_tool=reclaude", nil)
+	h.ServeHTTP(rec, req)
+	if gotHeader != "reclaude" {
+		t.Fatalf("caller_tool 应桥接进 %s 头，得 %q", callerToolHeader, gotHeader)
+	}
+}
+
 func TestBearer(t *testing.T) {
 	cases := map[string]string{
 		"Bearer abc":  "abc",

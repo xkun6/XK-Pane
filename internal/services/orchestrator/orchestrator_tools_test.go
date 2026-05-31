@@ -2,11 +2,30 @@ package orchestrator
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
 	"xkpane/internal/storage"
+
+	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// callerTool 从 RequestExtra.Header 读发起方 CLI；nil/缺失返回 ""。
+func TestCallerTool(t *testing.T) {
+	if callerTool(nil) != "" {
+		t.Error("nil req 应返回 \"\"")
+	}
+	if callerTool(&mcp.CallToolRequest{}) != "" {
+		t.Error("无 Extra 应返回 \"\"")
+	}
+	h := http.Header{}
+	h.Set(callerToolHeader, "reclaude")
+	req := &mcp.CallToolRequest{Extra: &mcp.RequestExtra{Header: h}}
+	if got := callerTool(req); got != "reclaude" {
+		t.Errorf("callerTool = %q, want reclaude", got)
+	}
+}
 
 func TestNormalizePath(t *testing.T) {
 	cases := map[string]string{

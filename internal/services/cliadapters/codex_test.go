@@ -23,6 +23,20 @@ func TestMcpOverridesUseCodexTomlDottedKeys(t *testing.T) {
 	}
 }
 
+// 守门：orchestrator 就绪时 pushMcpOverrides 的 panes url 自报 caller_tool=codex（同源继承用）。
+func TestPushMcpOverridesSelfReportsCallerTool(t *testing.T) {
+	args := pushMcpOverrides(nil, &Context{OrchestratorPort: 5000, OrchestratorToken: "tok"})
+	found := false
+	for i := 0; i+1 < len(args); i += 2 {
+		if strings.Contains(args[i+1], "mcp_servers.panes.url=") && strings.Contains(args[i+1], "caller_tool=codex") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("panes url 应含 caller_tool=codex，args = %v", args)
+	}
+}
+
 // 守门：append_system_prompt 走 developer_instructions 的 -c 覆盖（值 JSON 编码）。
 func TestDeveloperInstructionsOverrideUsesCodexCliConfig(t *testing.T) {
 	args := pushDeveloperInstructionsOverride(nil, "CC-Panes launch profile skill")

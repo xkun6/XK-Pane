@@ -88,7 +88,7 @@ type writeParams struct {
 
 // ── 工具实现 ────────────────────────────────────────────────────────────
 
-func (s *Service) toolLaunchTask(ctx context.Context, _ *mcp.CallToolRequest, in launchTaskParams) (*mcp.CallToolResult, any, error) {
+func (s *Service) toolLaunchTask(ctx context.Context, req *mcp.CallToolRequest, in launchTaskParams) (*mcp.CallToolResult, any, error) {
 	hasPrompt := strings.TrimSpace(in.Prompt) != ""
 	hasResume := strings.TrimSpace(in.ResumeID) != ""
 	if hasPrompt && hasResume {
@@ -108,9 +108,14 @@ func (s *Service) toolLaunchTask(ctx context.Context, _ *mcp.CallToolRequest, in
 			wsPath = p
 		}
 	}
+	// cli_tool 缺省时同源继承发起方 CLI（reclaude 启动的子会话仍走 reclaude）；
+	// 无法识别发起方（如裸 shell / 直连）才回落 claude。显式传参始终优先。
 	cliTool := in.CliTool
 	if cliTool == "" {
-		cliTool = "claude" // 默认 claude（对齐 cc-pane parse_launch_cli_tool 默认）
+		cliTool = callerTool(req)
+	}
+	if cliTool == "" {
+		cliTool = "claude"
 	}
 
 	spec := terminal.CreateSpec{
@@ -327,3 +332,12 @@ func (s *Service) workspacePath(ctx context.Context, name string) (string, bool)
 
 // genID 生成 32-hex 随机 id（task id 用，复用 genToken 的 crypto/rand）。
 func genID() string { return genToken() }
+
+// callerTool 从 MCP 请求头取「发起方 CLI」（authMiddleware 由 ?caller_tool= 桥接而来）；
+// 非 HTTP 传输 / 未自报时返回 ""。供 launch_task 同源继承缺省 cli_tool。
+func callerTool(req *mcp.CallToolRequest) string {
+	if req == nil || req.Extra == nil || req.Extra.Header == nil {
+		return ""
+	}
+	return req.Extra.Header.Get(callerToolHeader)
+}
