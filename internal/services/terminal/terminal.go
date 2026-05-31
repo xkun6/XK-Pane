@@ -74,6 +74,13 @@ type Service struct {
 	emitMu sync.RWMutex
 	emit   func(name string, payload any)
 
+	// orchestrator MCP 端点（P6 MCP 注入用）：app 装配阶段经 SetOrchestrator 注入。
+	// 0/"" = orchestrator 未就绪（CLI 不注入 ccpanes MCP，fail-open 裸跑）。P6b 起 resolveLaunch 据此填
+	// cliadapters.Context 并翻转 SkipMCP；P6a 仅存储（地基阶段还不注入）。
+	orchMu    sync.RWMutex
+	orchPort  int
+	orchToken string
+
 	mu       sync.Mutex
 	sessions map[string]*session
 }
@@ -86,6 +93,15 @@ func (s *Service) SetProviderResolver(r ProviderResolver) {
 // SetSessionStartHook 注入「会话启动 → 补启 Local History watcher」回调（app 装配阶段调）。
 func (s *Service) SetSessionStartHook(h func(projectPath string)) {
 	s.sessionStartHook = h
+}
+
+// SetOrchestrator 注入本地 orchestrator 的 MCP 端点 port/token（app 装配阶段调，orchestrator 启动后）。
+// P6b 起 resolveLaunch 据此填 cliadapters.Context（OrchestratorPort/Token）并翻转 SkipMCP。
+func (s *Service) SetOrchestrator(port int, token string) {
+	s.orchMu.Lock()
+	s.orchPort = port
+	s.orchToken = token
+	s.orchMu.Unlock()
 }
 
 // session 是一次终端会话的内部状态。
