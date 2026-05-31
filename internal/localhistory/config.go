@@ -24,7 +24,12 @@ type HistoryConfig struct {
 	MinSaveIntervalSecs int64    `json:"minSaveIntervalSecs"` // 同文件同分支最小保存间隔（秒）
 }
 
-// DefaultHistoryConfig 返回默认配置（与 cc-pane 默认一致，ignore 把 .ccpanes 换成 .xkpanes）。
+// DefaultHistoryConfig 返回默认配置（ignore 把 .ccpanes 换成 .xkpanes）。
+//
+// **有意偏离 cc-pane**：MinSaveIntervalSecs 默认 0（cc-pane 是 300=5 分钟）。本地历史的价值在「每次
+// 修改都能回看」，5 分钟节流会让同文件 5 分钟内只存一版、看不到中间编辑——失去 IDE Local History 语义。
+// 改 0 = 每个「内容变化的保存」都记一版；500ms debounce 已把一次保存的多个事件合一、hash 去重已跳过
+// 内容未变的保存，故不会刷屏。存储量由 MaxVersionsPerFile/MaxAgeDays + 清理兜底。用户可在配置面板按需调高。
 func DefaultHistoryConfig() HistoryConfig {
 	return HistoryConfig{
 		Enabled: true,
@@ -36,7 +41,7 @@ func DefaultHistoryConfig() HistoryConfig {
 		MaxAgeDays:          30,
 		MaxFileSize:         5 * 1024 * 1024,
 		MaxTotalSize:        500 * 1024 * 1024,
-		MinSaveIntervalSecs: 300,
+		MinSaveIntervalSecs: 0,
 	}
 }
 

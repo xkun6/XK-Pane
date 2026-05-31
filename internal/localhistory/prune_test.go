@@ -31,7 +31,7 @@ func TestConfigRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadConfig: %v", err)
 	}
-	if !cfg.Enabled || cfg.MaxVersionsPerFile != 50 || cfg.MaxAgeDays != 30 || cfg.MinSaveIntervalSecs != 300 {
+	if !cfg.Enabled || cfg.MaxVersionsPerFile != 50 || cfg.MaxAgeDays != 30 || cfg.MinSaveIntervalSecs != 0 {
 		t.Fatalf("defaults wrong: %+v", cfg)
 	}
 

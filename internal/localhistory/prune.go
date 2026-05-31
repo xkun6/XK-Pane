@@ -8,17 +8,46 @@ import (
 	"time"
 )
 
-// Cleanup 按项目配置清理：先按 age + 每文件数量删旧版本，再按总大小 LRU 删，最后回收孤儿 blob。
-// 对齐 cc-pane history_service.cleanup。
+// Cleanup 按项目配置清理：先删「已匹配忽略规则」的历史版本（清掉如忽略规则更新后残留、或早期 bug
+// 误捕获的 node_modules 等垃圾），再按 age + 每文件数量删旧版本，再按总大小 LRU 删，最后回收孤儿 blob。
+// 对齐 cc-pane history_service.cleanup（清理忽略项为 XK 增项）。
 func (s *Store) Cleanup(ctx context.Context) error {
 	cfg, err := s.ReadConfig()
 	if err != nil {
+		return err
+	}
+	if err := s.cleanupIgnored(ctx, cfg.IgnorePatterns); err != nil {
 		return err
 	}
 	if err := s.CleanupOldVersions(ctx, cfg); err != nil {
 		return err
 	}
 	return s.CleanupByTotalSize(ctx, cfg.MaxTotalSize)
+}
+
+// cleanupIgnored 删除「文件路径匹配当前忽略规则」的所有历史版本（再回收孤儿 blob）。用于清掉忽略规则
+// 收紧后残留、或早期漏匹配 bug 误捕获的版本（如 frontend/node_modules/...）。patterns 为空则 no-op。
+func (s *Store) cleanupIgnored(ctx context.Context, patterns []string) error {
+	if len(patterns) == 0 {
+		return nil
+	}
+	var fps []string
+	if err := s.gdb.WithContext(ctx).Model(&FileVersion{}).Distinct().Pluck("file_path", &fps).Error; err != nil {
+		return err
+	}
+	var toDelete []string
+	for _, fp := range fps {
+		if PathMatchesIgnore(fp, patterns) {
+			toDelete = append(toDelete, fp)
+		}
+	}
+	if len(toDelete) == 0 {
+		return nil
+	}
+	if err := s.gdb.WithContext(ctx).Where("file_path IN ?", toDelete).Delete(&FileVersion{}).Error; err != nil {
+		return err
+	}
+	return s.cleanupOrphanBlobs(ctx)
 }
 
 // CleanupOldVersions 按 max_age_days（删早于 cutoff 的版本）+ max_versions_per_file（每文件只留
