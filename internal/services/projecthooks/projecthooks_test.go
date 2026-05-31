@@ -170,6 +170,10 @@ func TestSyncCodexHooksWritesInlineConfigAndFeatureFlag(t *testing.T) {
 	if !strings.Contains(cmd, "xkpane-cli-hook") || !strings.Contains(cmd, "session-start") {
 		t.Errorf("command=%q 缺二进制名或子命令", cmd)
 	}
+	// Windows 覆盖：codex 通用 command 走 sh 会吃掉反斜杠，必须有 command_windows 走 cmd。
+	if cw, _ := inner["command_windows"].(string); cw == "" {
+		t.Error("codex hook 应含 command_windows（Windows cmd 覆盖）")
+	}
 
 	// 旧独立 hooks.json 应被清理（避免双源）。
 	if _, err := os.Stat(filepath.Join(dir, ".codex", "hooks.json")); !os.IsNotExist(err) {

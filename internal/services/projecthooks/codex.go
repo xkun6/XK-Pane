@@ -63,17 +63,21 @@ func syncCodexHooks(projectPath, hookBinary string) error {
 	return nil
 }
 
-// buildCodexHookEntry 与 claude 版同形，但用 codex 的 statusMessage 字段（无 async）。
+// buildCodexHookEntry 与 claude 版同形，但用 codex 的 statusMessage 字段（无 async），并补
+// command_windows：codex 的通用 command 在 Windows 上经 sh/bash 执行，bash 会把 C:\path 的反斜杠
+// 当转义吃掉 → 路径损坏 → exit 1（手测 codex 报 "hook exited with code 1" 且未注入即此因）。
+// command_windows 经 cmd.exe 执行，反斜杠原样保留（官方 Windows 覆盖字段）。
 func buildCodexHookEntry(hookBinary string, def hookDef) map[string]any {
 	command := hookCommand(hookBinary, def.subcommand)
 	return map[string]any{
 		"matcher": def.matcher,
 		"hooks": []any{
 			map[string]any{
-				"type":          "command",
-				"command":       command,
-				"timeout":       def.timeout,
-				"statusMessage": "Loading XK-Pane context",
+				"type":            "command",
+				"command":         command,
+				"command_windows": command,
+				"timeout":         def.timeout,
+				"statusMessage":   "Loading XK-Pane context",
 			},
 		},
 	}
