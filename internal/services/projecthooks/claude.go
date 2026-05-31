@@ -43,16 +43,18 @@ func syncClaudeHooks(projectPath, hookBinary string) error {
 // Windows 路径），比 cc-pane 的双重转义更干净。
 func buildHookEntry(hookBinary string, def hookDef) map[string]any {
 	command := fmt.Sprintf("%q %s", hookBinary, def.subcommand)
+	inner := map[string]any{
+		"type":    "command",
+		"command": command,
+		"timeout": def.timeout,
+	}
+	// 仅 async=true 时写出该字段；省略即默认 false（同步），SessionStart stdout 才会被注入上下文。
+	if def.async {
+		inner["async"] = true
+	}
 	return map[string]any{
 		"matcher": def.matcher,
-		"hooks": []any{
-			map[string]any{
-				"type":    "command",
-				"command": command,
-				"timeout": def.timeout,
-				"async":   true,
-			},
-		},
+		"hooks":   []any{inner},
 	}
 }
 

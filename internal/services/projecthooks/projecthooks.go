@@ -23,18 +23,26 @@ import (
 // hookBinaryBaseName 是 cli-hook 二进制名（不含扩展名）。也是判定「本工具托管的 hook 条目」的标记串。
 const hookBinaryBaseName = "xkpane-cli-hook"
 
-// hookDef 描述一条要注册的 hook（事件 / 匹配器 / 超时 / 子命令）。
+// hookDef 描述一条要注册的 hook（事件 / 匹配器 / 超时 / 子命令 / 是否异步）。
 type hookDef struct {
 	subcommand string // cli-hook 子命令
 	event      string // CLI hook 事件名（SessionStart / PostToolUse …）
 	matcher    string // 匹配器（claude/codex 各自语义）
 	timeout    int    // 秒
+	async      bool   // true=后台跑（只要副作用，stdout 被忽略）；false=同步（stdout 注入上下文）
 }
 
 // claudeHookDefs 是 claude/reclaude 注册的 hook（im-forward 已按 D6d-3 砍掉）。
+//
+// ⚠️ session-start 必须 async=false：SessionStart hook 的 stdout 只有在【同步】执行时才会被
+// CLI 注入进模型上下文；async=true 会让 CLI 后台跑并丢弃 stdout（仅保留 POST 副作用），
+// 导致 <xkpane-context> 注入失效（实测发现 + claude-code-guide 权威确认）。
+// 这是【有意偏离 cc-pane】——cc-pane 给所有 hook 都设 async:true，其 session-start stdout 注入
+// 实际不生效（只靠副作用）。plan-archive 是纯副作用（PostToolUse，无 stdout 注入需求），保留 async
+// 以免阻塞 Write 工具完成。
 var claudeHookDefs = []hookDef{
-	{subcommand: "session-start", event: "SessionStart", matcher: "startup", timeout: 10},
-	{subcommand: "plan-archive", event: "PostToolUse", matcher: "", timeout: 5},
+	{subcommand: "session-start", event: "SessionStart", matcher: "startup", timeout: 10, async: false},
+	{subcommand: "plan-archive", event: "PostToolUse", matcher: "", timeout: 5, async: true},
 }
 
 // codexHookDefs 是 codex 注册的 hook：仅 session-start（plan-archive 在 codex 不支持）。

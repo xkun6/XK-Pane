@@ -47,9 +47,24 @@ func TestSyncClaudeHooksWritesSessionStartAndPlanArchive(t *testing.T) {
 		t.Errorf("command=%q 缺二进制名或子命令", cmd)
 	}
 
-	if pa := readClaudeHooks(t, dir, "PostToolUse"); len(pa) != 1 {
-		t.Errorf("PostToolUse 条目数=%d want 1", len(pa))
+	// session-start 必须同步（无 async 字段）才能注入 stdout 上下文。
+	if _, hasAsync := innerHook(entry)["async"]; hasAsync {
+		t.Error("session-start 不应带 async（同步才注入 stdout）")
 	}
+
+	pa := readClaudeHooks(t, dir, "PostToolUse")
+	if len(pa) != 1 {
+		t.Fatalf("PostToolUse 条目数=%d want 1", len(pa))
+	}
+	// plan-archive 是纯副作用，保留 async:true 不阻塞 Write。
+	if async, _ := innerHook(pa[0].(map[string]any))["async"].(bool); !async {
+		t.Error("plan-archive 应带 async:true")
+	}
+}
+
+// innerHook 取条目 hooks[0] 内层对象。
+func innerHook(entry map[string]any) map[string]any {
+	return entry["hooks"].([]any)[0].(map[string]any)
 }
 
 // 重复 sync 应幂等（不堆叠重复条目），且保留外部 hook。
