@@ -9,7 +9,11 @@
 - **P2 ✅**：删 Todo/Spec/Memory + VSCode 式 Git SCM 面板 + Home 仪表盘。用户手测通过。
 - **P3 ✅**：Workspace 两层树（P3a，用户手测通过）+ 会话恢复（P3b）。**会话恢复最终形态**（用户手测后拍板回退）：**仅工作空间树项目节点 chevron 的按需扫盘子列表**（SessionSubList，左键恢复/右键 恢复·以 reclaude 恢复·复制 id → `launchProject(resumeId)` → CLI resume）。独立 Sessions 页 + status store + launchhistory resume 附加均已撤；`history` 导航位已移除。保留 P3b-1 resume 透传链 + `sessionscan` 后端 + `SessionScanService`。明细见 progress.md。
 - **P4 ✅（用户手测通过）**：Local History 忠实化 = 自动捕获 watcher + 暴露 PutLabel/GetFileBranches + 4-tab 整页。6 单元逐个提交（`3b1ff98` P4a-1 / `a49de20` P4a-2 / `d867b2a` P4b / `800b954` P4c-1 / `3e634bc` P4c-2 / `7d0ba9b` P4c-3）+ 手测 5 处修复（`42c81a1` 忽略嵌套目录 / `e7b0e23`+`b21b234` 阶段2 布局 / `6852ff1` 清理删忽略项+默认间隔 300→0 / `047bfee` gofmt）。用户确认「保留并继续打磨」。详见 progress.md P4 末两节。
-- **P5 未开始 = 下一交接目标**：见 REBUILD_BLUEPRINT.md §2 下一行 / 与用户确认范围。
+- **P5 进行中（终端进阶，3 块独立子功能，用户逐块拍板）**：
+  - ✅ **Tab 拖拽**（本轮，用户选定先做；用户手测前）：@dnd-kit reorder + 跨面板 move + 同面板边缘分屏。提交：`43353da` 首页滚动条修复 / `9b6bd0e` P5a reducer 三件套 + setTabSession 按 tabId / `b14a825` P5b-1 核心(DndPaneProvider+TabBar sortable) / `62be3ee` P5b-2 边缘 drop zone / `0579d6a` 复审修复(边缘高亮仅本面板)。typecheck + 48 vitest + build 全绿。详见 progress.md「P5 终端进阶 · Tab 拖拽」节 + 手测清单。
+  - ⏳ **内层终端分屏**（`splitTerminalPane`/`closeTerminalPane`，单 Tab 内多 PTY；类型 `TerminalPaneSplit` 已备好，缺 reducer 内层操作 + PaneTree 内层渲染）：未开始。
+  - ⏳ **会话回放·跨重启恢复**（后端 ReplayBuffer + closedTabs 快照 + 重启复原）：未开始。最贵。
+  - 参考：REBUILD_BLUEPRINT.md §2 P5 行。
 
 ## ✅ P4 已完成实现摘要（取代原「下一步」骨架）
 

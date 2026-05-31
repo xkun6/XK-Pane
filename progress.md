@@ -1042,3 +1042,33 @@ useHistoryPage 阶段2：selectFile 异步加载（ListVersions 倒序 + GetFile
 - `047bfee` style：gofmt 清掉 launchhistory_test 误入的多余空行。
 - **关键教训**：以上多为后端（Go）改动，`wails3 dev` 前端 HMR 不重载 Go 后端，必须**完全重启** dev 才生效（用户最初未重启 → watcher 仍跑旧码持续抓 node_modules）。现有项目的 `MinSaveIntervalSecs` 存在各自 `.xkpanes/config.json`，需在配置面板手动改一次。
 - **特性方向**：用户确认**保留并继续打磨**「本地历史」（AI 激进改文件场景下、比 git 更细粒度的自动后悔药 + 留痕；每项目默认关闭，手动启用才捕获）。
+
+---
+
+## 会话（2026-05-31）— P5 终端进阶 · Tab 拖拽（@dnd-kit，3 单元 + 复审 1 修复，全绿，待手测）
+
+承上 P4 手测通过 → 用户「暂时不打磨，继续下一个功能」+ 顺手修一处首页不满。用户拍板 P5 第一块 = **Tab 拖拽重排**（授权 @dnd-kit）；P5 另两块（内层终端分屏 / 会话回放·跨重启恢复）之后再排。
+
+### 滚动条修复（`43353da`）
+首页环境检测区滚动条钉在 `maxWidth:920` 的 body 右缘（窗口中间偏右、右侧大片空白在条外）。改：外层撑满宽度的 root 承担 `overflowY:auto`，限宽交给 body → 滚动条回到窗口最右缘。纯前端、HMR 即生效。
+
+### 摸地基（直接读 cc-pane 参考 + XK 渲染/dispatch 链）
+reducer 注释已标 P5 边界「刻意未移植 moveTab/reorderTabs/splitAndMoveTab（拖拽，随 TabBar 单元）」；TabBar 也留注释「延后 @dnd-kit 拖拽重排」。cc-pane 参考：`usePanesStore`(三 op) + `DndPaneProvider`(onDragEnd 同面板 reorder / 跨面板 move，**不做边缘分屏**——splitAndMoveTab 经右键菜单) + `TabBar`(SortableContext + useSortable)。**关键发现**：`TerminalContext` reconcile 预埋隐患——移植 moveTab 后须把 setTabSession 改按 tabId 全树定位，否则 Tab 跨 pane 迁移后旧 paneId 回填 no-op 泄漏 session。
+
+### P5a reducer 拖拽三件套 + setTabSession 按 tabId（`9b6bd0e`）
+忠实移植 `reorderTabs`（同面板 splice）/ `moveTab`（跨面板移动 + 源面板掏空→摘除折叠，**不做 closedTabs 快照**，那属会话回放子功能）/ `splitAndMoveTab`（拆分源面板移 Tab 入新面板，**绝不移出唯一 Tab**）。`setTabSession` 改按 tabId 全树 `findTabLocation` 定位（不再依赖 paneId），消除上述 reconcile 隐患；同步改 context 签名 + reconcile dispatch + 注释。paneTree 加 `findTabLocation`。reducer.test 补 reorder/move/split + 跨 move 回填回归 → **41 测试全绿**。
+
+### P5b-1 @dnd-kit 核心拖拽（`b14a825`）
+@dnd-kit/core 6.3.1 + sortable 10.0.0 + utilities 3.2.2（此前已在 package.json，prior 会话预备）。`DndPaneProvider`（新，包整棵 PaneTree）：DndContext + PointerSensor `distance:8` + DragOverlay 浮层预览；onDragEnd 决策落 `useDndPaneProvider`(VM) —— 同面板→reorderTabs / 跨面板→moveTab。`TabBar` 改 sortable：每面板 SortableContext(horizontalListSortingStrategy)，`SortableTab`(useSortable，外层包裹承载 transform、内层视觉 tab，`data:{type:'tab',paneId,tab}`)；加 `paneId` prop、PanelView 透传 `panel.id`。
+
+### P5b-2 边缘拖拽分屏（`62be3ee`）
+`EdgeDropZone`（新）：内容区右/下边缘 useDroppable（right 30% 满高 / bottom 30% 且 `right:30%` 不与右区重叠 / `pointerEvents:none` 不挡终端 / isOver accent 高亮），仅多 Tab 面板（tabs>1）渲染。onDragEnd 处理 `over.type==='paneEdge'` → **仅同面板**触发 splitAndMoveTab。碰撞检测改 `pointerWithin`（TabBar 内 tab 目标与内容区边缘 zone 按光标位置干净区分）。**有意偏离 cc-pane**：cc-pane 经右键菜单触发 splitAndMoveTab，XK 暂无右键菜单 → 改用拖到边缘暴露。
+
+### 多视角对抗式复审（10-agent workflow）→ 1 修复（`0579d6a`）
+4 视角并行（reducer 正确性 / reconcile 泄漏 / dnd-kit 接线 / 铁律合规）→ 每条发现对抗式核验（倾向证伪）。6 发现仅 **1 确认**（low, dnd-wiring）：EdgeDropZone 对**任何**拖拽都显示 isOver 高亮，但 handler 只在同面板才动作 → 跨面板拖到边缘「高亮承诺却静默无反应」。修：高亮仅在「拖拽源=本面板」时显示（读 useDroppable 返回的 `active`）。其余 5 条（reducer 折叠/纯函数、reconcile 隐患已消除、铁律合规）均被证伪 = 核心逻辑通过。
+
+### ✅ P5·Tab 拖拽 完成（待用户手测）
+- **验证**：pnpm typecheck ✅ / 48 vitest（含新增 reorder/move/split + 跨 move 回填回归）✅ / pnpm build ✅。**无后端改动**（纯前端 + reducer，无 bindings 变更）。
+- **铁律核对**：MVVM(View 无 bindings；VM `useDndPaneProvider` 消费 `useTerminal` Context + `@/terminal/paneTree` 纯函数，@dnd-kit 为 UI 库)；i18n(无新增人类可见硬编码串，复用 `terminal.tab.*`)；图标 `*Rounded`；取色 `theme.palette.foundation`（`alpha()` 派生自 theme）；无新造 window 事件；圆角约定。
+- **未做（留 P5 后续）**：内层终端分屏（`splitTerminalPane`/`closeTerminalPane`，单 Tab 内多 PTY）；会话回放·跨重启恢复（ReplayBuffer + closedTabs）；TabBar 右键菜单 + pin + 重命名；跨面板「拖到目标面板边缘分屏」（当前仅同面板，跨面板移动走 TabBar）。
+- **待用户 `wails3 dev` 手测**：① 同面板拖 Tab 重排顺序；② 先分屏出 ≥2 面板，拖 Tab 到另一面板的 TabBar（跨面板移动，松手该面板激活该 Tab）；③ 多 Tab 面板里把一个 Tab 拖到本面板右/下边缘 → 拆出新面板（边缘 accent 高亮）；④ 跨面板拖到别的面板边缘**不误高亮**、松手无反应（请改落目标 TabBar）；⑤ 点击选中 / 点击关闭仍正常（8px 阈值不误触拖拽）；⑥ 跨面板移动后该 Tab 的终端仍在跑（session 不泄漏/不丢）。
