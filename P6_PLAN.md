@@ -146,3 +146,4 @@ shared-MCP（npx mcp-proxy）；cc-memory-mcp（独立 stdio + Memory DB）；IM
 
 ## 变更记录
 - 2026-05-31：6-agent 研究产出本计划；待用户拍板 §5 决策点后进入 P6a。
+- 2026-05-31（拍板 + P6a 落地）：用户拍板「先只做 P6a 地基（spike 验证），两个 SDK 都试」。spike（`cmd/mcp-spike`，throwaway，`4fbc574`）实测两个 SDK 协议层均通（官方走 SSE、mark3labs 走纯 JSON）；**真实 Claude CLI 连通确认 ping 工具 → 选定官方 `go-sdk v1.6.1`**。P6a 落地（`abb74cf`）：`internal/services/orchestrator` 地基（127.0.0.1:0 HTTP + 32-hex token + `/api/health` + `/mcp` StreamableHTTPHandler + Bearer/`?token=`/Accept 中间件 + `health` 工具 + 写 `mcp-orchestrator.json`）+ `storage.UserDataDir()` + `terminal.SetOrchestrator` + app fail-open 接线；删 spike + `go mod tidy` 去 mark3labs。次要决策按默认：bind `127.0.0.1` / 端口随机 / hook 独立二进制（P6d）/ `get_session_output` 轻量缓冲（P6c）。**下一步**：用户手测 P6a（`wails3 dev` 后把 Claude 连到 `%AppData%\XK-Pane\mcp-orchestrator.json`、调 `health` 工具）通过 → 再定 §5 决策 2 的 X（自我编排 P6b→d）/ Y（直奔 MC PE P6e）方向。

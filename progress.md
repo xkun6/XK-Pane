@@ -1086,3 +1086,20 @@ reducer 注释已标 P5 边界「刻意未移植 moveTab/reorderTabs/splitAndMov
 - **验证**：typecheck + 61 vitest + build 全绿；纯前端。
 - **P5 终端剩余**：仅「会话回放·跨重启恢复」（你选的，L–XL，下个）。内层分屏 UI 已按你定调撤下（reducer 休眠）。
 - **待手测**：右键任意 Tab → 重命名（弹框输入回车）/ 置顶（显 pin 图标、关闭按钮消失、不可关闭）/ 取消置顶 / 关闭。
+
+---
+
+## 会话（2026-05-31）— P6 MCP/Orchestrator 规划 + P6a 服务地基（spike → 官方 go-sdk → 地基落地）
+
+看完全局剩余工作地图后，用户拍板下一步三大方向（依赖序）：**P5 终端收尾 → MCP/Orchestrator → MC PE**，并要求「直接做 MCP 的规划」。
+
+### 规划（6-agent 研究 → `P6_PLAN.md` `44595c1`）
+6 路并行通读 cc-pane MCP/Orchestrator 全栈（orchestrator_service.rs / cli-adapters / cc-panes-cli-hook / mc_pe / bedrock / 前端）+ XK 现状（带 file:line）。**核心结论**：cc-pane Orchestrator = 进程内本地 HTTP+MCP server，让 pane 内 CLI 经 MCP 反向调用宿主（~64 工具 = 33 编排 + 5 MC PE + 26 Bedrock）；XK「接线盒」（cliadapters Context/env/MCP-config stub，env 名 1:1 对齐）已就绪、「电源」（server/MCP/token/hook/前端）全缺。分期 P6a 地基 → P6b 注入闭环 → P6c 编排工具 → P6d cli-hook → P6e MC PE（XL，单独子规划）→ P6f Bedrock。详见 P6_PLAN。
+
+### P6a — 服务地基（spike-first → `4fbc574` spike / `abb74cf` 正式）
+- **拍板**：先只做 P6a 地基（spike 验证）；两个 Go MCP SDK 都试。
+- **spike**（`cmd/mcp-spike`，throwaway）：同一 HTTP 外壳分别跑官方 `go-sdk v1.6.1` 与 `mark3labs/mcp-go v0.54.1`，自测 health/initialize/401 均通（官方走 SSE 响应、mark3labs 走纯 JSON）。**用户用真实 Claude CLI 连通、调用 `ping` 成功 → 选定官方 go-sdk v1.6.1**。
+- **正式 P6a**：`internal/services/orchestrator`（net/http 绑 127.0.0.1:0 + 32-hex Bearer token + `/api/health` + `/mcp` go-sdk StreamableHTTPHandler + 鉴权中间件复刻 cc-pane 两补丁〔`?token=` 后备 Claude #7290 / Accept text/event-stream 注入 Codex 406〕 + trivial `health` 工具 + 写 `mcp-orchestrator.json`）；`storage.UserDataDir()` 导出；`terminal.SetOrchestrator(port,token)`（P6a 仅存，P6b 用）；app.go fail-open 接线（启动失败仅 warn 不阻断）+ defer Stop。删 spike + `go mod tidy` 去 mark3labs。
+- **验证**：go build/vet ./internal/... + orchestrator 单测（authMiddleware/bearer/genToken）全绿。HTTP+MCP 全链路由 spike + 真实 Claude 验证。
+- **待手测**：`wails3 dev` 后把 Claude 连到 `%AppData%\XK-Pane\mcp-orchestrator.json`、`/mcp` 看到并调用 `health` 工具返回「XK-Pane orchestrator online」。通过 → 定下一步 X（自我编排 P6b→d）/ Y（直奔 MC PE P6e）。
+- **铁律核对**：HTTP server 用 net/http（铁律只禁 client 侧 net/http.DefaultClient，server 不冲突）；配置写 filex.WriteAtomic；日志 logx；token crypto/rand；orchestrator 非 Wails service（无前端面，纯后端），故无 bindings 变更（terminal.SetOrchestrator 属内部接线方法，bindings 下次 dev 自然重生）。
