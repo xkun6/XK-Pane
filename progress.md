@@ -1139,3 +1139,9 @@ P6b 手测通过（claude/codex 都能看到 ccpanes MCP）后，用户要求把
 - **验证**：go build/vet ./internal/... + orchestrator/terminal 测试全绿 + gofmt 干净。terminal 新增导出方法（SessionOutput/SessionSnapshots）+ events 新事件 → bindings 下次 `wails3 dev` 自动重生（前端暂不消费，不阻塞）。
 - **未做**：task 级状态跟踪（get_task_status + tasks map）、长 prompt 外部化为文件（safety net）、create_runtime_config/list_panes/trigger_notification（依赖缺失 service）、**P6c-3 前端 orchestrator:launch listener 开新 Tab**（需评估「后端先建会话、前端附着既有 session」可行性——XK 通常前端建会话；当前 launch_task 开的会话在后端跑、可经 get_session_output 读，但前端无可见 Tab）。
 - **待用户 `wails3 dev` 手测**（⚠️ 改后端必完全重启）：在 pane 里让 Claude 调 `mcp__panes__list_projects` 看已注册项目 → `mcp__panes__launch_task(project_path=<已注册>, prompt="…")` → `mcp__panes__list_sessions` 见新 sessionId → `mcp__panes__get_session_output(session_id=…)` 读到子会话输出 → `mcp__panes__submit_to_session` 发指令 → `mcp__panes__kill_session` 终止。注意 launch_task 的 project_path 必须已在 XK 注册（否则「未注册」报错）。
+
+### P6c 同源继承：launch_task 缺省 cli_tool 继承发起方（`3c8a3bc`）
+用户要求「reclaude 启动的 Claude 走 reclaude，claude 启动的才走 claude——同源」。难点：orchestrator 收到的是单 token 的 HTTP MCP 请求，默认无法区分发起方。**先验证 go-sdk 机制**（读 streamable.go：servePOST 给每个 JSON-RPC 请求挂 `RequestExtra{TokenInfo, Header: req.Header}`，tool handler 经 `CallToolRequest.Extra.Header` 可读 HTTP 请求头）。
+- 落地：被启动 CLI 在自己的 panes URL 自报 `?caller_tool=<tool>`（claude/reclaude 经 generateClaudeMCPConfig 加 callerTool 形参；codex 经 pushMcpOverrides url）→ orchestrator authMiddleware 把 query 桥接进请求头 `X-XKPane-Caller-Tool`（go-sdk handler 只见 header 不见 URL）→ launch_task 读 `req.Extra.Header` 作缺省 cli_tool（callerTool 辅助）。显式传参优先，无法识别才回落 claude。
+- 守门测试：codex url 自报 caller_tool=codex / authMiddleware 桥接 query→header / callerTool 读 header。全绿。
+- **此修正纳入本轮手测**（一次重启 dev 同时验证闭环 + 同源 + reclaude 场景）。**P6c-3 前端弹出可见 Tab 仍待手测通过后做**。
