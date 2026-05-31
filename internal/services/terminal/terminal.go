@@ -31,6 +31,7 @@ import (
 
 	"xkpane/internal/events"
 	"xkpane/internal/services/cliadapters"
+	"xkpane/internal/services/projecthooks"
 	"xkpane/internal/utils/logx"
 	"xkpane/internal/utils/ptyx"
 
@@ -230,6 +231,13 @@ func (s *Service) CreateSession(ctx context.Context, spec CreateSpec) (string, e
 
 	orchPort, orchToken := s.orchestratorEndpoint()
 	env := buildEnv(id, spec.CliTool, orchPort, orchToken, providerEnv, envInject, envRemove)
+
+	// 启动前把 cli-hook 注册进被启动项目的 hook 配置（claude/reclaude→.claude/settings.local.json，
+	// codex→.codex/hooks.json+config.toml；P6d-2）。settings 必须在 CLI 启动前就位，故同步调；
+	// failure 仅 warn，绝不阻断启动（对齐 cc-pane）。none/裸 shell 时 Sync 内部 no-op。
+	if err := projecthooks.Sync(spec.ProjectPath, spec.CliTool); err != nil {
+		s.logger.Warn("project hooks sync failed", "session", id, "cliTool", spec.CliTool, "err", err)
+	}
 
 	pt, err := ptyx.Spawn(context.Background(), ptyx.Spec{
 		Command: command,
