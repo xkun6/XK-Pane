@@ -20,9 +20,17 @@ func TestShouldIgnoreDefaults(t *testing.T) {
 		{"target/debug/app", true},
 		{"dist/bundle.js", true},
 		{"build/out.o", true},
+		// 嵌套依赖目录必须忽略（回归：frontend/node_modules 此前漏匹配导致被捕获）
+		{"frontend/node_modules", true},
+		{"frontend/node_modules/.pnpm/@vitest+mocker@4.1.7/node_modules/.bin/vite.CMD", true},
+		{"a/b/c/.git/HEAD", true},
+		{"frontend/dist/assets/x.js", true},
+		{"pkg/target/debug/app", true},
 		// 不应误匹配相邻同前缀目录（cc-pane 第 541-543 行的精确性保证）
 		{"target2/foo", false},
 		{"node_modules_backup/x", false},
+		{"frontend/my-node_modules/x", false},
+		{"a/distribution/x", false},
 		// 扩展名
 		{"server.log", true},
 		{"logs/app.log", true},
