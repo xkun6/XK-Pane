@@ -16,6 +16,7 @@ import (
 	"xkpane/internal/services/gitsvc"
 	"xkpane/internal/services/greet"
 	"xkpane/internal/services/launchhistory"
+	"xkpane/internal/services/lhwatcher"
 	"xkpane/internal/services/localhistorysvc"
 	"xkpane/internal/services/preferences"
 	"xkpane/internal/services/project"
@@ -79,6 +80,11 @@ func Run(assets embed.FS) error {
 	// 打 Local History 标签（cc-pane auto_label_before_git）。两者皆注册，连接经 SetAutoLabeler。
 	gitSvc := gitsvc.New()
 	lhSvc := localhistorysvc.New()
+	// project / workspace service 提为变量：既注册给前端，又供 watcher 启动扫描「已登记项目」。
+	projSvc := project.New(holder)
+	wsSvc := workspace.New(holder)
+	// Local History 自动捕获 watcher（决策 D4-1 独立包）。依赖 lhSvc（窄接口 Saver：读配置 + 保存）。
+	lhWatcher := lhwatcher.New(lhSvc)
 
 	app := application.New(application.Options{
 		Name:        "XK-Pane",
@@ -88,7 +94,7 @@ func Run(assets embed.FS) error {
 			application.NewService(preferences.New(holder)),
 			application.NewService(appsettings.New(holder)),
 			application.NewService(storagesvc.New(holder, cfgMgr)),
-			application.NewService(project.New(holder)),
+			application.NewService(projSvc),
 			application.NewService(launchhistory.New(holder)),
 			application.NewService(provider.New(holder)),
 			application.NewService(session.New(holder)),
@@ -97,7 +103,7 @@ func Run(assets embed.FS) error {
 			application.NewService(subSvc),
 			application.NewService(termSvc),
 			application.NewService(clitools.New(cliRegistry)),
-			application.NewService(workspace.New(holder)),
+			application.NewService(wsSvc),
 			application.NewService(sessionscan.New()),
 		},
 		Assets: application.AssetOptions{
@@ -109,6 +115,7 @@ func Run(assets embed.FS) error {
 	})
 	subSvc.AttachApp(app)
 	termSvc.AttachApp(app)
+	lhWatcher.AttachApp(app) // watcher 经此向前端 Emit localhistory:changed（live 刷新）
 	// 连接 Git → Local History：stash/pull/push 前给项目历史打 auto 标签（localhistorysvc 内
 	// 已守门：仅对已在用 Local History 的项目生效，不会为纯 git 操作凭空创建 .xkpanes/）。
 	gitSvc.SetAutoLabeler(func(ctx context.Context, repoPath, name, source, branch string) error {
@@ -126,8 +133,51 @@ func Run(assets embed.FS) error {
 
 	go emitTimeLoop(app)
 
+	// Local History 自动捕获：启动时扫已登记项目，仅对已启用本地历史（.xkpanes/history 存在且
+	// config.enabled）的项目启 watcher（决策 D4-4）。放后台 goroutine 避免阻塞窗口出现（涉及扫盘 +
+	// 逐项目读 config.json）。SaveConfig(enabled) / launchProject 时的补启在 P4a-2 接线。
+	go func() {
+		paths := registeredProjectPaths(context.Background(), projSvc, wsSvc)
+		lhWatcher.StartRegistered(context.Background(), paths)
+	}()
+
 	defer logx.Close()
+	defer lhWatcher.StopAll() // app 退出时停所有 watcher（defer LIFO：先于 logx.Close 执行）
 	return app.Run()
+}
+
+// registeredProjectPaths 汇总「已登记项目」的去重路径：全局 projects 表 + 各 workspace 下的
+// workspace_projects。供 watcher 启动扫描判定哪些项目需要监控。
+func registeredProjectPaths(ctx context.Context, projSvc *project.Service, wsSvc *workspace.Service) []string {
+	seen := make(map[string]struct{})
+	var out []string
+	add := func(p string) {
+		if p == "" {
+			return
+		}
+		if _, ok := seen[p]; ok {
+			return
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
+	}
+	if ps, err := projSvc.List(ctx); err == nil {
+		for _, p := range ps {
+			add(p.Path)
+		}
+	} else {
+		logx.For("app").Warn("list projects for watcher failed", "err", err)
+	}
+	if wss, err := wsSvc.List(ctx); err == nil {
+		for _, ws := range wss {
+			for _, p := range ws.Projects {
+				add(p.Path)
+			}
+		}
+	} else {
+		logx.For("app").Warn("list workspaces for watcher failed", "err", err)
+	}
+	return out
 }
 
 // emitTimeLoop 演示后端主动推事件给前端的链路。
