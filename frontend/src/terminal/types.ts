@@ -60,8 +60,10 @@ export interface Tab {
   /** 该 Tab 内的终端分屏树根；单终端时即一个 leaf。 */
   terminalRootPane?: TerminalPaneNode;
   activeTerminalPaneId?: string;
+  /** 置顶：置顶的 Tab 不可被关闭（关闭按钮隐藏、closeTab 守门），与 cc-pane 一致。 */
+  pinned?: boolean;
   // TODO(phase3/4): provider* / launchProfileId / workspaceSnapshotId /
-  //   ssh / wsl / machineName / pinned / minimized / ... 见文件头
+  //   ssh / wsl / machineName / minimized / ... 见文件头
 }
 
 // ---- 外层：窗口布局面板树 ----

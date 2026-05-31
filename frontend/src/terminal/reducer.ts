@@ -49,6 +49,8 @@ export type TerminalAction =
   | { type: 'addTab'; paneId: string; opts: NewTabOptions }
   | { type: 'closeTab'; paneId: string; tabId: string }
   | { type: 'selectTab'; paneId: string; tabId: string }
+  | { type: 'togglePinTab'; paneId: string; tabId: string }
+  | { type: 'renameTab'; paneId: string; tabId: string; title: string }
   | { type: 'setActivePane'; paneId: string }
   | { type: 'resizePanes'; paneId: string; sizes: number[] }
   // —— P5 拖拽三件套 ——
@@ -225,7 +227,7 @@ export function terminalTreeReducer(
       const snapPane = findPane(state.rootPane, action.paneId);
       if (!snapPane || snapPane.type !== 'panel') return state;
       const snapTab = snapPane.tabs.find((t) => t.id === action.tabId);
-      if (!snapTab) return state;
+      if (!snapTab || snapTab.pinned) return state; // 置顶 Tab 不可关闭（对齐 cc-pane）
 
       // 最后一个 Tab → 关闭整个 Panel（复用 closePane 逻辑，含折叠）。
       if (snapPane.tabs.length <= 1) {
@@ -251,6 +253,28 @@ export function terminalTreeReducer(
       if (!pane || pane.type !== 'panel') return state;
       pane.activeTabId = action.tabId;
       return { rootPane: root, activePaneId: action.paneId };
+    }
+
+    case 'togglePinTab': {
+      const root = structuredClone(state.rootPane);
+      const pane = findPane(root, action.paneId);
+      if (!pane || pane.type !== 'panel') return state;
+      const tab = pane.tabs.find((t) => t.id === action.tabId);
+      if (!tab) return state;
+      tab.pinned = !tab.pinned;
+      return { ...state, rootPane: root };
+    }
+
+    case 'renameTab': {
+      const title = action.title.trim();
+      if (!title) return state; // 空标题不改（由 UI 兜底，这里再守一道）
+      const root = structuredClone(state.rootPane);
+      const pane = findPane(root, action.paneId);
+      if (!pane || pane.type !== 'panel') return state;
+      const tab = pane.tabs.find((t) => t.id === action.tabId);
+      if (!tab) return state;
+      tab.title = title;
+      return { ...state, rootPane: root };
     }
 
     case 'resizePanes': {

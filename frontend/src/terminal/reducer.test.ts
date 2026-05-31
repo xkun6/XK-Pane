@@ -738,3 +738,49 @@ describe('内层终端分屏', () => {
     expect((tabById(s2, tabId).terminalRootPane as TerminalPaneSplit).sizes).toEqual([30, 70]);
   });
 });
+
+// ── TabBar 终端菜单：置顶 / 重命名 ──
+
+describe('togglePinTab / renameTab', () => {
+  function twoTabs(): { state: TerminalTreeState; pid: string; ids: string[] } {
+    let s = createInitialTreeState();
+    const pid = rootPanel(s).id;
+    for (const p of ['a', 'b']) {
+      s = terminalTreeReducer(s, {
+        type: 'addTab',
+        paneId: pid,
+        opts: { projectId: p, projectPath: `/${p}` },
+      });
+    }
+    return { state: s, pid, ids: rootPanel(s).tabs.map((t) => t.id) };
+  }
+
+  it('togglePinTab 翻转 pinned', () => {
+    const { state, pid, ids } = twoTabs();
+    const s1 = terminalTreeReducer(state, { type: 'togglePinTab', paneId: pid, tabId: ids[0]! });
+    expect(rootPanel(s1).tabs[0]!.pinned).toBe(true);
+    const s2 = terminalTreeReducer(s1, { type: 'togglePinTab', paneId: pid, tabId: ids[0]! });
+    expect(rootPanel(s2).tabs[0]!.pinned).toBe(false);
+  });
+
+  it('置顶的 Tab → closeTab 拒绝（原样返回）', () => {
+    const { state, pid, ids } = twoTabs();
+    const pinned = terminalTreeReducer(state, { type: 'togglePinTab', paneId: pid, tabId: ids[0]! });
+    const closed = terminalTreeReducer(pinned, { type: 'closeTab', paneId: pid, tabId: ids[0]! });
+    expect(closed).toBe(pinned); // 未关闭
+    expect(rootPanel(closed).tabs).toHaveLength(2);
+  });
+
+  it('renameTab 改标题；空标题 no-op', () => {
+    const { state, pid, ids } = twoTabs();
+    const s1 = terminalTreeReducer(state, {
+      type: 'renameTab',
+      paneId: pid,
+      tabId: ids[0]!,
+      title: '  我的会话  ',
+    });
+    expect(rootPanel(s1).tabs[0]!.title).toBe('我的会话'); // trim
+    const s2 = terminalTreeReducer(s1, { type: 'renameTab', paneId: pid, tabId: ids[0]!, title: '   ' });
+    expect(s2).toBe(s1); // 空标题原样返回
+  });
+});
