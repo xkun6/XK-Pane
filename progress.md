@@ -1072,3 +1072,8 @@ reducer 注释已标 P5 边界「刻意未移植 moveTab/reorderTabs/splitAndMov
 - **铁律核对**：MVVM(View 无 bindings；VM `useDndPaneProvider` 消费 `useTerminal` Context + `@/terminal/paneTree` 纯函数，@dnd-kit 为 UI 库)；i18n(无新增人类可见硬编码串，复用 `terminal.tab.*`)；图标 `*Rounded`；取色 `theme.palette.foundation`（`alpha()` 派生自 theme）；无新造 window 事件；圆角约定。
 - **未做（留 P5 后续）**：内层终端分屏（`splitTerminalPane`/`closeTerminalPane`，单 Tab 内多 PTY）；会话回放·跨重启恢复（ReplayBuffer + closedTabs）；TabBar 右键菜单 + pin + 重命名；跨面板「拖到目标面板边缘分屏」（当前仅同面板，跨面板移动走 TabBar）。
 - **待用户 `wails3 dev` 手测**：① 同面板拖 Tab 重排顺序；② 先分屏出 ≥2 面板，拖 Tab 到另一面板的 TabBar（跨面板移动，松手该面板激活该 Tab）；③ 多 Tab 面板里把一个 Tab 拖到本面板右/下边缘 → 拆出新面板（边缘 accent 高亮）；④ 跨面板拖到别的面板边缘**不误高亮**、松手无反应（请改落目标 TabBar）；⑤ 点击选中 / 点击关闭仍正常（8px 阈值不误触拖拽）；⑥ 跨面板移动后该 Tab 的终端仍在跑（session 不泄漏/不丢）。
+
+### 🔄 手测迭代（2 处修复，全绿）
+- `06b6715` **跨面板合并失效**：P5b-2 把碰撞检测换成全局 `pointerWithin`，要求指针精确落在目标 Tab rect 内，跨面板合并几乎命不中 → 松手无反应。修：自定义 `paneCollisionDetection` —— 边缘区命中走分屏、其余在 Tab 容器里 `closestCenter` 取最近 Tab（宽容，支撑同面板重排 + 跨面板合并）。
+- `0222153` **任意 Tab 拖到任意面板任意边**（覆盖「仅同面板边缘」的初始取舍——用户明确要 VSCode 式）：`splitAndMoveTab` → **`moveTabToEdge`**(fromPaneId, tabId, targetPaneId, edge: left/right/top/bottom)，泛化为任意源 + 任意目标面板 + 四条边（left/top 插前、right/bottom 插后；跨面板源掏空则折叠；同面板仍禁移出唯一 Tab）。EdgeDropZone 改四条边（VSCode 十字布局，中心 50% 留给合并），高亮仅在「真会拆分」时显示；碰撞检测任意面板边缘均触发拆分。52 vitest（+4）。
+- **净效果**：拖任意 Tab 到任意面板——**中心→合并、四边→在该面板旁拆新面板**，源面板可为任意面板。「未做」里的「跨面板拖到目标面板边缘分屏」已落地。
