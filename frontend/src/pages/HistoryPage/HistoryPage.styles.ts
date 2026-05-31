@@ -60,14 +60,16 @@ export const historyPageStyles = (theme: Theme): Styles => ({
   // —— 阶段 2：版本时间线 + 4-tab 预览 ——
   stageHeader: { display: 'flex', alignItems: 'center', gap: 1 },
   stagePath: { fontSize: 14, fontWeight: 600, fontFamily: 'monospace', wordBreak: 'break-all' },
-  stage2: { display: 'flex', gap: 1.5, alignItems: 'stretch', minHeight: 0 },
+  // 两栏固定高度，子项填满并各自滚动 —— 给确定高度避免 flex 在版本数少时把预览栏压扁、内容溢出叠到下方。
+  stage2: { display: 'flex', gap: 1.5, height: 460, minHeight: 0 },
   timeline: {
     width: 260,
     flexShrink: 0,
     display: 'flex',
     flexDirection: 'column',
     gap: 0.5,
-    maxHeight: 520,
+    height: '100%',
+    minHeight: 0,
     overflowY: 'auto',
     paddingRight: 0.5,
   },
@@ -100,8 +102,10 @@ export const historyPageStyles = (theme: Theme): Styles => ({
   preview: {
     flex: 1,
     minWidth: 0,
+    minHeight: 0,
     display: 'flex',
     flexDirection: 'column',
+    overflow: 'hidden', // 裁剪：内容只在 previewBody 内滚动，绝不溢出到面板外
     border: `1px solid ${theme.palette.foundation.divider}`,
     borderRadius: 8,
     backgroundColor: theme.palette.foundation.bg.elevated,
@@ -113,8 +117,9 @@ export const historyPageStyles = (theme: Theme): Styles => ({
     padding: '6px 10px',
     borderBottom: `1px solid ${theme.palette.foundation.divider}`,
     flexWrap: 'wrap',
+    flexShrink: 0,
   },
-  previewBody: { flex: 1, minWidth: 0, overflow: 'auto', padding: '4px 10px', maxHeight: 520 },
+  previewBody: { flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto', padding: '4px 10px' },
   previewCaption: { fontSize: 12, color: theme.palette.foundation.text.muted, padding: '6px 10px 0' },
   contentPre: {
     margin: 0,
