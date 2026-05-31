@@ -76,7 +76,7 @@ func (a *ClaudeAdapter) BuildCommand(ctx *Context) (CommandResult, error) {
 		command, args = windowsNpmShimInvocation(path, args)
 	}
 
-	// CC_PANES_* 会话/orchestrator env 由 terminal.buildEnv 统一注入（对齐 cc-pane terminal_service）。
+	// XKPANE_* 会话/orchestrator env 由 terminal.buildEnv 统一注入（对齐 cc-pane terminal_service）。
 	return CommandResult{
 		Command:   command,
 		Args:      args,

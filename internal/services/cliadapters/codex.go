@@ -45,10 +45,10 @@ func (a *CodexAdapter) BuildCommand(ctx *Context) (CommandResult, error) {
 	if !ctx.SkipMCP {
 		args = pushMcpOverrides(args, ctx)
 	}
-	// SkipMCP 时不注入任何 ccpanes 覆盖。codex 0.134.0 对每个 mcp_servers.<name> 强制校验 transport，
-	// 而 `-c mcp_servers.ccpanes.enabled=false` 会凭空造出一个只有 enabled、无 type/command/url 的表，
-	// 触发启动失败 "invalid transport in `mcp_servers.ccpanes`"（已实测复现）。P1 无 orchestrator、恒 SkipMCP，
-	// 必中此坑；且用户全局 config.toml 本就无 ccpanes，注入无任何收益。真正「禁用已存在的全局 ccpanes」
+	// SkipMCP 时不注入任何 panes 覆盖。codex 0.134.0 对每个 mcp_servers.<name> 强制校验 transport，
+	// 而 `-c mcp_servers.panes.enabled=false` 会凭空造出一个只有 enabled、无 type/command/url 的表，
+	// 触发启动失败 "invalid transport in `mcp_servers.panes`"（已实测复现）。orchestrator 未就绪即 SkipMCP，
+	// 必中此坑；且用户全局 config.toml 本就无 panes，注入无任何收益。真正「禁用已存在的全局 panes」
 	// 需先解析 ~/.codex/config.toml、仅对存在项 disabled —— 归 Phase 5（对齐 cc-pane
 	// configured_mcp_server_names，见 pushMcpIsolationOverrides 的 TODO）。
 	if ctx.AppendSystemPrompt != "" {
@@ -71,13 +71,13 @@ func (a *CodexAdapter) BuildCommand(ctx *Context) (CommandResult, error) {
 
 // ── MCP -c 覆盖辅助（纯函数，守门测试覆盖）──────────────────────────────
 
-// pushMcpOverrides 注入 ccpanes 端点 + 共享 MCP（仅在 orchestrator port/token 就绪时，Phase 5）。
+// pushMcpOverrides 注入 panes 端点 + 共享 MCP（仅在 orchestrator port/token 就绪时）。
 func pushMcpOverrides(args []string, ctx *Context) []string {
 	if ctx.OrchestratorPort != 0 && ctx.OrchestratorToken != "" {
 		url := fmt.Sprintf("http://127.0.0.1:%d/mcp?token=%s", ctx.OrchestratorPort, ctx.OrchestratorToken)
-		args = pushMcpURLOverride(args, "ccpanes", url)
-		args = pushMcpBearerEnvOverride(args, "ccpanes", "CC_PANES_API_TOKEN")
-		args = pushMcpEnabledOverride(args, "ccpanes", true)
+		args = pushMcpURLOverride(args, "panes", url)
+		args = pushMcpBearerEnvOverride(args, "panes", "XKPANE_API_TOKEN")
+		args = pushMcpEnabledOverride(args, "panes", true)
 	}
 	for name, url := range ctx.SharedMCPURLs {
 		args = pushMcpURLOverride(args, name, url)
@@ -122,7 +122,7 @@ func pushMcpIsolationOverrides(args []string, ctx *Context) []string {
 // Phase 1 返回空（DisableUnlistedMCPServers 默认关，此函数不被实际调用）。
 func configuredMCPServerNames() []string { return nil }
 
-// pushMcpIsolationOverridesForNames 对 (configured ∪ allowed ∪ {ccpanes}) 中不在 allowed 的名字
+// pushMcpIsolationOverridesForNames 对 (configured ∪ allowed ∪ {panes}) 中不在 allowed 的名字
 // 逐个 push enabled=false。按名字排序输出（对应 cc-pane 的 BTreeSet 有序遍历）。
 func pushMcpIsolationOverridesForNames(args []string, allowed []string, configured []string) []string {
 	allowedSet := make(map[string]bool, len(allowed))
@@ -136,7 +136,7 @@ func pushMcpIsolationOverridesForNames(args []string, allowed []string, configur
 	for _, a := range allowed {
 		set[a] = true
 	}
-	set["ccpanes"] = true
+	set["panes"] = true
 
 	names := make([]string, 0, len(set))
 	for n := range set {

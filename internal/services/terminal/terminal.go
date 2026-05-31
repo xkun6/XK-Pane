@@ -76,7 +76,7 @@ type Service struct {
 	emit   func(name string, payload any)
 
 	// orchestrator MCP 端点（P6 MCP 注入用）：app 装配阶段经 SetOrchestrator 注入。
-	// 0/"" = orchestrator 未就绪（CLI 不注入 ccpanes MCP，fail-open 裸跑）。P6b 起 resolveLaunch 据此填
+	// 0/"" = orchestrator 未就绪（CLI 不注入 panes MCP，fail-open 裸跑）。P6b 起 resolveLaunch 据此填
 	// cliadapters.Context 并翻转 SkipMCP；P6a 仅存储（地基阶段还不注入）。
 	orchMu    sync.RWMutex
 	orchPort  int
@@ -353,9 +353,9 @@ func (s *Service) resolveLaunch(ctx context.Context, id string, spec CreateSpec)
 		return "", nil, nil, nil, nil, fmt.Errorf("terminal: unknown cli tool %q", toolID)
 	}
 
-	// orchestrator 就绪（port/token 非空）才注入 ccpanes MCP（翻转 SkipMCP）。未就绪 fail-open 裸跑，
+	// orchestrator 就绪（port/token 非空）才注入 panes MCP（翻转 SkipMCP）。未就绪 fail-open 裸跑，
 	// 避免 adapter 生成依赖未落地端口的配置。claude/reclaude 写 <proj>/.claude/mcp-<sid>.json；
-	// codex 经 -c mcp_servers.ccpanes.url + bearer_token_env_var=CC_PANES_API_TOKEN（env 由 buildEnv 注入）。
+	// codex 经 -c mcp_servers.panes.url + bearer_token_env_var=XKPANE_API_TOKEN（env 由 buildEnv 注入）。
 	orchPort, orchToken := s.orchestratorEndpoint()
 	cctx := &cliadapters.Context{
 		SessionID:         id,
@@ -509,12 +509,14 @@ func exitCodeOf(err error) int {
 func nowMilli() int64 { return time.Now().UnixMilli() }
 
 // buildEnv 从父进程环境派生子进程完整环境（ptyx 要求 Env 非 nil 时完全替换）。
-// 注入 TERM/COLORTERM（Release .app 从 Finder 启动不继承终端环境）与 CC_PANES_* 标识，
+// 注入 TERM/COLORTERM（Release .app 从 Finder 启动不继承终端环境）与 XKPANE_* 标识，
 // 合并 provider 的 Tier-A env，再叠加 adapter 的 envInject，最后移除 adapter 声明的 envRemove。
 //
-// orchestrator 端点 env（CC_PANES_API_PORT/TOKEN/BASE_URL）在此对所有本地 CLI 会话统一注入
-// （对齐 cc-pane terminal_service line 1192-1204，不在 adapter 里）：codex 经
-// bearer_token_env_var=CC_PANES_API_TOKEN 读 token，cli-hook（P6d）经 BASE_URL 回连。
+// orchestrator 端点 env（XKPANE_API_PORT/TOKEN/BASE_URL）在此对所有本地 CLI 会话统一注入
+// （注入位置对齐 cc-pane terminal_service line 1192-1204，不在 adapter 里）：codex 经
+// bearer_token_env_var=XKPANE_API_TOKEN 读 token，cli-hook（P6d）经 BASE_URL 回连。
+// 注：env 名 CC_PANES_*→XKPANE_*、MCP server 名 ccpanes→panes 是有意偏离 cc-pane（换 XK 品牌、
+// 与 cc-pane 共存不撞名）。
 //
 // 合并顺序（与 cc-pane terminal_service 一致）：base → providerEnv(Tier-A) →
 // adapter inject(Tier-B) → remove。故 adapter 自注入覆盖 provider 同名键（如 glm ZAI_*
@@ -532,17 +534,17 @@ func buildEnv(sessionID, toolID string, orchPort int, orchToken string, provider
 	if _, ok := m["COLORTERM"]; !ok {
 		m["COLORTERM"] = "truecolor"
 	}
-	// CC_PANES_PTY_SESSION_ID 是 launch_cwd 上报回路的关联键（cli-hook 据此上报 $PWD）。
+	// XKPANE_PTY_SESSION_ID 是 launch_cwd 上报回路的关联键（cli-hook 据此上报 $PWD）。
 	// TODO(phase5): 接收端 = orchestrator HTTP 回调，尚未移植；此处先注入以备后续启用。
-	m["CC_PANES_PTY_SESSION_ID"] = sessionID
+	m["XKPANE_PTY_SESSION_ID"] = sessionID
 	if toolID != "" && toolID != "none" {
-		m["CC_PANES_CLI_TOOL"] = toolID
+		m["XKPANE_CLI_TOOL"] = toolID
 	}
 	// orchestrator MCP 端点（仅就绪时注入，本地全工具统一）。codex bearer / cli-hook 回连依赖此组。
 	if orchPort != 0 && orchToken != "" {
-		m["CC_PANES_API_PORT"] = strconv.Itoa(orchPort)
-		m["CC_PANES_API_TOKEN"] = orchToken
-		m["CC_PANES_API_BASE_URL"] = fmt.Sprintf("http://127.0.0.1:%d", orchPort)
+		m["XKPANE_API_PORT"] = strconv.Itoa(orchPort)
+		m["XKPANE_API_TOKEN"] = orchToken
+		m["XKPANE_API_BASE_URL"] = fmt.Sprintf("http://127.0.0.1:%d", orchPort)
 	}
 	for k, v := range providerEnv { // Tier-A provider env（adapter inject 之前）
 		m[k] = v

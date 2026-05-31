@@ -133,11 +133,11 @@ func failingCmd(code int) *exec.Cmd {
 func TestBuildEnvInjectsTermAndSessionID(t *testing.T) {
 	env := buildEnv("sess-123", "claude", 0, "", nil, map[string]string{"FOO": "bar"}, nil)
 	m := envToMap(env)
-	if m["CC_PANES_PTY_SESSION_ID"] != "sess-123" {
-		t.Errorf("session id = %q, want sess-123", m["CC_PANES_PTY_SESSION_ID"])
+	if m["XKPANE_PTY_SESSION_ID"] != "sess-123" {
+		t.Errorf("session id = %q, want sess-123", m["XKPANE_PTY_SESSION_ID"])
 	}
-	if m["CC_PANES_CLI_TOOL"] != "claude" {
-		t.Errorf("cli tool = %q, want claude", m["CC_PANES_CLI_TOOL"])
+	if m["XKPANE_CLI_TOOL"] != "claude" {
+		t.Errorf("cli tool = %q, want claude", m["XKPANE_CLI_TOOL"])
 	}
 	if m["TERM"] == "" {
 		t.Errorf("TERM not injected")
@@ -160,9 +160,9 @@ func TestBuildEnvRemoveAndOverride(t *testing.T) {
 	if m["TERM"] != "override-term" {
 		t.Errorf("inject should override TERM default; got %q", m["TERM"])
 	}
-	// toolID == "none" → 不注入 CC_PANES_CLI_TOOL
-	if _, ok := m["CC_PANES_CLI_TOOL"]; ok {
-		t.Errorf("CC_PANES_CLI_TOOL should be absent for 'none' tool")
+	// toolID == "none" → 不注入 XKPANE_CLI_TOOL
+	if _, ok := m["XKPANE_CLI_TOOL"]; ok {
+		t.Errorf("XKPANE_CLI_TOOL should be absent for 'none' tool")
 	}
 }
 
@@ -220,19 +220,19 @@ func TestResolveLaunchWithProvider(t *testing.T) {
 // orchestrator 就绪时 buildEnv 注入端点三件套；未就绪（port=0）一个都不注入。
 func TestBuildEnvInjectsOrchestratorEndpoint(t *testing.T) {
 	env := envToMap(buildEnv("s", "claude", 58387, "deadbeef", nil, nil, nil))
-	if env["CC_PANES_API_PORT"] != "58387" {
-		t.Errorf("CC_PANES_API_PORT = %q, want 58387", env["CC_PANES_API_PORT"])
+	if env["XKPANE_API_PORT"] != "58387" {
+		t.Errorf("XKPANE_API_PORT = %q, want 58387", env["XKPANE_API_PORT"])
 	}
-	if env["CC_PANES_API_TOKEN"] != "deadbeef" {
-		t.Errorf("CC_PANES_API_TOKEN = %q, want deadbeef", env["CC_PANES_API_TOKEN"])
+	if env["XKPANE_API_TOKEN"] != "deadbeef" {
+		t.Errorf("XKPANE_API_TOKEN = %q, want deadbeef", env["XKPANE_API_TOKEN"])
 	}
-	if env["CC_PANES_API_BASE_URL"] != "http://127.0.0.1:58387" {
-		t.Errorf("CC_PANES_API_BASE_URL = %q", env["CC_PANES_API_BASE_URL"])
+	if env["XKPANE_API_BASE_URL"] != "http://127.0.0.1:58387" {
+		t.Errorf("XKPANE_API_BASE_URL = %q", env["XKPANE_API_BASE_URL"])
 	}
 
 	// 未就绪：三件套均不注入（fail-open）。
 	bare := envToMap(buildEnv("s", "claude", 0, "", nil, nil, nil))
-	for _, k := range []string{"CC_PANES_API_PORT", "CC_PANES_API_TOKEN", "CC_PANES_API_BASE_URL"} {
+	for _, k := range []string{"XKPANE_API_PORT", "XKPANE_API_TOKEN", "XKPANE_API_BASE_URL"} {
 		if _, ok := bare[k]; ok {
 			t.Errorf("orchestrator 未就绪不应注入 %s", k)
 		}

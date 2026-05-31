@@ -10,13 +10,13 @@ import (
 func TestMcpOverridesUseCodexTomlDottedKeys(t *testing.T) {
 	var args []string
 	args = pushMcpURLOverride(args, "context 7", "http://127.0.0.1:3100/mcp")
-	args = pushMcpBearerEnvOverride(args, "ccpanes", "CC_PANES_API_TOKEN")
-	args = pushMcpEnabledOverride(args, "ccpanes", false)
+	args = pushMcpBearerEnvOverride(args, "panes", "XKPANE_API_TOKEN")
+	args = pushMcpEnabledOverride(args, "panes", false)
 
 	want := []string{
 		"-c", `mcp_servers."context 7".url="http://127.0.0.1:3100/mcp"`,
-		"-c", `mcp_servers.ccpanes.bearer_token_env_var="CC_PANES_API_TOKEN"`,
-		"-c", "mcp_servers.ccpanes.enabled=false",
+		"-c", `mcp_servers.panes.bearer_token_env_var="XKPANE_API_TOKEN"`,
+		"-c", "mcp_servers.panes.enabled=false",
 	}
 	if !slices.Equal(args, want) {
 		t.Fatalf("args =\n%v\nwant\n%v", args, want)
@@ -34,8 +34,8 @@ func TestDeveloperInstructionsOverrideUsesCodexCliConfig(t *testing.T) {
 
 // 守门：MCP 隔离把 allowlist 之外的已配置 server 显式 disabled，按名字排序输出。
 func TestMcpIsolationDisablesConfiguredServersOutsideAllowlist(t *testing.T) {
-	configured := []string{"ccpanes", "fetch", "chrome-devtools-windows", "Desktop Commander"}
-	args := pushMcpIsolationOverridesForNames(nil, []string{"ccpanes", "fetch"}, configured)
+	configured := []string{"panes", "fetch", "chrome-devtools-windows", "Desktop Commander"}
+	args := pushMcpIsolationOverridesForNames(nil, []string{"panes", "fetch"}, configured)
 
 	want := []string{
 		"-c", `mcp_servers."Desktop Commander".enabled=false`,
@@ -46,10 +46,10 @@ func TestMcpIsolationDisablesConfiguredServersOutsideAllowlist(t *testing.T) {
 	}
 }
 
-// 守门（回归）：SkipMCP 时 BuildCommand 不得产出任何 ccpanes 覆盖。
-// 历史 bug：注入 `-c mcp_servers.ccpanes.enabled=false` 会让 codex 0.134.0 凭空造出无 transport 的表，
-// 启动即 "invalid transport in mcp_servers.ccpanes"。P1 恒 SkipMCP，必须保证零注入。
-func TestBuildCommandSkipMCPOmitsCcpanesOverride(t *testing.T) {
+// 守门（回归）：SkipMCP 时 BuildCommand 不得产出任何 panes 覆盖。
+// 历史 bug：注入 `-c mcp_servers.panes.enabled=false` 会让 codex 0.134.0 凭空造出无 transport 的表，
+// 启动即 "invalid transport in mcp_servers.panes"。orchestrator 未就绪即 SkipMCP，必须保证零注入。
+func TestBuildCommandSkipMCPOmitsPanesOverride(t *testing.T) {
 	if _, err := resolveSimple("codex"); err != nil {
 		t.Skip("codex 不在 PATH，跳过（BuildCommand 需解析可执行文件）")
 	}
@@ -58,8 +58,8 @@ func TestBuildCommandSkipMCPOmitsCcpanesOverride(t *testing.T) {
 		t.Fatalf("BuildCommand error: %v", err)
 	}
 	for _, a := range res.Args {
-		if strings.Contains(a, "ccpanes") {
-			t.Fatalf("SkipMCP 时不应出现 ccpanes 覆盖，args = %v", res.Args)
+		if strings.Contains(a, "panes") {
+			t.Fatalf("SkipMCP 时不应出现 panes 覆盖，args = %v", res.Args)
 		}
 	}
 }

@@ -8,7 +8,7 @@
 //   - 移植：types / 接口 / Registry / 8 个 BuildCommand / 路径字段铁律（D7）/
 //     可执行解析 + Windows npm shim / Detect（LookPath + 版本探测）。
 //   - P6b 落地：claude/reclaude 的 generate_mcp_config（orchestrator 就绪时写
-//     <proj>/.claude/mcp-<sid>.json，合并 ~/.claude.json 用户全局 mcpServers + ccpanes 端点）；
+//     <proj>/.claude/mcp-<sid>.json，合并 ~/.claude.json 用户全局 mcpServers + panes 端点）；
 //     codex pushMcpOverrides 转真（SkipMCP 由 terminal 据 orchestrator 就绪翻转）。
 //   - 仍延后：codex disable_unlisted_mcp 的 ~/.codex/config.toml 解析（默认关）；shared MCP
 //     （npx mcp-proxy 桥，SharedMCPURLs 恒空）；项目 hooks 机制（依赖 cc-panes-cli-hook 二进制，P6d）。
@@ -191,7 +191,7 @@ func buildAddDirArgs(ctx *Context) []string {
 // 不加 --mcp-config，fail-open 裸跑）。
 //
 // 内容：合并 ~/.claude.json 用户全局 mcpServers（低优先级，shared 命中则跳过）+ shared MCP（HTTP）
-// + ccpanes 端点（最高优先级，覆盖同名）。ccpanes token 经 header 与 ?token= 双通道（Claude Issue #7290 后备）。
+// + panes 端点（最高优先级，覆盖同名）。token 经 header 与 ?token= 双通道（Claude Issue #7290 后备）。
 //
 // 落点偏离 cc-pane（其写 data_dir）：用户要求 per-session 注入落到被启动项目的 .claude/（与 skills 同处）。
 // shared MCP（npx mcp-proxy 桥）本轮推迟，SharedMCPURLs 恒空。
@@ -220,8 +220,8 @@ func generateClaudeMCPConfig(ctx *Context) string {
 	for name, url := range ctx.SharedMCPURLs {
 		servers[name] = map[string]any{"type": "http", "url": url}
 	}
-	// ccpanes 端点（最高优先级，覆盖同名）。
-	servers["ccpanes"] = map[string]any{
+	// panes 端点（最高优先级，覆盖同名）。MCP server 名 = panes（与 cc-pane 的 ccpanes 区分，避免共存撞名）。
+	servers["panes"] = map[string]any{
 		"type":    "http",
 		"url":     fmt.Sprintf("http://127.0.0.1:%d/mcp?token=%s", ctx.OrchestratorPort, ctx.OrchestratorToken),
 		"headers": map[string]string{"Authorization": "Bearer " + ctx.OrchestratorToken},

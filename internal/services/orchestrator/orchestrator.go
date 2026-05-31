@@ -204,7 +204,7 @@ func writeConfig(port int, token string) (string, error) {
 	path := filepath.Join(dir, configFileName)
 	cfg := map[string]any{
 		"mcpServers": map[string]any{
-			"ccpanes": map[string]any{
+			"panes": map[string]any{
 				"type":    "http",
 				"url":     fmt.Sprintf("http://127.0.0.1:%d/mcp?token=%s", port, token),
 				"headers": map[string]string{"Authorization": "Bearer " + token},
