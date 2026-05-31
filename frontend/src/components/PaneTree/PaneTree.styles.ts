@@ -1,4 +1,4 @@
-import type { Theme } from '@mui/material';
+import { alpha, type Theme } from '@mui/material';
 import type { SystemStyleObject } from '@mui/system';
 
 type S = SystemStyleObject<Theme>;
@@ -83,6 +83,30 @@ export const dragOverlayStyles = (theme: Theme): { overlay: S } => {
       whiteSpace: 'nowrap',
       overflow: 'hidden',
       textOverflow: 'ellipsis',
+    },
+  };
+};
+
+// 面板内容区的边缘放置区（拖 Tab 到右/下边缘触发 splitAndMoveTab）。
+// 右区占右侧 30% 满高；下区占底部 30%，且 right:30% 避免与右区重叠（角落归右区，行为确定）。
+// pointerEvents:none —— 平时不挡终端交互；拖拽时 @dnd-kit 按已注册 rect 命中，isOver 才显高亮。
+export const edgeDropStyles = (
+  theme: Theme,
+): { zoneRight: S; zoneBottom: S; zoneActive: S } => {
+  const fp = theme.palette.foundation;
+  const common: S = {
+    position: 'absolute',
+    pointerEvents: 'none',
+    zIndex: 5,
+    backgroundColor: 'transparent',
+    transition: 'background-color 120ms ease, box-shadow 120ms ease',
+  };
+  return {
+    zoneRight: { ...common, top: 0, right: 0, bottom: 0, width: '30%' },
+    zoneBottom: { ...common, left: 0, right: '30%', bottom: 0, height: '30%' },
+    zoneActive: {
+      backgroundColor: alpha(fp.accent, 0.18),
+      boxShadow: `inset 0 0 0 2px ${fp.accent}`,
     },
   };
 };

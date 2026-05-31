@@ -1,5 +1,5 @@
 import { Box, useTheme } from '@mui/material';
-import { DndContext, DragOverlay } from '@dnd-kit/core';
+import { DndContext, DragOverlay, pointerWithin } from '@dnd-kit/core';
 import type { ReactNode } from 'react';
 import { useDndPaneProvider } from './useDndPaneProvider';
 import { dragOverlayStyles } from './PaneTree.styles';
@@ -15,6 +15,7 @@ export const DndPaneProvider = ({ children }: { children: ReactNode }) => {
   return (
     <DndContext
       sensors={sensors}
+      collisionDetection={pointerWithin}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}

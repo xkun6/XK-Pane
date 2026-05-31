@@ -9,14 +9,21 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { useTerminal, type Tab } from '@/terminal';
+import { useTerminal, type SplitDirection, type Tab } from '@/terminal';
 import { collectPanels } from '@/terminal/paneTree';
 
-/** 拖拽源/目标携带的数据（active/over.data.current）。 */
+/** 拖拽源携带的数据（active.data.current）/ TabBar 内的可放置目标（over）。 */
 export interface DndTabData {
   type: 'tab';
   paneId: string;
   tab: Tab;
+}
+
+/** 面板内容边缘的可放置目标（over.data.current）—— 落此触发拆分并把 Tab 移入新面板。 */
+export interface DndEdgeData {
+  type: 'paneEdge';
+  paneId: string;
+  direction: SplitDirection;
 }
 
 export interface DndPaneModel {
@@ -34,7 +41,7 @@ function asTabData(data: unknown): DndTabData | null {
 }
 
 export function useDndPaneProvider(): DndPaneModel {
-  const { rootPane, reorderTabs, moveTab } = useTerminal();
+  const { rootPane, reorderTabs, moveTab, splitAndMoveTab } = useTerminal();
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
 
   // 至少拖动 8px 才启动拖拽，避免与「点击选中 / 点击关闭」误触。
@@ -52,12 +59,22 @@ export function useDndPaneProvider(): DndPaneModel {
       if (!over) return;
       const activeData = asTabData(active.data.current);
       if (!activeData) return;
-      const overData = asTabData(over.data.current);
-      if (!overData) return; // P5b-1 仅处理「落到另一 Tab 上」；边缘分屏落 P5b-2。
 
       const fromPaneId = activeData.paneId;
-      const toPaneId = overData.paneId;
       const tabId = String(active.id);
+      const overRaw = over.data.current as DndTabData | DndEdgeData | undefined;
+
+      if (overRaw?.type === 'paneEdge') {
+        // 边缘分屏：仅当拖的是「自己面板的 Tab」落到「自己面板的边缘」才拆分（跨面板移动请落目标 TabBar）。
+        // splitAndMoveTab 内部要求源面板 >1 个 Tab，否则 no-op（绝不把唯一 Tab 移出）。
+        if (overRaw.paneId === fromPaneId) {
+          splitAndMoveTab(fromPaneId, tabId, overRaw.direction);
+        }
+        return;
+      }
+
+      if (overRaw?.type !== 'tab') return;
+      const toPaneId = overRaw.paneId;
       const overTabId = String(over.id);
       const panels = collectPanels(rootPane);
 
@@ -78,7 +95,7 @@ export function useDndPaneProvider(): DndPaneModel {
         moveTab(fromPaneId, toPaneId, tabId, toIndex >= 0 ? toIndex : undefined);
       }
     },
-    [rootPane, reorderTabs, moveTab],
+    [rootPane, reorderTabs, moveTab, splitAndMoveTab],
   );
 
   const handleDragCancel = useCallback(() => setActiveTab(null), []);

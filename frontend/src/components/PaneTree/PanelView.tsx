@@ -4,6 +4,7 @@ import { TabBar } from '@/components/TabBar';
 import { TerminalView } from '@/components/TerminalView';
 import { useT } from '@/i18n';
 import { useTerminal, type Panel } from '@/terminal';
+import { EdgeDropZone } from './EdgeDropZone';
 import { panelViewStyles } from './PaneTree.styles';
 
 // 叶子面板：TabBar（其活动 Tab）+ 内容区（每 Tab 一个 TerminalView，活动可见、其余隐藏保挂载）。
@@ -59,6 +60,13 @@ export const PanelView = ({ panel }: { panel: Panel }) => {
             </Box>
           );
         })}
+        {/* 多 Tab 面板才提供边缘分屏区：把其中一个 Tab 拽到右/下边缘 → 拆出新面板。 */}
+        {panel.tabs.length > 1 && (
+          <>
+            <EdgeDropZone paneId={panel.id} direction="right" />
+            <EdgeDropZone paneId={panel.id} direction="down" />
+          </>
+        )}
       </Box>
     </Box>
   );
