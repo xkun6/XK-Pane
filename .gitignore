@@ -12,6 +12,10 @@ build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 /.claude/settings.local.json
 /.claude/scheduled_tasks.lock
 /.claude/scheduled_tasks.json
+# 编排器每会话写入被启动项目 .claude/ 的 MCP 配置（机器/会话本地，P6b）
+/.claude/mcp-*.json
+# codex 项目级配置：hook 注册写入的 config.toml 含机器绝对路径，全为运行时产物
+/.codex/
 /.idea/
 .ace-tool/
 
