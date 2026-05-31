@@ -2,9 +2,10 @@
 // 让在 pane 内运行的 Claude/Codex 在生命周期事件 spawn xkpane-cli-hook（移植 cc-pane
 // cc-cli-adapters 的 sync_project_hooks + ProjectCliHooksService）。
 //
-// 落点（D6d-5 拍板）：
+// 落点（D6d-5 拍板，据手测 + codex 源码核对调整）：
 //   - claude / reclaude → <proj>/.claude/settings.local.json 的 hooks 块
-//   - codex            → <proj>/.codex/hooks.json + <proj>/.codex/config.toml（[features] codex_hooks=true）
+//   - codex            → <proj>/.codex/config.toml 内联 [[hooks.SessionStart]]（[features] hooks=true）
+//                         codex command_windows 用 PowerShell 调用运算符形式（见 codex.go / powershellHookCommand）
 //
 // 偏好（D6d-2 拍板）：缺省全启用，本期不做 toggle UI / 偏好文件——启动时自动注册全部支持的 hook。
 //
@@ -116,6 +117,23 @@ func fileExists(p string) bool {
 // 刻意【不用 fmt %q】——%q 会把反斜杠转义成 \\，使命令值里出现双反斜杠路径。这里裸路径加双引号
 // （Windows 路径不含 "，安全）；落到 JSON 由 json.Marshal 自行转义、落到 TOML 由 go-toml 用 literal
 // 串原样保留，运行时还原为单反斜杠合法路径。
+//
+// 此形式用于：claude（settings.local.json，实测可执行）+ codex 非 Windows 的 command（codex 在
+// 非 Windows 经 `sh -lc "<cmd>"` 执行，sh 能执行带引号的路径）。codex 的 Windows 覆盖见
+// powershellHookCommand。
 func hookCommand(hookBinary, subcommand string) string {
 	return `"` + hookBinary + `" ` + subcommand
+}
+
+// powershellHookCommand 拼 PowerShell 可执行的命令串：`& "<二进制绝对路径>" <子命令>`。
+// 用于 codex 的 command_windows 字段。
+//
+// 根因（已由 codex 源码 + 本机实测坐实）：codex 在 Windows 上【默认用 PowerShell】执行 hook
+// （core/src/shell.rs default_user_shell → PowerShell；session/mod.rs build_hooks_for_config 经
+// derive_exec_args 派生 `pwsh -NoProfile -Command "<cmd>"`）。PowerShell 里以引号开头的命令串会
+// 被当作【字符串字面量】而非命令调用，后跟参数即触发解析错误（Unexpected token）→ 进程退出码 1
+// （即用户实测的 "hook exited with code 1"）。要让 PowerShell 执行带引号的可执行路径，必须前置
+// 【调用运算符 &】。这也解释了为何同一二进制 reclaude（claude 不走 PowerShell）跑通而 codex exit 1。
+func powershellHookCommand(hookBinary, subcommand string) string {
+	return "& " + hookCommand(hookBinary, subcommand)
 }

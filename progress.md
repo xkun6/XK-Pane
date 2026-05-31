@@ -1191,6 +1191,15 @@ common:build:hook（go build → bin/xkpane-cli-hook[.exe]）；root dev 前置�
 - **未做（留后续）**：im-forward / IM 桥全栈（D6d-3 砍）；launch_cwd 落库（无消费方，等 resume-by-cwd）；前端订阅 orchestrator:session-started；通知设置前端 UI。
 - **待用户手测**（⚠️ 改后端必**完全重启 dev**；**改 hook 代码须重跑 `task common:build:hook`**）：
   1. pane 内启 claude → 看 `<proj>/.claude/settings.local.json` 出现 2 条 hooks（含 xkpane-cli-hook 绝对路径 + session-start/plan-archive）；claude 启动时模型应收到注入的 `<xkpane-context>`/`<current-state>`；app.log 见 `session-started 上报 cwd=...`。
-  2. 启 codex → `<proj>/.codex/hooks.json` + config.toml `[features] codex_hooks=true`；**验证 codex 在 Windows 是否真触发 session-start**（cc-pane 未验证、高风险点）。
+  2. 启 codex → `<proj>/.codex/config.toml` 内联 `[[hooks.SessionStart]]`（`[features] hooks=true`）；codex 首次会提示信任 hook（选 Trust）→ 模型应收到 `<xkpane-context>`、app.log 见 `session-started 上报 cliTool=codex`。**根因已定论修复见下（2026-06-01）**。
   3. claude 内用 Write 写 `~/.claude/plans/*.md` → 看 `<proj>/.xkpanes/plans/` 出现归档副本。
   4. 终端跑 `xkpane-cli-hook notify --title 测试 --body 内容`（pane 内继承 env）→ 桌面 toast；⚠️ dev 未安装态 Windows toast 可能不弹（缺 AUMID/快捷方式）→ 退而看 app.log `notification trigger` + 命令返回 200。
+
+## 会话（2026-06-01）— codex hook "exited with code 1" 根因定论 + 修复（1 提交）
+
+承 P6d 手测：codex 反复报 `SessionStart hook (failed) error: hook exited with code 1`，模型只收到 AGENTS.md、无我们的注入；之前加 `command_windows` 也没解决。用户让直接看 codex 源码（`J:/Program/ai/codex`）。**派 workflow 深挖**（3 路并行调查 schema/exec/inject + 3 路对抗复核 command_windows/matcher/exit1）+ 本机 PowerShell 实测，**推翻此前全部猜测**：
+
+- ✅ 配置 schema 全对：`command_windows` codex 认识（`config/src/hook_config.rs` HookHandlerConfig::Command，`rename="commandWindows" alias="command_windows"`；`engine/discovery.rs:438` Windows 下 `command_windows.unwrap_or(command)`）；`matcher='startup|resume'` 精确多值匹配（`events/common.rs:129` split('|')，source∈startup/resume/clear/compact）；`type='command'`/`timeout`(秒)/`statusMessage`(camelCase 即正确)全对；`[features].hooks` 源码未检查（惰性无害）。codex 会跳过 async hook（我们 codex 侧本就无 async）。
+- ❌ **真因（非配置、非我方代码）**：codex 在 **Windows 默认经 PowerShell** 执行 hook（`core/src/shell.rs:318` default_user_shell→PowerShell；`session/mod.rs:3290` build_hooks_for_config 派生 `pwsh -NoProfile -Command "<cmd>"`）。命令串 `"<path>" session-start` **以引号开头被 PowerShell 当字符串字面量**，后跟参数即解析错误 → 退出码 1。**本机实测坐实**：`powershell -Command '"...exe" arg'` → ParserError(Unexpected token) exit 1；`'& "...exe" arg'` → exit 0 正常执行。这解释了同二进制 reclaude（claude 不走 PowerShell）跑通而 codex exit 1。此前「bash 吃反斜杠」判断错误（Windows codex 根本不用 bash）。
+- **修复（`projecthooks`）**：新增 `powershellHookCommand` = `& "<bin>" <sub>`；`buildCodexHookEntry` 的 `command_windows` 改用之（`command`/claude 侧不动——非 Windows 走 `sh -lc`，& 有歧义）。更新错误注释、`projecthooks_test.go` 断言 command_windows 以 `& ` 开头。go-toml 实测序列化为单引号 literal、回读无损，结构合 MatcherGroup。go build ./internal/... ./cmd/... + projecthooks 全测试绿。
+- **待 live 确认**：重启 dev → `task common:build:hook`（实为 dev 前置自动编）→ 重启 codex（hook 内容变会再次要求信任，选 Trust）→ 应见 `<xkpane-context>` 注入 + app.log `cliTool=codex`，且不再 `exited with code 1`。

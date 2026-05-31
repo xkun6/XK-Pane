@@ -170,9 +170,14 @@ func TestSyncCodexHooksWritesInlineConfigAndFeatureFlag(t *testing.T) {
 	if !strings.Contains(cmd, "xkpane-cli-hook") || !strings.Contains(cmd, "session-start") {
 		t.Errorf("command=%q 缺二进制名或子命令", cmd)
 	}
-	// Windows 覆盖：codex 通用 command 走 sh 会吃掉反斜杠，必须有 command_windows 走 cmd。
-	if cw, _ := inner["command_windows"].(string); cw == "" {
-		t.Error("codex hook 应含 command_windows（Windows cmd 覆盖）")
+	// Windows 覆盖：codex 在 Windows 默认经 PowerShell -Command 执行 hook，命令以引号开头会被当
+	// 字符串字面量 → 解析错误 exit 1；command_windows 必须前置 & 调用运算符才能执行带引号的路径。
+	cw, _ := inner["command_windows"].(string)
+	if !strings.HasPrefix(cw, "& ") {
+		t.Errorf("codex command_windows=%q 应以 PowerShell 调用运算符 \"& \" 开头", cw)
+	}
+	if !strings.Contains(cw, "xkpane-cli-hook") || !strings.Contains(cw, "session-start") {
+		t.Errorf("codex command_windows=%q 缺二进制名或子命令", cw)
 	}
 
 	// 旧独立 hooks.json 应被清理（避免双源）。

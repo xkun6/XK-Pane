@@ -63,19 +63,29 @@ func syncCodexHooks(projectPath, hookBinary string) error {
 	return nil
 }
 
-// buildCodexHookEntry 与 claude 版同形，但用 codex 的 statusMessage 字段（无 async），并补
-// command_windows：codex 的通用 command 在 Windows 上经 sh/bash 执行，bash 会把 C:\path 的反斜杠
-// 当转义吃掉 → 路径损坏 → exit 1（手测 codex 报 "hook exited with code 1" 且未注入即此因）。
-// command_windows 经 cmd.exe 执行，反斜杠原样保留（官方 Windows 覆盖字段）。
+// buildCodexHookEntry 与 claude 版同形，但用 codex 的 statusMessage 字段（无 async；codex 会
+// 跳过 async hook，见 discovery.rs "async hooks are not supported yet"），并给 command_windows
+// 用【PowerShell 调用运算符形式】。
+//
+// 字段映射均经 codex 源码核对（config/src/hook_config.rs HookHandlerConfig::Command）：
+//   - type='command'         枚举标签，必须
+//   - command                非 Windows（sh -lc）用；带引号路径在 sh 下可直接执行
+//   - command_windows        Windows 用（discovery.rs: cfg!(windows) 时 command_windows.unwrap_or(command)）；
+//                            serde rename="commandWindows" alias="command_windows"，写 snake_case 经 alias 命中
+//   - timeout                秒（rename="timeout"→timeout_sec）
+//   - statusMessage          serde rename="statusMessage"（camelCase 即正确键名，勿写 snake_case）
+//
+// command 与 command_windows 刻意【不同形】：codex 在 Windows 默认经 PowerShell 执行（见
+// powershellHookCommand 注释），必须前置 & 调用运算符；非 Windows 经 sh 执行，& 会变成后台/控制
+// 操作符语义，故 command 保留无 & 的引号形式。
 func buildCodexHookEntry(hookBinary string, def hookDef) map[string]any {
-	command := hookCommand(hookBinary, def.subcommand)
 	return map[string]any{
 		"matcher": def.matcher,
 		"hooks": []any{
 			map[string]any{
 				"type":            "command",
-				"command":         command,
-				"command_windows": command,
+				"command":         hookCommand(hookBinary, def.subcommand),
+				"command_windows": powershellHookCommand(hookBinary, def.subcommand),
 				"timeout":         def.timeout,
 				"statusMessage":   "Loading XK-Pane context",
 			},
