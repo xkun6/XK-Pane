@@ -164,8 +164,8 @@ func TestSyncCodexHooksWritesHooksAndFeatureFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 	features, _ := cfg["features"].(map[string]any)
-	if features["codex_hooks"] != true {
-		t.Errorf("features.codex_hooks=%v want true", features["codex_hooks"])
+	if features["hooks"] != true {
+		t.Errorf("features.hooks=%v want true", features["hooks"])
 	}
 }
 
@@ -199,8 +199,8 @@ func TestEnsureCodexHooksFeaturePreservesExisting(t *testing.T) {
 	if cfg["model"] != "gpt-5" {
 		t.Errorf("既有 model 配置丢失: %v", cfg["model"])
 	}
-	if cfg["features"].(map[string]any)["codex_hooks"] != true {
-		t.Error("codex_hooks 未写入")
+	if cfg["features"].(map[string]any)["hooks"] != true {
+		t.Error("features.hooks 未写入")
 	}
 }
 

@@ -11,8 +11,11 @@ import (
 )
 
 // syncCodexHooks 把 codexHookDefs 注册进 <proj>/.codex/hooks.json，并在 <proj>/.codex/config.toml
-// 写 [features] codex_hooks=true（codex hook 是实验特性，需此开关才会触发）。忠实移植 cc-pane
-// codex.rs sync_project_hooks（D6d-5）。
+// 写 [features] hooks=true（codex hook 特性开关，需此开关才会触发）。移植 cc-pane codex.rs
+// sync_project_hooks（D6d-5）。
+//
+// 注：feature flag 键为 `hooks`（手测发现 cc-pane 当年用的 `codex_hooks` 已被新版 codex 弃用，
+// 提示「Use [features].hooks instead」）→ 改用新键。
 //
 // 偏离 cc-pane：cc-pane 在 Windows 上把 codex project hooks 标记为不支持；XK 按用户拍板照常写入，
 // Windows 能否真触发由 XK 自行手测确认（见 P6D_PLAN §6 风险）。仅保留「.codex 是文件」的冲突检查。
@@ -63,7 +66,7 @@ func buildCodexHookEntry(hookBinary string, def hookDef) map[string]any {
 	}
 }
 
-// ensureCodexHooksFeature 读 <proj>/.codex/config.toml → 设 [features] codex_hooks=true → 写回。
+// ensureCodexHooksFeature 读 <proj>/.codex/config.toml → 设 [features] hooks=true → 写回。
 // 保留用户其余配置（与 cc-pane 同：整文件 round-trip，注释/格式不保真——toml 库重新序列化）。
 func ensureCodexHooksFeature(projectPath string) error {
 	configPath := filepath.Join(projectPath, ".codex", "config.toml")
@@ -83,7 +86,8 @@ func ensureCodexHooksFeature(projectPath string) error {
 		features = map[string]any{}
 		root["features"] = features
 	}
-	features["codex_hooks"] = true
+	features["hooks"] = true
+	delete(features, "codex_hooks") // 清掉旧键，避免新版 codex 的弃用警告
 
 	out, err := toml.Marshal(root)
 	if err != nil {
