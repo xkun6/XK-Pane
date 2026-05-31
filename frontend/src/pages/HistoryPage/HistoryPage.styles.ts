@@ -60,8 +60,9 @@ export const historyPageStyles = (theme: Theme): Styles => ({
   // —— 阶段 2：版本时间线 + 4-tab 预览 ——
   stageHeader: { display: 'flex', alignItems: 'center', gap: 1 },
   stagePath: { fontSize: 14, fontWeight: 600, fontFamily: 'monospace', wordBreak: 'break-all' },
-  // 两栏固定高度，子项填满并各自滚动 —— 给确定高度避免 flex 在版本数少时把预览栏压扁、内容溢出叠到下方。
-  stage2: { display: 'flex', gap: 1.5, height: 460, minHeight: 0 },
+  // 两栏固定高度，子项填满并各自滚动。flexShrink:0 关键 —— 根是纵向滚动 flex 列，不加则下方配置区
+  // 会把这块（含可压缩子项）挤成 0 高度（flex-shrink + overflow:auto 陷阱）；加了它整页改为溢出滚动。
+  stage2: { display: 'flex', gap: 1.5, height: 460, flexShrink: 0 },
   timeline: {
     width: 260,
     flexShrink: 0,

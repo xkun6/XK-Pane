@@ -481,8 +481,9 @@ export const HistoryPage = () => {
             </>
           )}
 
-          {/* 操作区：手动快照 + 配置 + 统计 + 清理（项目已选时常驻底部） */}
-          {vm.selectedPath && vm.config && (
+          {/* 操作区：手动快照 + 配置 + 统计 + 清理（项目级，仅阶段1=文件列表时显示，
+              进入某文件历史时让位给时间线+diff，保持页面干净） */}
+          {vm.selectedPath && vm.config && !vm.selectedFile && (
             <>
               <Box sx={styles.section}>
                 <Typography sx={styles.sectionTitle}>{t('history.snapshot.title')}</Typography>
