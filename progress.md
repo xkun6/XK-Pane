@@ -1117,3 +1117,10 @@ reducer 注释已标 P5 边界「刻意未移植 moveTab/reorderTabs/splitAndMov
 - **验证**：go build/vet ./internal/... ✅ / cliadapters + terminal 测试（新增 `TestBuildEnvInjectsOrchestratorEndpoint` 就绪注入/未就绪不注入两路）✅ / gofmt ✅。**无 Wails 导出签名变更 → 无 bindings 变更**（全是 buildEnv/resolveLaunch/orchestratorEndpoint 未导出方法）。
 - **铁律核对**：配置写 filex.WriteAtomic（per-session mcp json）；日志 logx；MCP 配置落 <proj>/.claude/（拍板偏离 cc-pane data_dir）；env 集中 buildEnv 忠实 cc-pane；codex TOML 编码沿用既有守门测试。
 - **待用户 `wails3 dev` 手测**（**改后端必完全重启 dev**）：① 在 pane 里用 Claude 启一个会话（带 provider）→ 看 `<被启动项目>/.claude/` 是否生成 `mcp-<sid>.json`（内含 ccpanes + 你 ~/.claude.json 的用户 MCP）→ Claude 内 `/mcp` 应见 `ccpanes`、调 `health` 返回「XK-Pane orchestrator online」；② 同理 Codex（`-c mcp_servers.ccpanes.url`，进程 args 可见）；③ orchestrator 万一没起（看 app.log）时仍能裸跑不报错（fail-open）。
+
+### P6b 改名：MCP server ccpanes→panes、env CC_PANES_*→XKPANE_*（`b6591fb`，手测通过）
+P6b 手测通过（claude/codex 都能看到 ccpanes MCP）后，用户要求把 MCP 改名跟 cc-pane 的 ccpanes 区分（同机共存不撞名/混淆）。拍板：**server 名 `panes`**（用户自定，工具前缀 `mcp__panes__*`）+ **env 前缀一起改 `XKPANE_*`**（彻底换品牌）。
+- server 名（配置 key）ccpanes→panes：orchestrator.go（mcp-orchestrator.json）/ adapter.go（claude/reclaude servers["panes"]）/ codex.go（3 处 -c mcp_servers.panes.* + 隔离内置名）。
+- env 前缀 CC_PANES_*→XKPANE_*：buildEnv 注入的 XKPANE_API_PORT/TOKEN/BASE_URL/PTY_SESSION_ID/CLI_TOOL + codex bearer_token_env_var=XKPANE_API_TOKEN。codex_test 守门用例同步。
+- 有意偏离 cc-pane（buildEnv 注释标注）。不动 .xkpanes 本地历史目录、orchestrator serverInfo.name=xkpane-orchestrator。go build/vet/test/gofmt 全绿，无 bindings 变更。**用户确认改名 OK**。
+- **下一步 P6c**：核心编排工具（launch_task/list_sessions/write_to_session/get_session_output/kill_session…），其中 get_session_output 需 per-session 输出环形缓冲（终端现直喂 xterm 未缓冲）。
