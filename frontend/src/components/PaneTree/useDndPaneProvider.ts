@@ -12,7 +12,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { useTerminal, type SplitDirection, type Tab } from '@/terminal';
+import { useTerminal, type PaneEdge, type Tab } from '@/terminal';
 import { collectPanels } from '@/terminal/paneTree';
 
 /** 拖拽源携带的数据（active.data.current）/ TabBar 内的可放置目标（over）。 */
@@ -22,11 +22,11 @@ export interface DndTabData {
   tab: Tab;
 }
 
-/** 面板内容边缘的可放置目标（over.data.current）—— 落此触发拆分并把 Tab 移入新面板。 */
+/** 面板内容边缘的可放置目标（over.data.current）—— 落此在目标面板旁拆出新面板装该 Tab。 */
 export interface DndEdgeData {
   type: 'paneEdge';
   paneId: string;
-  direction: SplitDirection;
+  edge: PaneEdge;
 }
 
 export interface DndPaneModel {
@@ -44,21 +44,18 @@ function asTabData(data: unknown): DndTabData | null {
 }
 
 /**
- * 面板树拖拽碰撞检测：
- *  ① 仅当指针精确落在「源 Tab **自己面板**的」边缘区时，采纳边缘分屏（pointerWithin）。
+ * 面板树拖拽碰撞检测（VSCode 式「边拆分 / 中心合并」）：
+ *  ① 指针精确落在**任意面板**的边缘区 → 采纳该边（pointerWithin）→ 在该面板旁拆出新面板。
  *  ② 其余一律在 Tab 容器中按 closestCenter 取最近 Tab —— 宽容好命中，支撑同面板重排 +
- *     跨面板合并（拖到目标面板任意位置都并入其最近的 Tab）。
+ *     跨面板合并（拖到目标面板中心/标签条都并入其最近的 Tab）。
  * 不用全局 pointerWithin：它要求指针精确落在目标 Tab rect 内，跨面板合并极难命中（曾致「合并不了」）。
- * 跨面板的边缘区（paneId≠源）不视作边缘命中，自然落到 ②→合并，而非静默无反应。
  */
 export const paneCollisionDetection: CollisionDetection = (args) => {
-  const sourcePaneId = (args.active.data.current as DndTabData | undefined)?.paneId;
-  const ownEdgeHits = pointerWithin(args).filter((collision) => {
+  const edgeHits = pointerWithin(args).filter((collision) => {
     const container = args.droppableContainers.find((dc) => dc.id === collision.id);
-    const data = container?.data.current as DndEdgeData | undefined;
-    return data?.type === 'paneEdge' && data.paneId === sourcePaneId;
+    return (container?.data.current as DndEdgeData | undefined)?.type === 'paneEdge';
   });
-  if (ownEdgeHits.length > 0) return ownEdgeHits;
+  if (edgeHits.length > 0) return edgeHits;
 
   const tabContainers = args.droppableContainers.filter(
     (dc) => (dc.data.current as DndTabData | undefined)?.type === 'tab',
@@ -67,7 +64,7 @@ export const paneCollisionDetection: CollisionDetection = (args) => {
 };
 
 export function useDndPaneProvider(): DndPaneModel {
-  const { rootPane, reorderTabs, moveTab, splitAndMoveTab } = useTerminal();
+  const { rootPane, reorderTabs, moveTab, moveTabToEdge } = useTerminal();
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
 
   // 至少拖动 8px 才启动拖拽，避免与「点击选中 / 点击关闭」误触。
@@ -91,11 +88,9 @@ export function useDndPaneProvider(): DndPaneModel {
       const overRaw = over.data.current as DndTabData | DndEdgeData | undefined;
 
       if (overRaw?.type === 'paneEdge') {
-        // 边缘分屏：仅当拖的是「自己面板的 Tab」落到「自己面板的边缘」才拆分（跨面板移动请落目标 TabBar）。
-        // splitAndMoveTab 内部要求源面板 >1 个 Tab，否则 no-op（绝不把唯一 Tab 移出）。
-        if (overRaw.paneId === fromPaneId) {
-          splitAndMoveTab(fromPaneId, tabId, overRaw.direction);
-        }
+        // 落在某面板的边 → 在该面板旁拆出新面板装这个 Tab（任意源 → 任意目标面板）。
+        // moveTabToEdge 内部保证：同面板时不移出唯一 Tab；跨面板时源掏空则折叠。
+        moveTabToEdge(fromPaneId, tabId, overRaw.paneId, overRaw.edge);
         return;
       }
 
@@ -121,7 +116,7 @@ export function useDndPaneProvider(): DndPaneModel {
         moveTab(fromPaneId, toPaneId, tabId, toIndex >= 0 ? toIndex : undefined);
       }
     },
-    [rootPane, reorderTabs, moveTab, splitAndMoveTab],
+    [rootPane, reorderTabs, moveTab, moveTabToEdge],
   );
 
   const handleDragCancel = useCallback(() => setActiveTab(null), []);

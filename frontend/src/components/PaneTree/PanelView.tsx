@@ -60,13 +60,12 @@ export const PanelView = ({ panel }: { panel: Panel }) => {
             </Box>
           );
         })}
-        {/* 多 Tab 面板才提供边缘分屏区：把其中一个 Tab 拽到右/下边缘 → 拆出新面板。 */}
-        {panel.tabs.length > 1 && (
-          <>
-            <EdgeDropZone paneId={panel.id} direction="right" />
-            <EdgeDropZone paneId={panel.id} direction="down" />
-          </>
-        )}
+        {/* 四条边放置区：把任意 Tab 拖到本面板某边 → 在其旁拆出新面板（中心区则合并，见碰撞检测）。
+            始终渲染，使本面板可作任意拖拽的目标；是否高亮/生效由 EdgeDropZone 按场景判定。 */}
+        <EdgeDropZone paneId={panel.id} edge="left" paneTabCount={panel.tabs.length} />
+        <EdgeDropZone paneId={panel.id} edge="right" paneTabCount={panel.tabs.length} />
+        <EdgeDropZone paneId={panel.id} edge="top" paneTabCount={panel.tabs.length} />
+        <EdgeDropZone paneId={panel.id} edge="bottom" paneTabCount={panel.tabs.length} />
       </Box>
     </Box>
   );

@@ -32,7 +32,7 @@ import {
   tabsNeedingSession,
   treeSessionIds,
 } from './sessionReconcile';
-import type { PaneNode, SplitDirection } from './types';
+import type { PaneEdge, PaneNode, SplitDirection } from './types';
 
 /** 启动一个项目终端所需的最小信息（projectPath = PTY cwd，铁律 D7）。 */
 export interface LaunchProjectInput {
@@ -73,8 +73,8 @@ export interface TerminalContextValue {
   reorderTabs: (paneId: string, fromIndex: number, toIndex: number) => void;
   /** 跨面板移动 Tab（拖到另一面板）；toIndex 缺省追加到末尾；源面板掏空则折叠。 */
   moveTab: (fromPaneId: string, toPaneId: string, tabId: string, toIndex?: number) => void;
-  /** 拆分源面板并把指定 Tab 移入新面板（拖到面板边缘触发）；绝不移出唯一 Tab。 */
-  splitAndMoveTab: (paneId: string, tabId: string, direction: SplitDirection) => void;
+  /** 把任意 Tab 拖到任意目标面板的某条边 → 在其旁拆出新面板装它（跨面板时源面板掏空则折叠）。 */
+  moveTabToEdge: (fromPaneId: string, tabId: string, targetPaneId: string, edge: PaneEdge) => void;
   /** 回填某 Tab 的活动 PTY 会话 id（供生命周期 effect 在 create 完成后调用，按 tabId 全树定位）。 */
   setTabSession: (tabId: string, sessionId: string) => void;
 }
@@ -165,9 +165,9 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
       dispatch({ type: 'moveTab', fromPaneId, toPaneId, tabId, toIndex }),
     [],
   );
-  const splitAndMoveTab = useCallback(
-    (paneId: string, tabId: string, direction: SplitDirection) =>
-      dispatch({ type: 'splitAndMoveTab', paneId, tabId, direction }),
+  const moveTabToEdge = useCallback(
+    (fromPaneId: string, tabId: string, targetPaneId: string, edge: PaneEdge) =>
+      dispatch({ type: 'moveTabToEdge', fromPaneId, tabId, targetPaneId, edge }),
     [],
   );
   const setTabSession = useCallback(
@@ -247,7 +247,7 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
       resizePanels,
       reorderTabs,
       moveTab,
-      splitAndMoveTab,
+      moveTabToEdge,
       setTabSession,
     }),
     [
@@ -263,7 +263,7 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
       resizePanels,
       reorderTabs,
       moveTab,
-      splitAndMoveTab,
+      moveTabToEdge,
       setTabSession,
     ],
   );

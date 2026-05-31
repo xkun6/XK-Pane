@@ -340,7 +340,7 @@ describe('moveTab', () => {
   });
 });
 
-describe('splitAndMoveTab', () => {
+describe('moveTabToEdge', () => {
   function paneWithTwoTabs() {
     let s = createInitialTreeState();
     const a = rootPanel(s).id;
@@ -349,30 +349,114 @@ describe('splitAndMoveTab', () => {
     return { state: s, a, ids: rootPanel(s).tabs.map((t) => t.id) };
   }
 
-  it('向右拆分并移 Tab → 根变水平 split[源, 新]，新面板含被移 Tab 且被激活', () => {
+  it('同面板·右边：根升级为水平 split[源, 新]，新面板含被移 Tab 且激活', () => {
     const { state, a, ids } = paneWithTwoTabs();
     const moved = ids[1]!;
-    const s1 = terminalTreeReducer(state, { type: 'splitAndMoveTab', paneId: a, tabId: moved, direction: 'right' });
+    const s1 = terminalTreeReducer(state, {
+      type: 'moveTabToEdge',
+      fromPaneId: a,
+      tabId: moved,
+      targetPaneId: a,
+      edge: 'right',
+    });
     expect(s1.rootPane.type).toBe('split');
     const sp = rootSplit(s1);
     expect(sp.direction).toBe('horizontal');
-    expect(sp.children).toHaveLength(2);
     const src = sp.children[0] as Panel;
     const dst = sp.children[1] as Panel;
     expect(src.id).toBe(a);
     expect(src.tabs.map((t) => t.id)).not.toContain(moved);
     expect(dst.tabs.map((t) => t.id)).toEqual([moved]);
-    expect(dst.activeTabId).toBe(moved);
     expect(s1.activePaneId).toBe(dst.id);
   });
 
-  it('面板只有 1 个 Tab → 拒绝（原样返回，绝不移出唯一 Tab）', () => {
+  it('同面板·左边：新面板插到源前 → split[新, 源]', () => {
+    const { state, a, ids } = paneWithTwoTabs();
+    const moved = ids[1]!;
+    const s1 = terminalTreeReducer(state, {
+      type: 'moveTabToEdge',
+      fromPaneId: a,
+      tabId: moved,
+      targetPaneId: a,
+      edge: 'left',
+    });
+    const sp = rootSplit(s1);
+    expect(sp.direction).toBe('horizontal');
+    expect((sp.children[0] as Panel).tabs.map((t) => t.id)).toEqual([moved]);
+    expect((sp.children[1] as Panel).id).toBe(a);
+  });
+
+  it('同面板·下边：垂直 split', () => {
+    const { state, a, ids } = paneWithTwoTabs();
+    const s1 = terminalTreeReducer(state, {
+      type: 'moveTabToEdge',
+      fromPaneId: a,
+      tabId: ids[1]!,
+      targetPaneId: a,
+      edge: 'bottom',
+    });
+    expect(rootSplit(s1).direction).toBe('vertical');
+  });
+
+  it('同面板只有 1 个 Tab → 拒绝（原样返回，绝不移出唯一 Tab）', () => {
     let s = createInitialTreeState();
     const a = rootPanel(s).id;
     s = terminalTreeReducer(s, { type: 'addTab', paneId: a, opts: { projectId: 'a1', projectPath: '/a1' } });
     const only = rootPanel(s).tabs[0]!.id;
-    const s1 = terminalTreeReducer(s, { type: 'splitAndMoveTab', paneId: a, tabId: only, direction: 'right' });
+    const s1 = terminalTreeReducer(s, {
+      type: 'moveTabToEdge',
+      fromPaneId: a,
+      tabId: only,
+      targetPaneId: a,
+      edge: 'right',
+    });
     expect(s1).toBe(s);
+  });
+
+  it('跨面板·拖到目标面板的右边：同方向并入 → [A, B, 新]，新含被移 Tab', () => {
+    // hsplit[A(2 Tab), B(默认 1 Tab)]；把 A 的一个 Tab 拖到 B 的右边。
+    let s = createInitialTreeState();
+    const a = rootPanel(s).id;
+    s = terminalTreeReducer(s, { type: 'addTab', paneId: a, opts: { projectId: 'a1', projectPath: '/a1' } });
+    s = terminalTreeReducer(s, { type: 'addTab', paneId: a, opts: { projectId: 'a2', projectPath: '/a2' } });
+    s = terminalTreeReducer(s, { type: 'split', paneId: a, direction: 'right' });
+    const b = s.activePaneId;
+    const moved = panels(s).find((p) => p.id === a)!.tabs[0]!.id;
+    const s1 = terminalTreeReducer(s, {
+      type: 'moveTabToEdge',
+      fromPaneId: a,
+      tabId: moved,
+      targetPaneId: b,
+      edge: 'right',
+    });
+    const sp = rootSplit(s1);
+    expect(sp.direction).toBe('horizontal');
+    expect(panels(s1).find((p) => p.id === a)!.tabs.map((t) => t.id)).not.toContain(moved);
+    const newPanel = panels(s1).find((p) => p.id === s1.activePaneId)!;
+    expect(newPanel.tabs.map((t) => t.id)).toEqual([moved]);
+    const bIdx = sp.children.findIndex((c) => c.id === b);
+    expect((sp.children[bIdx + 1] as Panel).id).toBe(s1.activePaneId);
+  });
+
+  it('跨面板·移走源面板唯一 Tab → 源面板掏空折叠消失', () => {
+    // hsplit[A, B]，B 仅有 split 自带默认 Tab；把它拖到 A 的下边 → B 消失，留 A 与新面板。
+    let s = createInitialTreeState();
+    const a = rootPanel(s).id;
+    s = terminalTreeReducer(s, { type: 'addTab', paneId: a, opts: { projectId: 'a1', projectPath: '/a1' } });
+    s = terminalTreeReducer(s, { type: 'split', paneId: a, direction: 'right' });
+    const b = s.activePaneId;
+    const moved = panels(s).find((p) => p.id === b)!.tabs[0]!.id;
+    const s1 = terminalTreeReducer(s, {
+      type: 'moveTabToEdge',
+      fromPaneId: b,
+      tabId: moved,
+      targetPaneId: a,
+      edge: 'bottom',
+    });
+    expect(panels(s1).some((p) => p.id === b)).toBe(false);
+    expect(panels(s1).some((p) => p.id === a)).toBe(true);
+    const newPanel = panels(s1).find((p) => p.id === s1.activePaneId)!;
+    expect(newPanel.tabs.map((t) => t.id)).toEqual([moved]);
   });
 });
 

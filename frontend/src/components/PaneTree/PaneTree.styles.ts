@@ -1,5 +1,6 @@
 import { alpha, type Theme } from '@mui/material';
 import type { SystemStyleObject } from '@mui/system';
+import type { PaneEdge } from '@/terminal';
 
 type S = SystemStyleObject<Theme>;
 
@@ -87,12 +88,13 @@ export const dragOverlayStyles = (theme: Theme): { overlay: S } => {
   };
 };
 
-// 面板内容区的边缘放置区（拖 Tab 到右/下边缘触发 splitAndMoveTab）。
-// 右区占右侧 30% 满高；下区占底部 30%，且 right:30% 避免与右区重叠（角落归右区，行为确定）。
-// pointerEvents:none —— 平时不挡终端交互；拖拽时 @dnd-kit 按已注册 rect 命中，isOver 才显高亮。
-export const edgeDropStyles = (
-  theme: Theme,
-): { zoneRight: S; zoneBottom: S; zoneActive: S } => {
+// 面板内容区的四条边放置区（拖 Tab 到某边 → 在该面板旁拆出新面板，VSCode 式十字布局）。
+// 左/右各占侧边 25% 满高；上/下占中间 50% 宽 × 25% 高（避开左右区，角落归左右区，无重叠）。
+// 中心 50%×50% 无 zone → 落到 closestCenter→合并。pointerEvents:none 平时不挡终端，
+// 拖拽时 @dnd-kit 按已注册 rect 命中、isOver 才显高亮。
+type EdgeDropSx = Record<PaneEdge, S> & { zoneActive: S };
+
+export const edgeDropStyles = (theme: Theme): EdgeDropSx => {
   const fp = theme.palette.foundation;
   const common: S = {
     position: 'absolute',
@@ -102,8 +104,10 @@ export const edgeDropStyles = (
     transition: 'background-color 120ms ease, box-shadow 120ms ease',
   };
   return {
-    zoneRight: { ...common, top: 0, right: 0, bottom: 0, width: '30%' },
-    zoneBottom: { ...common, left: 0, right: '30%', bottom: 0, height: '30%' },
+    left: { ...common, top: 0, left: 0, bottom: 0, width: '25%' },
+    right: { ...common, top: 0, right: 0, bottom: 0, width: '25%' },
+    top: { ...common, top: 0, left: '25%', right: '25%', height: '25%' },
+    bottom: { ...common, bottom: 0, left: '25%', right: '25%', height: '25%' },
     zoneActive: {
       backgroundColor: alpha(fp.accent, 0.18),
       boxShadow: `inset 0 0 0 2px ${fp.accent}`,

@@ -6,6 +6,7 @@ export type { NewTabOptions, TerminalTreeState } from './reducer';
 export type {
   CliTool,
   KnownCliTool,
+  PaneEdge,
   PaneNode,
   Panel,
   SplitPane,

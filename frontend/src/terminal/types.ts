@@ -85,3 +85,6 @@ export type PaneNode = Panel | SplitPane;
 
 /** 分屏操作方向：向右拆（左右）/ 向下拆（上下）。 */
 export type SplitDirection = 'right' | 'down';
+
+/** 面板的四条边（拖 Tab 落到某边 → 在该面板旁拆出新面板）。left/top=插到目标前，right/bottom=插到目标后。 */
+export type PaneEdge = 'left' | 'right' | 'top' | 'bottom';

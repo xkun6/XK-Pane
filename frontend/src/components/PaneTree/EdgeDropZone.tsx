@@ -1,31 +1,30 @@
 import { Box, useTheme } from '@mui/material';
 import { useDroppable } from '@dnd-kit/core';
-import type { SplitDirection } from '@/terminal';
+import type { PaneEdge } from '@/terminal';
 import { edgeDropStyles } from './PaneTree.styles';
 import type { DndEdgeData, DndTabData } from './useDndPaneProvider';
 
-// 面板内容区的单个边缘放置区：拖自己面板的 Tab 落到此处 → DndPaneProvider 触发 splitAndMoveTab。
-// 边缘分屏仅作用于「源 Tab 所在的面板」（splitAndMoveTab 拆的是 Tab 自己的 pane；跨面板移动请落目标 TabBar）。
-// 因此高亮只在「当前拖拽的 Tab 来自本面板」时显示，避免对跨面板拖拽给出「可放置」的误导承诺却静默无反应。
+// 面板内容区的单条边放置区：把任意 Tab 落到此处 → DndPaneProvider 在该面板旁拆出新面板装它。
+// 高亮只在「这次拖拽真的会触发拆分」时显示，避免给出无效承诺：
+//   - 跨面板（拖的是别的面板的 Tab）：总会拆分（移入新面板，源掏空则折叠）。
+//   - 同面板：仅当本面板有 >1 个 Tab（否则移出唯一 Tab = 原地分屏，无意义，moveTabToEdge 会 no-op）。
 export const EdgeDropZone = ({
   paneId,
-  direction,
+  edge,
+  paneTabCount,
 }: {
   paneId: string;
-  direction: SplitDirection;
+  edge: PaneEdge;
+  paneTabCount: number;
 }) => {
   const theme = useTheme();
   const styles = edgeDropStyles(theme);
-  const data: DndEdgeData = { type: 'paneEdge', paneId, direction };
-  const { setNodeRef, isOver, active } = useDroppable({ id: `edge:${paneId}:${direction}`, data });
+  const data: DndEdgeData = { type: 'paneEdge', paneId, edge };
+  const { setNodeRef, isOver, active } = useDroppable({ id: `edge:${paneId}:${edge}`, data });
 
-  const fromSamePane = (active?.data.current as DndTabData | undefined)?.paneId === paneId;
-  const showActive = isOver && fromSamePane;
+  const sourcePaneId = (active?.data.current as DndTabData | undefined)?.paneId;
+  const wouldSplit = sourcePaneId != null && (sourcePaneId !== paneId || paneTabCount > 1);
+  const showActive = isOver && wouldSplit;
 
-  return (
-    <Box
-      ref={setNodeRef}
-      sx={[direction === 'right' ? styles.zoneRight : styles.zoneBottom, showActive && styles.zoneActive]}
-    />
-  );
+  return <Box ref={setNodeRef} sx={[styles[edge], showActive && styles.zoneActive]} />;
 };

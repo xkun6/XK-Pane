@@ -6,7 +6,8 @@
 //
 // 已移植的外层操作：split / closePane / addTab / closeTab / selectTab / setActivePane /
 // resizePanes / setTabSession（生命周期回填钩子）+ 拖拽三件套 reorderTabs / moveTab /
-// splitAndMoveTab（P5 Tab 拖拽，随 TabBar @dnd-kit 单元）。
+// moveTabToEdge（P5 Tab 拖拽：任意 Tab 拖到任意面板的边 → 在其旁拆出新面板；泛化了
+// cc-pane splitAndMoveTab 的「同面板右/下拆分」到「任意源 + 任意目标面板 + 四条边」）。
 // 刻意未移植（依赖未落地子系统，勿现在硬塞——CLAUDE.md 简洁铁律）：
 //   - closedTabs 可恢复快照 + syncPtyRegistryUnregister（会话回放/恢复子功能，后续）
 //   - pinned 校验（UI 细节，后续）
@@ -22,7 +23,7 @@ import {
   findTabLocation,
   generateId,
 } from './paneTree';
-import type { CliTool, PaneNode, Panel, SplitDirection } from './types';
+import type { CliTool, PaneEdge, PaneNode, Panel, SplitDirection } from './types';
 
 export interface TerminalTreeState {
   rootPane: PaneNode;
@@ -50,13 +51,27 @@ export type TerminalAction =
   // —— P5 拖拽三件套 ——
   | { type: 'reorderTabs'; paneId: string; fromIndex: number; toIndex: number }
   | { type: 'moveTab'; fromPaneId: string; toPaneId: string; tabId: string; toIndex?: number }
-  | { type: 'splitAndMoveTab'; paneId: string; tabId: string; direction: SplitDirection }
+  | {
+      type: 'moveTabToEdge';
+      fromPaneId: string;
+      tabId: string;
+      targetPaneId: string;
+      edge: PaneEdge;
+    }
   // setTabSession 按 tabId 全树查找（不再依赖 paneId）—— Tab 可经 moveTab 跨面板迁移。
   | { type: 'setTabSession'; tabId: string; sessionId: string };
 
 const DIRECTION_MAP: Record<SplitDirection, 'horizontal' | 'vertical'> = {
   right: 'horizontal',
   down: 'vertical',
+};
+
+// 四条边 → 分屏方向 + 新面板插在目标的前(after=false)/后(after=true)。
+const EDGE_TO_SPLIT: Record<PaneEdge, { direction: 'horizontal' | 'vertical'; after: boolean }> = {
+  left: { direction: 'horizontal', after: false },
+  right: { direction: 'horizontal', after: true },
+  top: { direction: 'vertical', after: false },
+  bottom: { direction: 'vertical', after: true },
 };
 
 // 折叠单子 split / 清理空 split + 重整 sizes —— 忠实移植 usePanesStore.normalizePaneTree。
@@ -284,21 +299,23 @@ export function terminalTreeReducer(
       return { rootPane: nextRoot, activePaneId: toPaneId };
     }
 
-    case 'splitAndMoveTab': {
-      // 拆分源面板并把指定 Tab 移入新面板 —— 忠实移植 usePanesStore.splitAndMoveTab。
-      // 绝不移出面板唯一的 Tab（否则源面板空了又要折叠，等价无意义的纯分屏）。
-      const { paneId, tabId, direction } = action;
+    case 'moveTabToEdge': {
+      // VSCode 式：把任意 Tab 拖到「任意目标面板」的某条边 → 在该面板旁拆出新面板装它。
+      // 同面板（from===target）= 从自己拽一个 Tab 出来分屏（要求 >1 个 Tab）；
+      // 跨面板 = 从源面板移出（源被掏空则折叠消失），在目标面板旁新建。
+      const { fromPaneId, tabId, targetPaneId, edge } = action;
       const root = structuredClone(state.rootPane);
-      const sourcePane = findPane(root, paneId);
-      if (!sourcePane || sourcePane.type !== 'panel') return state;
-      if (sourcePane.tabs.length <= 1) return state;
-      const tabIndex = sourcePane.tabs.findIndex((t) => t.id === tabId);
+      const fromPane = findPane(root, fromPaneId);
+      if (!fromPane || fromPane.type !== 'panel') return state;
+      const tabIndex = fromPane.tabs.findIndex((t) => t.id === tabId);
       if (tabIndex === -1) return state;
+      // 同面板时绝不移出唯一 Tab（移出后源空了即折叠，等价无意义的原地分屏）。
+      if (fromPaneId === targetPaneId && fromPane.tabs.length <= 1) return state;
 
-      const [tab] = sourcePane.tabs.splice(tabIndex, 1);
-      if (sourcePane.activeTabId === tabId) {
-        const newIdx = Math.min(tabIndex, sourcePane.tabs.length - 1);
-        sourcePane.activeTabId = sourcePane.tabs[newIdx]!.id;
+      const [tab] = fromPane.tabs.splice(tabIndex, 1);
+      if (fromPane.activeTabId === tabId && fromPane.tabs.length > 0) {
+        const newIdx = Math.min(tabIndex, fromPane.tabs.length - 1);
+        fromPane.activeTabId = fromPane.tabs[newIdx]!.id;
       }
 
       const newPane: Panel = {
@@ -307,33 +324,55 @@ export function terminalTreeReducer(
         tabs: [tab!],
         activeTabId: tab!.id,
       };
-      const splitDirection = DIRECTION_MAP[direction];
-      const parentResult = findParent(root, paneId);
-      if (!parentResult) return state;
+      const { direction: splitDirection, after } = EDGE_TO_SPLIT[edge];
+
+      const targetPane = findPane(root, targetPaneId);
+      if (!targetPane || targetPane.type !== 'panel') return state;
+      const tpr = findParent(root, targetPaneId);
+      if (!tpr) return state;
+      const ordered: PaneNode[] = after ? [targetPane, newPane] : [newPane, targetPane];
 
       let nextRoot: PaneNode = root;
-      if (parentResult.parent === null) {
+      if (tpr.parent === null) {
+        // 目标是根面板（整棵树仅此一个面板）→ from 必 === target，升级为一层 split。
         nextRoot = {
           type: 'split',
           id: generateId('split'),
           direction: splitDirection,
-          children: [sourcePane, newPane],
+          children: ordered,
           sizes: [50, 50],
         };
-      } else if (parentResult.parent.direction === splitDirection) {
-        parentResult.parent.children.splice(parentResult.index + 1, 0, newPane);
-        const newSize = 100 / parentResult.parent.children.length;
-        parentResult.parent.sizes = parentResult.parent.children.map(() => newSize);
+      } else if (tpr.parent.direction === splitDirection) {
+        const at = after ? tpr.index + 1 : tpr.index;
+        tpr.parent.children.splice(at, 0, newPane);
+        const newSize = 100 / tpr.parent.children.length;
+        tpr.parent.sizes = tpr.parent.children.map(() => newSize);
       } else {
-        parentResult.parent.children[parentResult.index] = {
+        tpr.parent.children[tpr.index] = {
           type: 'split',
           id: generateId('split'),
           direction: splitDirection,
-          children: [sourcePane, newPane],
+          children: ordered,
           sizes: [50, 50],
         };
       }
-      return { rootPane: nextRoot, activePaneId: newPane.id };
+
+      // 跨面板且源面板被掏空 → 从其父 split 摘除 + 重整 sizes（随后 normalize 折叠单子 split）。
+      if (fromPaneId !== targetPaneId && fromPane.tabs.length === 0) {
+        const fpr = findParent(nextRoot, fromPaneId);
+        if (fpr && fpr.parent) {
+          const parent = fpr.parent;
+          parent.children.splice(fpr.index, 1);
+          parent.sizes.splice(fpr.index, 1);
+          const total = parent.sizes.reduce((a, b) => a + b, 0);
+          parent.sizes =
+            total > 0
+              ? parent.sizes.map((s) => (s / total) * 100)
+              : parent.sizes.map(() => 100 / parent.sizes.length);
+        }
+      }
+
+      return { rootPane: normalizePaneTree(nextRoot), activePaneId: newPane.id };
     }
 
     case 'setTabSession': {
