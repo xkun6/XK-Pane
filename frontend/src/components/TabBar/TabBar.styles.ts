@@ -4,9 +4,10 @@ import type { SystemStyleObject } from '@mui/system';
 // 用 SystemStyleObject（纯样式对象，非 SxProps 联合）：既让 `sx={[styles.tab, ...]}` 数组形式的
 // 每个元素都是合法元素类型，又避免 Record 索引在 noUncheckedIndexedAccess 下带出的 `| undefined`。
 type S = SystemStyleObject<Theme>;
-interface TabBarSx {
+export interface TabBarSx {
   bar: S;
   items: S;
+  dragWrap: S;
   tab: S;
   tabActive: S;
   tabInactive: S;
@@ -35,6 +36,12 @@ export const tabBarStyles = (theme: Theme): TabBarSx => {
       overflowX: 'auto',
       overflowY: 'hidden',
       '&::-webkit-scrollbar': { height: 0, display: 'none' },
+    },
+    // 拖拽外层包裹：@dnd-kit sortable 节点（承载 transform），不参与收缩，内部嵌真实 tab。
+    dragWrap: {
+      display: 'flex',
+      alignItems: 'stretch',
+      flexShrink: 0,
     },
     tab: {
       display: 'flex',

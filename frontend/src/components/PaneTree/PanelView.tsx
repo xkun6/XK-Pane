@@ -40,6 +40,7 @@ export const PanelView = ({ panel }: { panel: Panel }) => {
   return (
     <Box sx={styles.panel}>
       <TabBar
+        paneId={panel.id}
         tabs={panel.tabs}
         activeTabId={panel.activeTabId}
         onSelect={(tabId) => setActiveTab(panel.id, tabId)}

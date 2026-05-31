@@ -60,3 +60,29 @@ export const panelViewStyles = (theme: Theme): PanelViewSx => {
     emptyHint: { fontSize: 12, color: fp.text.muted, maxWidth: 280, lineHeight: 1.6 },
   };
 };
+
+// 拖拽 Tab 时跟随光标的浮层预览（@dnd-kit DragOverlay 内容）。
+export const dragOverlayStyles = (theme: Theme): { overlay: S } => {
+  const fp = theme.palette.foundation;
+  return {
+    overlay: {
+      display: 'flex',
+      alignItems: 'center',
+      height: 30,
+      px: 1.5,
+      maxWidth: 220,
+      borderRadius: 1,
+      fontSize: 13,
+      fontWeight: 500,
+      cursor: 'grabbing',
+      color: fp.text.primary,
+      backgroundColor: fp.bg.elevated,
+      border: `1px solid ${fp.accent}`,
+      boxShadow: theme.shadows[6],
+      pointerEvents: 'none',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+    },
+  };
+};

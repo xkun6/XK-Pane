@@ -1,5 +1,5 @@
 import { Box, useTheme } from '@mui/material';
-import { PaneTree } from '@/components/PaneTree';
+import { DndPaneProvider, PaneTree } from '@/components/PaneTree';
 import { WorkspaceTree } from '@/components/WorkspaceTree';
 import { useTerminal } from '@/terminal';
 import { terminalPageStyles } from './TerminalPage.styles';
@@ -16,7 +16,9 @@ export const TerminalPage = () => {
     <Box sx={styles.root}>
       <WorkspaceTree />
       <Box sx={styles.body}>
-        <PaneTree node={rootPane} />
+        <DndPaneProvider>
+          <PaneTree node={rootPane} />
+        </DndPaneProvider>
       </Box>
     </Box>
   );
