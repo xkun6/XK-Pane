@@ -15,6 +15,10 @@ const (
 	// Local History 自动捕获事件（后端 lhwatcher 保存版本成功 → 前端历史页 live 刷新）。
 	// payload 见 LocalHistoryChangedPayload；前端按 projectPath 过滤后重拉当前列表。
 	LocalHistoryChanged = "localhistory:changed"
+
+	// Orchestrator 编排事件（后端 MCP launch_task → 前端开新面板附着已建会话）。
+	// payload 见 OrchestratorLaunchPayload；前端 listener 见 P6c-3。
+	OrchestratorLaunch = "orchestrator:launch"
 )
 
 // TerminalOutputPayload 是 TerminalOutput 事件载荷。
@@ -47,6 +51,19 @@ type LocalHistoryChangedPayload struct {
 	Timestamp    int64    `json:"timestamp"`    // unix milli
 }
 
+// OrchestratorLaunchPayload 是 OrchestratorLaunch 事件载荷。
+// 后端 launch_task 已创建 PTY 会话后发出，前端据此开新面板并附着 SessionID。
+type OrchestratorLaunchPayload struct {
+	TaskID        string `json:"taskId"`
+	SessionID     string `json:"sessionId"`
+	ProjectPath   string `json:"projectPath"`
+	WorkspaceName string `json:"workspaceName,omitempty"`
+	ProviderID    string `json:"providerId,omitempty"`
+	Title         string `json:"title,omitempty"`
+	ResumeID      string `json:"resumeId,omitempty"`
+	CliTool       string `json:"cliTool,omitempty"`
+}
+
 // Register 在 application 初始化前注册所有强类型事件，
 // Wails 的 binding 生成器会据此为前端生成类型化 API。
 func Register() {
@@ -55,4 +72,5 @@ func Register() {
 	application.RegisterEvent[TerminalStatusPayload](TerminalStatus)
 	application.RegisterEvent[TerminalExitPayload](TerminalExit)
 	application.RegisterEvent[LocalHistoryChangedPayload](LocalHistoryChanged)
+	application.RegisterEvent[OrchestratorLaunchPayload](OrchestratorLaunch)
 }

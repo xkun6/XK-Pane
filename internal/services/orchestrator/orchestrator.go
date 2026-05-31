@@ -29,11 +29,39 @@ import (
 	"sync"
 	"time"
 
+	"xkpane/internal/services/terminal"
+	"xkpane/internal/storage"
 	"xkpane/internal/utils/filex"
 	"xkpane/internal/utils/logx"
 
+	"github.com/wailsapp/wails/v3/pkg/application"
+
 	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// Terminal 是编排工具依赖的终端能力子集（*terminal.Service 满足）。
+type Terminal interface {
+	CreateSession(ctx context.Context, spec terminal.CreateSpec) (string, error)
+	WriteInput(ctx context.Context, sessionID, data string) error
+	Kill(ctx context.Context, sessionID string) error
+	SessionSnapshots() []terminal.SessionSnapshot
+	SessionOutput(sessionID string, lines int) (terminal.SessionOutput, error)
+}
+
+// Projects / Workspaces 是项目 / 工作空间列举能力（*project.Service / *workspace.Service 满足）。
+type Projects interface {
+	List(ctx context.Context) ([]storage.Project, error)
+}
+type Workspaces interface {
+	List(ctx context.Context) ([]storage.Workspace, error)
+}
+
+// Deps 是 orchestrator 编排工具的下游依赖（app 装配阶段注入既有 service）。
+type Deps struct {
+	Terminal   Terminal
+	Projects   Projects
+	Workspaces Workspaces
+}
 
 // orchestratorVersion 报给 MCP 客户端的 server 版本（与应用版本解耦，独立演进）。
 const orchestratorVersion = "0.1.0"
@@ -48,10 +76,32 @@ type Service struct {
 	port  int
 	token string
 	srv   *http.Server
+
+	deps Deps
+
+	// emit 把事件推给前端（orchestrator:launch）；nil 时丢弃（未 AttachApp / 单测）。
+	emitMu sync.RWMutex
+	emit   func(name string, payload any)
 }
 
-// New 构造一个未启动的 orchestrator 服务。
-func New() *Service { return &Service{} }
+// New 构造一个未启动的 orchestrator 服务。deps 为编排工具的下游依赖（terminal/project/workspace）。
+func New(deps Deps) *Service { return &Service{deps: deps} }
+
+// AttachApp 回填 app 引用，让编排工具能 Emit orchestrator:launch 给前端（app 装配阶段调，镜像 terminal）。
+func (s *Service) AttachApp(app *application.App) {
+	s.emitMu.Lock()
+	s.emit = func(name string, payload any) { app.Event.Emit(name, payload) }
+	s.emitMu.Unlock()
+}
+
+func (s *Service) emitEvent(name string, payload any) {
+	s.emitMu.RLock()
+	fn := s.emit
+	s.emitMu.RUnlock()
+	if fn != nil {
+		fn(name, payload)
+	}
+}
 
 // Port 返回监听端口（未启动为 0）。
 func (s *Service) Port() int {
@@ -77,7 +127,7 @@ func (s *Service) Start() error {
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
 
-	mcpHandler := authMiddleware(token, buildMCPHandler())
+	mcpHandler := authMiddleware(token, s.buildMCPHandler())
 	mux := http.NewServeMux()
 	// 无鉴权探活（对照 cc-pane GET /api/health）。
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, _ *http.Request) {
@@ -126,18 +176,17 @@ func (s *Service) Stop() error {
 }
 
 // buildMCPHandler 构造 MCP server（官方 go-sdk）并包成 Streamable HTTP handler。
-// P6a 仅注册 health 工具；P6c 在此追加 launch_task / list_sessions 等编排工具。
-func buildMCPHandler() http.Handler {
+// health（连通自检）+ P6c 编排工具（registerTools，依赖 s.deps 兜底）。
+func (s *Service) buildMCPHandler() http.Handler {
 	srv := mcp.NewServer(
 		&mcp.Implementation{Name: "xkpane-orchestrator", Version: orchestratorVersion}, nil)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "health",
 		Description: "返回 XK-Pane orchestrator 在线状态（连通自检）",
 	}, func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: "XK-Pane orchestrator online"}},
-		}, nil, nil
+		return textResult("XK-Pane orchestrator online"), nil, nil
 	})
+	s.registerTools(srv)
 	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, nil)
 }
 

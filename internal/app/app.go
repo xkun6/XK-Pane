@@ -147,7 +147,12 @@ func Run(assets embed.FS) error {
 
 	// —— MCP/Orchestrator 地基（P6a）：本地 HTTP+MCP server，让 pane 内 CLI 经 MCP 反向调用宿主。——
 	// 启动失败 fail-open（CLI 裸跑无 MCP 注入，不阻断应用启动）；端口/token 注入 terminal 供 P6b 生成 MCP 配置。
-	orchSvc := orchestrator.New()
+	orchSvc := orchestrator.New(orchestrator.Deps{
+		Terminal:   termSvc,
+		Projects:   projSvc,
+		Workspaces: wsSvc,
+	})
+	orchSvc.AttachApp(app) // 编排工具经此 Emit orchestrator:launch 给前端
 	if err := orchSvc.Start(); err != nil {
 		logx.For("app").Warn("orchestrator start failed (CLI 将无 MCP 注入，fail-open)", "err", err)
 	} else {

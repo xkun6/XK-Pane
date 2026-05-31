@@ -125,7 +125,8 @@ func TestGenToken(t *testing.T) {
 }
 
 func TestBuildMCPHandlerNonNil(t *testing.T) {
-	if buildMCPHandler() == nil {
+	// 注册阶段不触 deps（仅 handler 调用时才用），故 New(Deps{}) 空依赖即可校验 handler 构造。
+	if New(Deps{}).buildMCPHandler() == nil {
 		t.Fatal("buildMCPHandler 返回 nil")
 	}
 }
