@@ -8,7 +8,7 @@
 - **P1 ✅**：终端真跑 Claude/Codex（TUI 兼容层 + 启动菜单 + cliadapters），用户确认。
 - **P2 ✅**：删 Todo/Spec/Memory + VSCode 式 Git SCM 面板 + Home 仪表盘。用户手测通过。
 - **P3 ✅**：Workspace 两层树（P3a，用户手测通过）+ 会话恢复（P3b）。**会话恢复最终形态**（用户手测后拍板回退）：**仅工作空间树项目节点 chevron 的按需扫盘子列表**（SessionSubList，左键恢复/右键 恢复·以 reclaude 恢复·复制 id → `launchProject(resumeId)` → CLI resume）。独立 Sessions 页 + status store + launchhistory resume 附加均已撤；`history` 导航位已移除。保留 P3b-1 resume 透传链 + `sessionscan` 后端 + `SessionScanService`。明细见 progress.md。
-- **P4 ✅（待用户手测）**：Local History 忠实化 = 自动捕获 watcher + 暴露 PutLabel/GetFileBranches + 4-tab 整页。6 单元逐个提交全绿（`3b1ff98` P4a-1 / `a49de20` P4a-2 / `d867b2a` P4b / `800b954` P4c-1 / `3e634bc` P4c-2 / `7d0ba9b` P4c-3）。详见 progress.md P4 末节。**待用户 `wails3 dev` 手测**（清单见文末）。
+- **P4 ✅（用户手测通过）**：Local History 忠实化 = 自动捕获 watcher + 暴露 PutLabel/GetFileBranches + 4-tab 整页。6 单元逐个提交（`3b1ff98` P4a-1 / `a49de20` P4a-2 / `d867b2a` P4b / `800b954` P4c-1 / `3e634bc` P4c-2 / `7d0ba9b` P4c-3）+ 手测 5 处修复（`42c81a1` 忽略嵌套目录 / `e7b0e23`+`b21b234` 阶段2 布局 / `6852ff1` 清理删忽略项+默认间隔 300→0 / `047bfee` gofmt）。用户确认「保留并继续打磨」。详见 progress.md P4 末两节。
 - **P5 未开始 = 下一交接目标**：见 REBUILD_BLUEPRINT.md §2 下一行 / 与用户确认范围。
 
 ## ✅ P4 已完成实现摘要（取代原「下一步」骨架）

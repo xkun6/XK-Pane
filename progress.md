@@ -1032,3 +1032,13 @@ useHistoryPage 阶段2：selectFile 异步加载（ListVersions 倒序 + GetFile
 - **铁律核对**：SQLite-only（LH 每项目 `.xkpanes` 独立库）；写配置 filex / 日志 logx / 子进程 procx 沿用；对话框走 NativeDialogs + 文本录入 TextInputDialog；图标全 `@mui/icons-material *Rounded`（无 emoji/Unicode/第三方/内联 SVG）；人类可见串全走 `t()` + 新页配 lang 并 App 注册；取色全 `theme.palette.foundation.*`（无硬编码十六进制）；圆角 按钮 6/容器 8；事件名集中 `internal/events`；MVVM(View 无 bindings → useHistoryPage 无 JSX/无 t() 经 LocalHistoryService → @bindings)；导航 `navigate('history')`；后端业务 service 不 capture `*storage.DB`（LH 每项目独立 Store 经 svc 缓存 + 写锁）。
 - **未做（留后续）**：P4d 文件级历史 Dialog 入口（工作空间树 / Git 右键「查看历史」）；watcher 启动扫描只扫已登记项目（新建未登记项目需经 SaveConfig/launchProject 补启）。
 - **待用户 `wails3 dev` 手测**：见 P4_HANDOFF.md「待手测清单」。
+
+### ✅ P4 手测通过（5 处手测修复）
+用户 `wails3 dev` 手测，发现 5 处问题，逐个修复后确认正常：
+- `42c81a1` **忽略规则漏匹配嵌套目录**：`matchesPattern` 的 `dir/**` 用根前缀，`node_modules/**` 只匹配根 `node_modules/`，本仓 `frontend/node_modules/...` 漏匹配 → watcher 既递归监控了上万个子目录、又把其中文件（如 `.pnpm/.../vite.CMD`）存进历史。修：单段目录名的 `dir/**` 改为匹配任意深度的该路径段（对齐 gitignore 无前导斜杠语义），仍避免 `target2` 误匹配 `target/**`。
+- `e7b0e23` **阶段2 两栏叠层**：`alignItems:stretch` + 子项仅 `maxHeight` 在版本数少时把预览栏压成极矮盒子、内容 `overflow:visible` 溢出叠到下方操作区。修：两栏给确定高度 + preview `overflow:hidden` 裁剪。
+- `b21b234` **阶段2 时间线/diff 整块消失**：上一修给两栏设 `minHeight:0`，根纵向滚动 flex 列为塞下下方配置区把可压缩两栏挤成 0 高度（flex-shrink 陷阱）。修：`stage2` 改 `flexShrink:0` 稳占 460px，整页溢出滚动；并把项目级操作区（快照/配置/统计/清理）改为**仅阶段1**显示，进入文件历史时只留时间线+diff。
+- `6852ff1` **「立即清理」清不掉 node_modules 垃圾 + 只看到最新版**：①清理只按 age/数量/总大小/孤儿blob，删不动小而新的忽略项 → 新增 `cleanupIgnored`：清理时顺带删 file_path 匹配忽略规则的版本；忽略匹配下沉 `localhistory.PathMatchesIgnore` 单一实现（lhwatcher 委托）。②`MinSaveIntervalSecs` 默认 300→0（有意偏离 cc-pane）：5 分钟节流让同文件只存一版、看不到中间编辑，改 0 = 每个内容变化的保存记一版（debounce 合一 + 去重防刷屏）。
+- `047bfee` style：gofmt 清掉 launchhistory_test 误入的多余空行。
+- **关键教训**：以上多为后端（Go）改动，`wails3 dev` 前端 HMR 不重载 Go 后端，必须**完全重启** dev 才生效（用户最初未重启 → watcher 仍跑旧码持续抓 node_modules）。现有项目的 `MinSaveIntervalSecs` 存在各自 `.xkpanes/config.json`，需在配置面板手动改一次。
+- **特性方向**：用户确认**保留并继续打磨**「本地历史」（AI 激进改文件场景下、比 git 更细粒度的自动后悔药 + 留痕；每项目默认关闭，手动启用才捕获）。
