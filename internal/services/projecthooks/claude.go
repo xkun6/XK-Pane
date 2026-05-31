@@ -2,7 +2,6 @@ package projecthooks
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,7 +41,7 @@ func syncClaudeHooks(projectPath, hookBinary string) error {
 // 注：command 里路径不预转义反斜杠——json.Marshal 会正确转义为单层 \\（运行时还原为单反斜杠的合法
 // Windows 路径），比 cc-pane 的双重转义更干净。
 func buildHookEntry(hookBinary string, def hookDef) map[string]any {
-	command := fmt.Sprintf("%q %s", hookBinary, def.subcommand)
+	command := hookCommand(hookBinary, def.subcommand)
 	inner := map[string]any{
 		"type":    "command",
 		"command": command,

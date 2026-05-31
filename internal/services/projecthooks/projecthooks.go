@@ -111,3 +111,11 @@ func fileExists(p string) bool {
 	fi, err := os.Stat(p)
 	return err == nil && !fi.IsDir()
 }
+
+// hookCommand 拼 hook 命令字符串：`"<二进制绝对路径>" <子命令>`。
+// 刻意【不用 fmt %q】——%q 会把反斜杠转义成 \\，使命令值里出现双反斜杠路径。这里裸路径加双引号
+// （Windows 路径不含 "，安全）；落到 JSON 由 json.Marshal 自行转义、落到 TOML 由 go-toml 用 literal
+// 串原样保留，运行时还原为单反斜杠合法路径。
+func hookCommand(hookBinary, subcommand string) string {
+	return `"` + hookBinary + `" ` + subcommand
+}

@@ -127,24 +127,37 @@ func TestSyncClaudeHooksIdempotentAndPreservesForeign(t *testing.T) {
 	}
 }
 
-func TestSyncCodexHooksWritesHooksAndFeatureFlag(t *testing.T) {
+// 读 config.toml 的 hooks[event] 数组。
+func readCodexConfigHooks(t *testing.T, projectPath, event string) (map[string]any, []any) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(projectPath, ".codex", "config.toml"))
+	if err != nil {
+		t.Fatalf("read config.toml: %v", err)
+	}
+	var cfg map[string]any
+	if err := toml.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("toml: %v", err)
+	}
+	hooks, _ := cfg["hooks"].(map[string]any)
+	arr, _ := hooks[event].([]any)
+	return cfg, arr
+}
+
+func TestSyncCodexHooksWritesInlineConfigAndFeatureFlag(t *testing.T) {
 	dir := t.TempDir()
 	if err := syncCodexHooks(dir, fakeBin); err != nil {
 		t.Fatal(err)
 	}
 
-	// hooks.json：仅 SessionStart（codex 无 plan-archive）。
-	data, err := os.ReadFile(filepath.Join(dir, ".codex", "hooks.json"))
-	if err != nil {
-		t.Fatal(err)
+	cfg, ss := readCodexConfigHooks(t, dir, "SessionStart")
+	// [features] hooks=true。
+	if cfg["features"].(map[string]any)["hooks"] != true {
+		t.Errorf("features.hooks=%v want true", cfg["features"])
 	}
-	var root map[string]any
-	_ = json.Unmarshal(data, &root)
-	hooks := root["hooks"].(map[string]any)
-	if _, ok := hooks["PostToolUse"]; ok {
-		t.Error("codex 不该有 PostToolUse hook")
+	// 仅 SessionStart（codex 无 plan-archive）。
+	if len(ss) != 1 {
+		t.Fatalf("SessionStart 条目数=%d want 1", len(ss))
 	}
-	ss := hooks["SessionStart"].([]any)
 	entry := ss[0].(map[string]any)
 	if entry["matcher"] != "startup|resume" {
 		t.Errorf("codex matcher=%v want startup|resume", entry["matcher"])
@@ -153,19 +166,14 @@ func TestSyncCodexHooksWritesHooksAndFeatureFlag(t *testing.T) {
 	if _, ok := inner["statusMessage"]; !ok {
 		t.Error("codex hook 应含 statusMessage")
 	}
+	cmd, _ := inner["command"].(string)
+	if !strings.Contains(cmd, "xkpane-cli-hook") || !strings.Contains(cmd, "session-start") {
+		t.Errorf("command=%q 缺二进制名或子命令", cmd)
+	}
 
-	// config.toml：[features] codex_hooks=true。
-	cfgData, err := os.ReadFile(filepath.Join(dir, ".codex", "config.toml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var cfg map[string]any
-	if err := toml.Unmarshal(cfgData, &cfg); err != nil {
-		t.Fatal(err)
-	}
-	features, _ := cfg["features"].(map[string]any)
-	if features["hooks"] != true {
-		t.Errorf("features.hooks=%v want true", features["hooks"])
+	// 旧独立 hooks.json 应被清理（避免双源）。
+	if _, err := os.Stat(filepath.Join(dir, ".codex", "hooks.json")); !os.IsNotExist(err) {
+		t.Error("旧 hooks.json 应被删除")
 	}
 }
 
@@ -180,8 +188,8 @@ func TestSyncCodexHooksDotCodexFileConflict(t *testing.T) {
 	}
 }
 
-// ensureCodexHooksFeature 保留用户既有 config.toml 配置。
-func TestEnsureCodexHooksFeaturePreservesExisting(t *testing.T) {
+// syncCodexHooks 保留用户既有 config.toml 配置 + 幂等（重复 sync 不堆叠）。
+func TestSyncCodexHooksPreservesExistingAndIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	codexDir := filepath.Join(dir, ".codex")
 	if err := os.MkdirAll(codexDir, 0o755); err != nil {
@@ -190,17 +198,19 @@ func TestEnsureCodexHooksFeaturePreservesExisting(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(codexDir, "config.toml"), []byte("model = \"gpt-5\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := ensureCodexHooksFeature(dir); err != nil {
+	if err := syncCodexHooks(dir, fakeBin); err != nil {
 		t.Fatal(err)
 	}
-	data, _ := os.ReadFile(filepath.Join(codexDir, "config.toml"))
-	var cfg map[string]any
-	_ = toml.Unmarshal(data, &cfg)
+	if err := syncCodexHooks(dir, fakeBin); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, ss := readCodexConfigHooks(t, dir, "SessionStart")
 	if cfg["model"] != "gpt-5" {
 		t.Errorf("既有 model 配置丢失: %v", cfg["model"])
 	}
-	if cfg["features"].(map[string]any)["hooks"] != true {
-		t.Error("features.hooks 未写入")
+	if len(ss) != 1 {
+		t.Errorf("幂等：SessionStart 条目数=%d want 1（不堆叠）", len(ss))
 	}
 }
 
