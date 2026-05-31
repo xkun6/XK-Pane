@@ -4,21 +4,21 @@ import {
   NativeDialogs,
   type DiffResult,
   type FileVersion,
+  type HistoryConfig,
   type HistoryLabel,
+  type HistoryStats,
   type Project,
 } from '@/services';
 import { useProjects } from '@/project';
 
-// HistoryPage ViewModel：消费全局 ProjectProvider 选项目 + 按 path 浏览本地历史（两阶段 + 4-tab）：
-//   阶段 1 = 最近变更文件列表（GetRecentChanges 跨文件聚合，按文件去重保留最新）
-//   阶段 2 = 版本时间线（倒序）+ 4-tab 预览（diff/content/deleted/project-restore）+ 分支筛选
+// HistoryPage ViewModel：消费全局 ProjectProvider 选项目 + 按 path 浏览本地历史（两阶段 + 4-tab）+
+// 标签 / 手动快照 / 单文件回滚 / 配置 / 统计 / 清理 + watcher live 刷新。
 //
 // MVVM：不返回 JSX、不持翻译串（错误 / 确认标题由 View 经 t() 传入）。请求令牌防快速切换竞态。
 // 忠实 cc-pane web/components/LocalHistoryPanel.tsx。
 
 export type HistoryViewMode = 'diff' | 'content' | 'deleted' | 'project-restore';
 
-// 阶段 1 列表的一行（按文件聚合后的最新变更）。
 export interface HistoryFileEntry {
   filePath: string;
   fileName: string;
@@ -29,14 +29,47 @@ export interface HistoryFileEntry {
   labelName: string;
 }
 
-// 恢复已删除文件 / 恢复到项目快照的文案束（View 经 t() 填好传入）。
+// 恢复（已删除文件 / 项目快照）文案束。
 export interface RestoreStrings {
   confirmTitle: string;
-  confirmMessage: string; // 含 {{path}} / {{name}} / {{count}} 由 View 预先插值
+  confirmMessage: string;
   ok: string;
   cancel: string;
   successTitle: string;
-  successMessage: string; // 含 {{count}} 由 View 预先插值
+  successMessage: string;
+  errorTitle: string;
+}
+
+// 打标签结果文案束（输入框由 View 的 TextInputDialog 提供）。
+export interface TagStrings {
+  successTitle: string;
+  successMessage: string;
+  errorTitle: string;
+}
+
+// 手动快照文案束。
+export interface SnapshotStrings {
+  createdTitle: string;
+  createdMessage: string;
+  noChangeMessage: string;
+  errorTitle: string;
+}
+
+// 保存配置文案束。
+export interface ConfigStrings {
+  successTitle: string;
+  successMessage: string;
+  errorTitle: string;
+}
+
+// 立即清理文案束。
+export interface CleanupStrings {
+  confirmTitle: string;
+  confirmMessage: string;
+  ok: string;
+  cancel: string;
+  doneTitle: string;
+  doneMessage: string;
   errorTitle: string;
 }
 
@@ -46,14 +79,13 @@ export interface UseHistoryPageResult {
   loading: boolean;
   files: HistoryFileEntry[];
   selectedFile: string | null;
-  // —— 阶段 2 ——
-  versions: FileVersion[]; // 倒序（最新在上）
-  filteredVersions: FileVersion[]; // 应用分支筛选后
+  versions: FileVersion[];
+  filteredVersions: FileVersion[];
   selectedVersion: FileVersion | null;
   viewMode: HistoryViewMode;
   fileBranches: string[];
-  branchFilter: string; // '' = 全部分支
-  versionLabels: Record<string, HistoryLabel[]>; // versionId → 关联标签
+  branchFilter: string;
+  versionLabels: Record<string, HistoryLabel[]>;
   diff: DiffResult | null;
   diffLoading: boolean;
   diffCaption: 'vsWorking' | 'betweenVersions' | null;
@@ -62,6 +94,8 @@ export interface UseHistoryPageResult {
   deletedFiles: FileVersion[];
   deletedLoading: boolean;
   labels: HistoryLabel[];
+  config: HistoryConfig | null;
+  stats: HistoryStats | null;
   // —— 操作 ——
   select: (path: string, errorTitle: string) => Promise<void>;
   refresh: (errorTitle: string) => Promise<void>;
@@ -72,6 +106,13 @@ export interface UseHistoryPageResult {
   setBranchFilter: (branch: string, errorTitle: string) => void;
   restoreDeleted: (file: FileVersion, s: RestoreStrings) => Promise<void>;
   restoreToLabel: (label: HistoryLabel, s: RestoreStrings) => Promise<void>;
+  restoreVersion: (version: FileVersion, s: RestoreStrings) => Promise<void>;
+  addTag: (version: FileVersion, name: string, s: TagStrings) => Promise<void>;
+  snapshot: (relPath: string, s: SnapshotStrings) => Promise<void>;
+  setConfig: (cfg: HistoryConfig) => void;
+  saveConfig: (s: ConfigStrings) => Promise<void>;
+  cleanup: (s: CleanupStrings) => Promise<void>;
+  reloadSilent: () => void; // watcher live 刷新（无错误弹窗）
 }
 
 function messageOf(e: unknown): string {
@@ -105,7 +146,6 @@ export const useHistoryPage = (): UseHistoryPageResult => {
   const [files, setFiles] = useState<HistoryFileEntry[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
 
-  // 阶段 2 状态
   const [versions, setVersions] = useState<FileVersion[]>([]);
   const [selectedVersion, setSelectedVersion] = useState<FileVersion | null>(null);
   const [viewMode, setViewModeState] = useState<HistoryViewMode>('diff');
@@ -119,23 +159,21 @@ export const useHistoryPage = (): UseHistoryPageResult => {
   const [contentLoading, setContentLoading] = useState(false);
   const [deletedFiles, setDeletedFiles] = useState<FileVersion[]>([]);
   const [deletedLoading, setDeletedLoading] = useState(false);
+  const [config, setConfigState] = useState<HistoryConfig | null>(null);
+  const [stats, setStats] = useState<HistoryStats | null>(null);
 
-  // 请求令牌：丢弃过期响应（快速切项目 / 文件 / 版本）。
   const reqIdRef = useRef(0);
   const diffReqRef = useRef(0);
-  // selectedPath 镜像：供 selectVersion 等回调读最新值而不进 deps。
   const pathRef = useRef('');
   pathRef.current = selectedPath;
   const fileRef = useRef<string | null>(null);
   fileRef.current = selectedFile;
 
-  // 分支筛选后的版本列表（倒序保持）。
   const filteredVersions = useMemo(
     () => (branchFilter ? versions.filter((v) => v.branch === branchFilter) : versions),
     [versions, branchFilter],
   );
 
-  // versionId → 关联标签（标签的 fileSnapshots 引用了当前文件的该版本）。
   const versionLabels = useMemo(() => {
     const map: Record<string, HistoryLabel[]> = {};
     if (!selectedFile) return map;
@@ -170,36 +208,47 @@ export const useHistoryPage = (): UseHistoryPageResult => {
     }
   }, []);
 
+  const loadConfigStats = useCallback(async (path: string): Promise<void> => {
+    try {
+      const [cfg, st] = await Promise.all([LocalHistoryService.getConfig(path), LocalHistoryService.getStats(path)]);
+      setConfigState(cfg);
+      setStats(st);
+    } catch {
+      // 配置 / 统计加载失败不阻断列表（兜底 null），不弹窗。
+      setConfigState(null);
+      setStats(null);
+    }
+  }, []);
+
   const select = useCallback(
     async (path: string, errorTitle: string): Promise<void> => {
       setSelectedPath(path);
       setSelectedFile(null);
-      await loadFiles(path, errorTitle);
+      await Promise.all([loadFiles(path, errorTitle), loadConfigStats(path)]);
     },
-    [loadFiles],
+    [loadFiles, loadConfigStats],
   );
 
   const refresh = useCallback(
     async (errorTitle: string): Promise<void> => {
-      await loadFiles(pathRef.current, errorTitle);
+      await Promise.all([loadFiles(pathRef.current, errorTitle), loadConfigStats(pathRef.current)]);
     },
-    [loadFiles],
+    [loadFiles, loadConfigStats],
   );
 
-  // —— 阶段 2：diff / content 加载（基于当前 filteredVersions 找相邻版本）——
   const loadDiff = useCallback(async (path: string, filePath: string, list: FileVersion[], v: FileVersion, errorTitle: string): Promise<void> => {
     const myReq = ++diffReqRef.current;
     setDiffLoading(true);
     try {
       const idx = list.findIndex((x) => x.id === v.id);
-      const older = idx >= 0 ? list[idx + 1] : undefined; // 倒序：idx+1 更旧
+      const older = idx >= 0 ? list[idx + 1] : undefined;
       let result: DiffResult;
       let caption: 'vsWorking' | 'betweenVersions';
       if (older) {
         result = await LocalHistoryService.versionsDiff(path, filePath, older.id, v.id);
         caption = 'betweenVersions';
       } else {
-        result = await LocalHistoryService.versionDiff(path, filePath, v.id); // 最早版 ↔ 工作树
+        result = await LocalHistoryService.versionDiff(path, filePath, v.id);
         caption = 'vsWorking';
       }
       if (myReq !== diffReqRef.current) return;
@@ -245,7 +294,6 @@ export const useHistoryPage = (): UseHistoryPageResult => {
     }
   }, []);
 
-  // 选中一个版本：按当前 viewMode 加载 diff 或 content。
   const selectVersion = useCallback(
     async (v: FileVersion, errorTitle: string): Promise<void> => {
       setSelectedVersion(v);
@@ -261,7 +309,27 @@ export const useHistoryPage = (): UseHistoryPageResult => {
     [viewMode, filteredVersions, loadDiff, loadContent],
   );
 
-  // 进入阶段 2：加载版本 + 分支 + 标签，默认选最新版并按 diff 模式预览。
+  // 加载某文件的版本 + 分支 + 标签（供 selectFile 与 reloadSilent 共用）。preserveId 用于 live 刷新
+  // 时尽量保留当前选中版本；返回选中的版本（供后续加载预览）。
+  const loadVersionsFor = useCallback(
+    async (path: string, filePath: string, preserveId: string | null): Promise<{ ordered: FileVersion[]; selected: FileVersion | null }> => {
+      const [vs, branches, lbls] = await Promise.all([
+        LocalHistoryService.listVersions(path, filePath),
+        LocalHistoryService.getFileBranches(path, filePath),
+        LocalHistoryService.listLabels(path),
+      ]);
+      const ordered = [...vs].reverse();
+      setVersions(ordered);
+      setFileBranches(branches);
+      setLabels(lbls);
+      const kept = preserveId ? ordered.find((v) => v.id === preserveId) : undefined;
+      const selected = kept ?? ordered[0] ?? null;
+      setSelectedVersion(selected);
+      return { ordered, selected };
+    },
+    [],
+  );
+
   const selectFile = useCallback(
     async (filePath: string, errorTitle: string): Promise<void> => {
       setSelectedFile(filePath);
@@ -272,27 +340,15 @@ export const useHistoryPage = (): UseHistoryPageResult => {
       setContent('');
       const path = pathRef.current;
       try {
-        const [vs, branches, lbls] = await Promise.all([
-          LocalHistoryService.listVersions(path, filePath),
-          LocalHistoryService.getFileBranches(path, filePath),
-          LocalHistoryService.listLabels(path),
-        ]);
-        const ordered = [...vs].reverse(); // 最新在上
-        setVersions(ordered);
-        setFileBranches(branches);
-        setLabels(lbls);
-        const newest = ordered[0];
-        if (newest) {
-          setSelectedVersion(newest);
-          await loadDiff(path, filePath, ordered, newest, errorTitle);
-        }
+        const { ordered, selected } = await loadVersionsFor(path, filePath, null);
+        if (selected) await loadDiff(path, filePath, ordered, selected, errorTitle);
       } catch (e) {
         setVersions([]);
         setFileBranches([]);
         void NativeDialogs.error(errorTitle, messageOf(e));
       }
     },
-    [loadDiff],
+    [loadVersionsFor, loadDiff],
   );
 
   const backToList = useCallback((): void => {
@@ -302,7 +358,6 @@ export const useHistoryPage = (): UseHistoryPageResult => {
     setDeletedFiles([]);
   }, []);
 
-  // 切换 tab：按需加载该 tab 数据（diff/content 复用选中版本；deleted 拉已删；project-restore 重拉标签）。
   const setViewMode = useCallback(
     (mode: HistoryViewMode, errorTitle: string): void => {
       setViewModeState(mode);
@@ -321,7 +376,6 @@ export const useHistoryPage = (): UseHistoryPageResult => {
     [selectedVersion, filteredVersions, loadDeleted, loadContent, loadDiff],
   );
 
-  // 切分支筛选：若当前选中版本不在筛选结果内，改选筛选后的最新版并重载预览。
   const setBranchFilter = useCallback(
     (branch: string, errorTitle: string): void => {
       setBranchFilterState(branch);
@@ -366,6 +420,125 @@ export const useHistoryPage = (): UseHistoryPageResult => {
     }
   }, []);
 
+  // 单文件回滚到选中版本（diff/content tab 的「回滚到此版本」），恢复前后端自动打 Before-Restore 标签。
+  const restoreVersion = useCallback(
+    async (version: FileVersion, s: RestoreStrings): Promise<void> => {
+      const filePath = fileRef.current;
+      if (!filePath) return;
+      const ok = await NativeDialogs.confirm({ title: s.confirmTitle, message: s.confirmMessage, okLabel: s.ok, cancelLabel: s.cancel });
+      if (!ok) return;
+      const path = pathRef.current;
+      try {
+        await LocalHistoryService.restoreVersion(path, filePath, version.id, version.branch);
+        await loadVersionsFor(path, filePath, version.id);
+        await loadFiles(path, s.errorTitle);
+        await NativeDialogs.info(s.successTitle, s.successMessage);
+      } catch (e) {
+        void NativeDialogs.error(s.errorTitle, messageOf(e));
+      }
+    },
+    [loadVersionsFor, loadFiles],
+  );
+
+  // 为某版本打标签（source='user' / type='manual' / 单文件快照）。成功后重拉标签刷新 badge。
+  const addTag = useCallback(
+    async (version: FileVersion, name: string, s: TagStrings): Promise<void> => {
+      const filePath = fileRef.current;
+      const path = pathRef.current;
+      if (!filePath) return;
+      try {
+        await LocalHistoryService.putLabel(path, {
+          id: crypto.randomUUID(),
+          name,
+          labelType: 'manual',
+          source: 'user',
+          timestamp: new Date().toISOString(),
+          branch: version.branch,
+          fileSnapshots: [{ filePath, versionId: version.id }],
+        });
+        setLabels(await LocalHistoryService.listLabels(path));
+        await NativeDialogs.info(s.successTitle, s.successMessage);
+      } catch (e) {
+        void NativeDialogs.error(s.errorTitle, messageOf(e));
+      }
+    },
+    [],
+  );
+
+  // 手动快照一个项目内相对路径文件（无节流；内容未变因去重返回 null）。
+  const snapshot = useCallback(
+    async (relPath: string, s: SnapshotStrings): Promise<void> => {
+      const path = pathRef.current;
+      const rel = relPath.trim();
+      if (!path || !rel) return;
+      try {
+        const v = await LocalHistoryService.snapshotFile(path, rel, '');
+        await loadFiles(path, s.errorTitle);
+        if (rel === fileRef.current) await loadVersionsFor(path, rel, null);
+        if (v) await NativeDialogs.info(s.createdTitle, s.createdMessage);
+        else await NativeDialogs.info(s.createdTitle, s.noChangeMessage);
+      } catch (e) {
+        void NativeDialogs.error(s.errorTitle, messageOf(e));
+      }
+    },
+    [loadFiles, loadVersionsFor],
+  );
+
+  const setConfig = useCallback((cfg: HistoryConfig): void => {
+    setConfigState(cfg);
+  }, []);
+
+  const saveConfig = useCallback(
+    async (s: ConfigStrings): Promise<void> => {
+      const path = pathRef.current;
+      if (!path || !config) return;
+      try {
+        await LocalHistoryService.saveConfig(path, config);
+        await loadConfigStats(path);
+        await NativeDialogs.info(s.successTitle, s.successMessage);
+      } catch (e) {
+        void NativeDialogs.error(s.errorTitle, messageOf(e));
+      }
+    },
+    [config, loadConfigStats],
+  );
+
+  const cleanup = useCallback(
+    async (s: CleanupStrings): Promise<void> => {
+      const path = pathRef.current;
+      if (!path) return;
+      const ok = await NativeDialogs.confirm({ title: s.confirmTitle, message: s.confirmMessage, okLabel: s.ok, cancelLabel: s.cancel });
+      if (!ok) return;
+      try {
+        await LocalHistoryService.cleanup(path);
+        await Promise.all([loadConfigStats(path), loadFiles(path, s.errorTitle)]);
+        await NativeDialogs.info(s.doneTitle, s.doneMessage);
+      } catch (e) {
+        void NativeDialogs.error(s.errorTitle, messageOf(e));
+      }
+    },
+    [loadConfigStats, loadFiles],
+  );
+
+  // watcher live 刷新（无错误弹窗）：静默重拉文件列表，若在阶段 2 则重拉版本（保留当前选中版本）。
+  const reloadSilent = useCallback((): void => {
+    const path = pathRef.current;
+    if (!path) return;
+    void (async () => {
+      try {
+        const rows = await LocalHistoryService.recentChanges(path, 200);
+        setFiles(aggregateFiles(rows));
+        const filePath = fileRef.current;
+        if (filePath) {
+          await loadVersionsFor(path, filePath, selectedVersion?.id ?? null);
+        }
+        await loadConfigStats(path);
+      } catch {
+        // live 刷新静默失败
+      }
+    })();
+  }, [loadVersionsFor, loadConfigStats, selectedVersion]);
+
   return {
     projects,
     selectedPath,
@@ -387,6 +560,8 @@ export const useHistoryPage = (): UseHistoryPageResult => {
     deletedFiles,
     deletedLoading,
     labels,
+    config,
+    stats,
     select,
     refresh,
     selectFile,
@@ -396,5 +571,12 @@ export const useHistoryPage = (): UseHistoryPageResult => {
     setBranchFilter,
     restoreDeleted,
     restoreToLabel,
+    restoreVersion,
+    addTag,
+    snapshot,
+    setConfig,
+    saveConfig,
+    cleanup,
+    reloadSilent,
   };
 };

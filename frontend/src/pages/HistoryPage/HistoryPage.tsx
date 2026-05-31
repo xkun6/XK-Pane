@@ -1,8 +1,11 @@
 import {
   Box,
+  Button,
   Chip,
+  FormControlLabel,
   IconButton,
   MenuItem,
+  Switch,
   Tab,
   Tabs,
   TextField,
@@ -10,20 +13,26 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import type { KeyboardEvent } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import DescriptionRoundedIcon from '@mui/icons-material/DescriptionRounded';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import SellRoundedIcon from '@mui/icons-material/SellRounded';
 import RestoreRoundedIcon from '@mui/icons-material/RestoreRounded';
+import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
+import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
+import CleaningServicesRoundedIcon from '@mui/icons-material/CleaningServicesRounded';
 import { useT } from '@/i18n';
 import { DiffView } from '@/components/DiffView';
-import type { FileVersion, HistoryLabel } from '@/services';
+import { TextInputDialog } from '@/components/TextInputDialog';
+import type { FileVersion, HistoryConfig, HistoryLabel } from '@/services';
+import { useLocalHistoryChangeEvent } from '@/shared/hooks/useLocalHistoryChangeEvent';
 import { historyPageStyles } from './HistoryPage.styles';
 import { useHistoryPage, type HistoryViewMode } from './useHistoryPage';
 import { formatSize, formatTime } from './historyFormat';
 
 const KNOWN_SOURCES = new Set(['git_commit', 'claude_session', 'user', 'build', 'restore', 'branch_switch', 'auto', 'manual']);
+const MB = 1024 * 1024;
 
 export const HistoryPage = () => {
   const theme = useTheme();
@@ -31,9 +40,14 @@ export const HistoryPage = () => {
   const t = useT();
   const vm = useHistoryPage();
 
+  const [tagVersion, setTagVersion] = useState<FileVersion | null>(null);
+  const [snapshotPath, setSnapshotPath] = useState('');
+
   const errorTitle = t('history.error.title');
 
-  // 标签来源 → 语义色（取 theme.palette.foundation.*，禁硬编码十六进制）。
+  // watcher 自动捕获 → live 刷新当前项目的列表 / 时间线。
+  useLocalHistoryChangeEvent(vm.selectedPath, vm.reloadSilent);
+
   const sourceColor = (source: string): string => {
     const f = theme.palette.foundation;
     switch (source) {
@@ -63,6 +77,8 @@ export const HistoryPage = () => {
 
   const showBranchFilter =
     (vm.viewMode === 'diff' || vm.viewMode === 'content') && vm.fileBranches.filter(Boolean).length > 1;
+  const showVersionActions =
+    (vm.viewMode === 'diff' || vm.viewMode === 'content') && vm.selectedVersion !== null;
 
   const onTimelineKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
     const list = vm.filteredVersions;
@@ -79,6 +95,56 @@ export const HistoryPage = () => {
     }
   };
 
+  const onRestoreVersion = (v: FileVersion): void =>
+    void vm.restoreVersion(v, {
+      confirmTitle: t('history.restoreConfirm.title'),
+      confirmMessage: t('history.restoreConfirm.message', { path: vm.selectedFile ?? '' }),
+      ok: t('history.restoreConfirm.ok'),
+      cancel: t('history.restoreConfirm.cancel'),
+      successTitle: t('history.restored.title'),
+      successMessage: t('history.restored.message'),
+      errorTitle,
+    });
+
+  const onSnapshot = (): void => {
+    const rel = snapshotPath.trim();
+    if (!rel) return;
+    void vm.snapshot(rel, {
+      createdTitle: t('history.snapshot.title'),
+      createdMessage: t('history.snapshot.created'),
+      noChangeMessage: t('history.snapshot.noChange'),
+      errorTitle,
+    });
+    setSnapshotPath('');
+  };
+
+  const onSaveConfig = (): void =>
+    void vm.saveConfig({
+      successTitle: t('history.config.saved.title'),
+      successMessage: t('history.config.saved.message'),
+      errorTitle,
+    });
+
+  const onCleanup = (): void =>
+    void vm.cleanup({
+      confirmTitle: t('history.cleanup.confirm.title'),
+      confirmMessage: t('history.cleanup.confirm.message'),
+      ok: t('history.cleanup.confirm.ok'),
+      cancel: t('history.cleanup.confirm.cancel'),
+      doneTitle: t('history.cleanup.done.title'),
+      doneMessage: t('history.cleanup.done.message'),
+      errorTitle,
+    });
+
+  // 配置编辑：基于当前 config 派生新对象交给 VM（VM 不持翻译串，纯数据）。
+  const patchConfig = (patch: Partial<HistoryConfig>): void => {
+    if (vm.config) vm.setConfig({ ...vm.config, ...patch });
+  };
+  const numField = (v: string): number => {
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+  };
+
   const renderVersionRow = (v: FileVersion) => {
     const selected = vm.selectedVersion?.id === v.id;
     const vLabels = vm.versionLabels[v.id] ?? [];
@@ -87,6 +153,10 @@ export const HistoryPage = () => {
         key={v.id}
         sx={{ ...styles.versionRow, ...(selected ? styles.versionRowSelected : {}) }}
         onClick={() => void vm.selectVersion(v, errorTitle)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setTagVersion(v);
+        }}
       >
         <Typography sx={styles.versionTime}>{formatTime(v.createdAt)}</Typography>
         <Box sx={styles.versionMeta}>
@@ -340,7 +410,6 @@ export const HistoryPage = () => {
               </Box>
 
               <Box sx={styles.stage2}>
-                {/* 左：版本时间线（倒序） */}
                 <Box sx={styles.timeline} tabIndex={0} onKeyDown={onTimelineKeyDown}>
                   {vm.filteredVersions.length === 0 ? (
                     <Box sx={styles.empty}>{t('history.timeline.empty')}</Box>
@@ -349,7 +418,6 @@ export const HistoryPage = () => {
                   )}
                 </Box>
 
-                {/* 右：4-tab 预览 */}
                 <Box sx={styles.preview}>
                   <Box sx={styles.previewToolbar}>
                     <Tabs
@@ -362,11 +430,7 @@ export const HistoryPage = () => {
                       <Tab value="diff" label={t('history.tabs.diff')} sx={{ minHeight: 36, textTransform: 'none' }} />
                       <Tab value="content" label={t('history.tabs.content')} sx={{ minHeight: 36, textTransform: 'none' }} />
                       <Tab value="deleted" label={t('history.tabs.deleted')} sx={{ minHeight: 36, textTransform: 'none' }} />
-                      <Tab
-                        value="project-restore"
-                        label={t('history.tabs.projectRestore')}
-                        sx={{ minHeight: 36, textTransform: 'none' }}
-                      />
+                      <Tab value="project-restore" label={t('history.tabs.projectRestore')} sx={{ minHeight: 36, textTransform: 'none' }} />
                     </Tabs>
                     {showBranchFilter && (
                       <TextField
@@ -386,13 +450,188 @@ export const HistoryPage = () => {
                       </TextField>
                     )}
                   </Box>
+
+                  {showVersionActions && vm.selectedVersion && (
+                    <Box sx={styles.previewToolbar}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<SellRoundedIcon />}
+                        onClick={() => setTagVersion(vm.selectedVersion)}
+                        sx={{ textTransform: 'none' }}
+                      >
+                        {t('history.tag.add')}
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<RestoreRoundedIcon />}
+                        onClick={() => vm.selectedVersion && onRestoreVersion(vm.selectedVersion)}
+                        sx={{ textTransform: 'none' }}
+                      >
+                        {t('history.restore')}
+                      </Button>
+                      <Typography sx={styles.hint}>{t('history.timeline.rightClickHint')}</Typography>
+                    </Box>
+                  )}
+
                   {renderPreviewBody()}
+                </Box>
+              </Box>
+            </>
+          )}
+
+          {/* 操作区：手动快照 + 配置 + 统计 + 清理（项目已选时常驻底部） */}
+          {vm.selectedPath && vm.config && (
+            <>
+              <Box sx={styles.section}>
+                <Typography sx={styles.sectionTitle}>{t('history.snapshot.title')}</Typography>
+                <Box sx={styles.snapshotRow}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    placeholder={t('history.snapshotPlaceholder')}
+                    value={snapshotPath}
+                    onChange={(e) => setSnapshotPath(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        onSnapshot();
+                      }
+                    }}
+                  />
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<PhotoCameraRoundedIcon />}
+                    onClick={onSnapshot}
+                    disabled={!snapshotPath.trim()}
+                    sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}
+                  >
+                    {t('history.snapshotAction')}
+                  </Button>
+                </Box>
+              </Box>
+
+              <Box sx={styles.section}>
+                <Typography sx={styles.sectionTitle}>{t('history.config.title')}</Typography>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={vm.config.enabled}
+                      onChange={(e) => patchConfig({ enabled: e.target.checked })}
+                    />
+                  }
+                  label={t('history.config.enabled')}
+                />
+                <Box sx={styles.configGrid}>
+                  <TextField
+                    size="small"
+                    type="number"
+                    label={t('history.config.maxVersionsPerFile')}
+                    value={vm.config.maxVersionsPerFile}
+                    onChange={(e) => patchConfig({ maxVersionsPerFile: numField(e.target.value) })}
+                  />
+                  <TextField
+                    size="small"
+                    type="number"
+                    label={t('history.config.maxAgeDays')}
+                    value={vm.config.maxAgeDays}
+                    onChange={(e) => patchConfig({ maxAgeDays: numField(e.target.value) })}
+                  />
+                  <TextField
+                    size="small"
+                    type="number"
+                    label={t('history.config.maxFileSizeMB')}
+                    value={Math.round(vm.config.maxFileSize / MB)}
+                    onChange={(e) => patchConfig({ maxFileSize: numField(e.target.value) * MB })}
+                  />
+                  <TextField
+                    size="small"
+                    type="number"
+                    label={t('history.config.maxTotalSizeMB')}
+                    value={Math.round(vm.config.maxTotalSize / MB)}
+                    onChange={(e) => patchConfig({ maxTotalSize: numField(e.target.value) * MB })}
+                  />
+                  <TextField
+                    size="small"
+                    type="number"
+                    label={t('history.config.minSaveIntervalSecs')}
+                    value={vm.config.minSaveIntervalSecs}
+                    onChange={(e) => patchConfig({ minSaveIntervalSecs: numField(e.target.value) })}
+                  />
+                </Box>
+                <TextField
+                  size="small"
+                  fullWidth
+                  multiline
+                  minRows={3}
+                  maxRows={8}
+                  label={t('history.config.ignorePatterns')}
+                  value={vm.config.ignorePatterns.join('\n')}
+                  onChange={(e) => patchConfig({ ignorePatterns: e.target.value.split('\n') })}
+                />
+                <Box sx={styles.configActions}>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<SaveRoundedIcon />}
+                    onClick={onSaveConfig}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    {t('history.config.save')}
+                  </Button>
+                </Box>
+              </Box>
+
+              <Box sx={styles.section}>
+                <Typography sx={styles.sectionTitle}>{t('history.stats.title')}</Typography>
+                {vm.stats && (
+                  <Typography sx={styles.statsSummary}>
+                    {t('history.stats.summary', {
+                      versions: String(vm.stats.versionCount),
+                      files: String(vm.stats.fileCount),
+                      size: formatSize(vm.stats.totalBlobSize),
+                    })}
+                  </Typography>
+                )}
+                <Box sx={styles.configActions}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<CleaningServicesRoundedIcon />}
+                    onClick={onCleanup}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    {t('history.cleanup.action')}
+                  </Button>
                 </Box>
               </Box>
             </>
           )}
         </>
       )}
+
+      <TextInputDialog
+        open={tagVersion !== null}
+        title={t('history.tag.title')}
+        label={t('history.tag.label')}
+        okLabel={t('history.tag.ok')}
+        cancelLabel={t('common.cancel')}
+        initialValue=""
+        onSubmit={(name) => {
+          const v = tagVersion;
+          setTagVersion(null);
+          if (v) {
+            void vm.addTag(v, name, {
+              successTitle: t('history.tag.added.title'),
+              successMessage: t('history.tag.added.message'),
+              errorTitle: t('history.tag.failed'),
+            });
+          }
+        }}
+        onClose={() => setTagVersion(null)}
+      />
     </Box>
   );
 };
