@@ -1155,3 +1155,42 @@ P6b 手测通过（claude/codex 都能看到 ccpanes MCP）后，用户要求把
 ### ✅ P6c 全部完成（含同源 + 前端 Tab，待用户手测）
 - **完整链路**：reclaude 里的 Claude 调 `mcp__panes__launch_task`（不传 cli_tool）→ 后端同源继承 reclaude 建会话 + 广播 orchestrator:launch → 前端弹出可见 Tab（标题/进程 args 应见 reclaude）→ 编排者 `get_session_output`/`submit_to_session` 读写 → `kill_session`。
 - **待用户 `wails3 dev` 手测**（⚠️ 改后端必完全重启）：① reclaude/claude 各调 launch_task 不传 cli_tool → 看弹出 Tab 的进程是否同源（reclaude→reclaude、claude→claude）；② Tab 里能看到子会话实时输出；③ get_session_output/submit/kill 闭环；④ 关掉弹出的 Tab → 后端会话被 reconcile 清理。
+
+---
+
+## 会话（2026-05-31）— P6d cli-hook 全栈（规划 + 拍板 + 5 单元落地，全绿，待手测）
+
+承 P6c 全部完成 → 用户要「完整做 P6d（cli-hook 全栈），不以最小改动为目的」。先精读 cc-pane 全栈真身（`../cc-pane`）：cc-panes-cli-hook crate（4 子命令 session_start/plan_archive/im_forward/notify）、cc-cli-adapters hook 注册（claude.rs HOOK_DEFS/sync_project_hooks、codex.rs .codex/hooks.json+config.toml）、ProjectCliHooksService、orchestrator_service REST handler（session-started/im-bridge-ingest/notifications-trigger + verify_token + check_rate_limit）、notification_service、im_bridge_service（3059 行独立子系统）、NSIS。产出 **P6D_PLAN.md**（架构映射 + 分单元 + §5 拍板点）。
+
+### 拍板（AskUserQuestion，含一次 codex 落点澄清）
+- **D6d-1** 回填关联键 = **pty_session_id**（cc-pane 用 launch_id；XK launch_history 由前端记账、无 launch_id 列）。
+- **D6d-2** hook 偏好 = **启动时自动注册全部，无 toggle UI**。
+- **D6d-3** im-forward = **完全不做**（cc-pane IM 桥是 3059 行 sidecar + 5 通道独立子系统）→ 砍子命令 + ingest 端点 + im_bridge 表，原 P6d-5 取消。
+- **D6d-5** codex hooks = **移植，落 `<proj>/.codex/`**。澄清：codex 物理不读 `.claude/`（用户初提「也放 .claude」），且 cc-pane 在 Windows 标记 codex hook 不支持 → XK 照写、Windows 触发自验。
+- **D6d-4** notify = appsettings 加 NotificationEnabled/OnlyWhenUnfocused；**D6d-6** plan-archive 归档 `<proj>/.xkpanes/plans/`（推荐默认）。
+
+### P6d-1 cli-hook 二进制 + 3 子命令（`90c2b7e`）
+`cmd/xkpane-cli-hook`（**纯 stdlib、不 import internal**，启动极快零依赖）：session-start（读 stdin → POST /api/terminal/session-started〔ptySessionId/resumeId/cliTool/runtimeKind/cwd〕→ stdout 注入 context header+current-state〔git branch/status〕+ready）/ plan-archive（~/.claude/plans Write → 归档 `<proj>/.xkpanes/plans/`，同 session+同名去重）/ notify（解析端点 env-first→mcp-orchestrator.json，server 名 panes → POST /api/notifications/trigger）。裸 `http.Client{Timeout:750ms}`（显式偏离 httpx 铁律理由：一次性进程要硬超时不要连接池）；git 子进程走平台 noWindowCmd（Windows CREATE_NO_WINDOW）；失败静默 exit 0（notify 例外 exit 1）。
+
+### P6d-2 hook 注册（`cb0092c`）
+新包 `internal/services/projecthooks`：claude/reclaude→`<proj>/.claude/settings.local.json` hooks 块（SessionStart=session-start / PostToolUse=plan-archive；merge/dedup 幂等，保留外部条目，command 不预转义反斜杠靠 json.Marshal）；codex→`<proj>/.codex/hooks.json`（仅 session-start，statusMessage 字段）+ `config.toml` `[features] codex_hooks=true`（go-toml/v2 round-trip 保留用户配置）；resolveHookBinary（env 覆盖→exe 同目录→binaries/→PATH）。**有意偏离 cc-pane**：不复刻其 codex Windows-unsupported 守门。接线 `terminal.CreateSession` 启动前同步 Sync（failure 仅 warn）。依赖新增 go-toml/v2 v2.3.1。
+
+### P6d-3 REST session-started（`1344a60`）— **二次拍板：log/emit，不回填 launch_history**
+实现中发现 ①XK 无 LaunchCwd 消费方 ②前端 launchProject 记账时会话尚未创建（sessionId 由 reconcile effect 异步产生），前端拿不到 pty_session_id。按 pty 回填 launch_history 需把记账搬后端（中等重构、为没人读的数据）→ 拍板只打通回路 + log/emit。`orchestrator` 加 rateLimiter（10s≤20）+ verifyToken；mux 加 `POST /api/terminal/session-started`（鉴权+限流 → logx + emit `orchestrator:session-started`）；events.go 新事件 + payload。不动 launch_history、不改前端。
+
+### P6d-4 notify 通道（`c613b1a`）
+`internal/services/notification`（包 Wails v3 notifications.NotificationService，sender 窄接口可测；规则忠实 cc-pane：enabled→only_when_unfocused〔focusFn 注入解耦窗口 API〕→dedupe 10s→send）。`AppSettings` 加 NotificationEnabled(默认 true)/OnlyWhenUnfocused(默认 false)，**不进前端 Snapshot**（无 UI，服务直读表，holder 不 capture *DB）。orchestrator `POST /api/notifications/trigger`（Notifier nil→503）。app.go 注册 wailsNotifier（跑 Windows ServiceStartup 注册 toast）+ 注入 mainWindow.IsFocused。依赖 go-toast/v2 v2.0.3（间接）。
+
+### P6d-6 打包（`e6cfe4e`）
+common:build:hook（go build → bin/xkpane-cli-hook[.exe]）；root dev 前置编 hook；windows build:native deps 加 build:hook(GOOS=windows)；NSIS project.nsi 加 `File ..\..\..\bin\xkpane-cli-hook.exe`（与主 exe 同目录安装 → resolveHookBinary 命中）。
+
+### ✅ P6d 完成（待用户手测）
+- **闭环**：被启动 CLI → SessionStart hook（settings.local.json/.codex 已注册）→ ① stdout 注入项目上下文给模型 ② POST session-started → 后端 log + emit；plan 写盘 → plan-archive 归档 `.xkpanes/plans/`；notify 子命令 / agent 调 → 桌面 toast。
+- **验证**：go build ./internal/... ./cmd/... + go vet + go test（cli-hook 3 子命令 helper、projecthooks claude/codex sync 幂等+保留+冲突、orchestrator rateLimiter+handler 401/200-emit/400、notification enabled/disabled/focus/dedupe/override）全绿。
+- **铁律核对**：hook 纯 stdlib 显式 750ms client（注释标偏离理由）；配置写 filex；日志 logx；SQLite-only（通知设置入 app_settings，不 localStorage）；通知服务不 capture *DB（holder.Current）；事件名集中 events.go。
+- **未做（留后续）**：im-forward / IM 桥全栈（D6d-3 砍）；launch_cwd 落库（无消费方，等 resume-by-cwd）；前端订阅 orchestrator:session-started；通知设置前端 UI。
+- **待用户手测**（⚠️ 改后端必**完全重启 dev**；**改 hook 代码须重跑 `task common:build:hook`**）：
+  1. pane 内启 claude → 看 `<proj>/.claude/settings.local.json` 出现 2 条 hooks（含 xkpane-cli-hook 绝对路径 + session-start/plan-archive）；claude 启动时模型应收到注入的 `<xkpane-context>`/`<current-state>`；app.log 见 `session-started 上报 cwd=...`。
+  2. 启 codex → `<proj>/.codex/hooks.json` + config.toml `[features] codex_hooks=true`；**验证 codex 在 Windows 是否真触发 session-start**（cc-pane 未验证、高风险点）。
+  3. claude 内用 Write 写 `~/.claude/plans/*.md` → 看 `<proj>/.xkpanes/plans/` 出现归档副本。
+  4. 终端跑 `xkpane-cli-hook notify --title 测试 --body 内容`（pane 内继承 env）→ 桌面 toast；⚠️ dev 未安装态 Windows toast 可能不弹（缺 AUMID/快捷方式）→ 退而看 app.log `notification trigger` + 命令返回 200。
