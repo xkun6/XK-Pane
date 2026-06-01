@@ -1203,3 +1203,11 @@ common:build:hook（go build → bin/xkpane-cli-hook[.exe]）；root dev 前置�
 - ❌ **真因（非配置、非我方代码）**：codex 在 **Windows 默认经 PowerShell** 执行 hook（`core/src/shell.rs:318` default_user_shell→PowerShell；`session/mod.rs:3290` build_hooks_for_config 派生 `pwsh -NoProfile -Command "<cmd>"`）。命令串 `"<path>" session-start` **以引号开头被 PowerShell 当字符串字面量**，后跟参数即解析错误 → 退出码 1。**本机实测坐实**：`powershell -Command '"...exe" arg'` → ParserError(Unexpected token) exit 1；`'& "...exe" arg'` → exit 0 正常执行。这解释了同二进制 reclaude（claude 不走 PowerShell）跑通而 codex exit 1。此前「bash 吃反斜杠」判断错误（Windows codex 根本不用 bash）。
 - **修复（`projecthooks`）**：新增 `powershellHookCommand` = `& "<bin>" <sub>`；`buildCodexHookEntry` 的 `command_windows` 改用之（`command`/claude 侧不动——非 Windows 走 `sh -lc`，& 有歧义）。更新错误注释、`projecthooks_test.go` 断言 command_windows 以 `& ` 开头。go-toml 实测序列化为单引号 literal、回读无损，结构合 MatcherGroup。go build ./internal/... ./cmd/... + projecthooks 全测试绿。
 - **✅ live 确认（2026-06-01，用户实测）**：codex 真机会话开头 `SessionStart hook (completed)`（不再 failed），模型收到完整 `<xkpane-context>`/`<current-state>`（time+branch+git status）/`<ready>` 注入，不再 `exited with code 1`。PowerShell 调用运算符 `&` 即根治。codex hook 全链路打通。
+
+### ✅✅ P6d 全栈手测全部通过（2026-06-01，用户实跑 + 我盯后端）
+
+承上 codex 修复后，逐项实跑剩余手测（用户在 pane 内 claude 会话驱动，我查 `.xkpanes/` + `app.log` 核对）。**三引擎 × 四能力全绿**：
+- **① session-start 注入**：claude/reclaude 真机会话开头收到 `<xkpane-context>`/`<current-state>`（time 08:40:55 + branch + git clean）/`<ready>`；codex 同（上条）。app.log `session-started 上报` 三引擎齐全（claude 00:19:56 / reclaude 多条 / codex 00:16:01），cwd 正确、async=false 修复对 claude 同样生效。
+- **② plan-archive**：claude Write `~/.claude/plans/xk-test.md` → PostToolUse(Write) async hook 触发 → 归档 `.xkpanes/plans/eddb95e6_20260601_084256_xk-test.md`，命名 `<会话id前8>_<yyyyMMdd_HHmmss>_<原名>` 分毫不差、内容正确。
+- **③ notify**：claude 经继承 env 跑 `& "<bin>" notify --title "XK 手测" --body ...` → 命令返回 `{"sent":true,"skipped":false}`（HTTP 200）；app.log `trigger component=notification kind=custom title="XK 手测" source=cli`（08:44:50）。端点解析（env 优先）→ POST /api/notifications/trigger → 通知服务 Trigger → SendNotification 成功。⚠️ dev 未安装态系统 toast 可能不弹窗（缺 AUMID），但整条 API 链路完整。
+- 测试残留（`~/.claude/plans/xk-test.md` + 归档副本）已清理。**P6d cli-hook 全栈：规划→5 单元落地→codex 根因修复→全手测通过，闭环完成。**
