@@ -26,6 +26,10 @@ export const settingsPageZhCN: Messages = {
         label: '数据存储',
         description: '数据库位置与占用空间',
       },
+      webaccess: {
+        label: 'Web 访问',
+        description: '手机 / 平板局域网访问与会话互通',
+      },
     },
     themes: {
       system: { label: '跟随系统', description: '随操作系统的明暗模式自动切换' },

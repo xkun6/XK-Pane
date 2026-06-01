@@ -20,6 +20,7 @@ import {
   type ReactNode,
 } from 'react';
 import { LaunchHistoryService, OrchestratorService, TerminalService } from '@/services';
+import { lifecycleRole } from '@/services/transport';
 import {
   createInitialTreeState,
   terminalTreeReducer,
@@ -113,6 +114,21 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
       const base = input.alias ?? input.projectName;
       const title =
         effectiveCliTool && effectiveCliTool !== 'none' ? `${base} (${effectiveCliTool})` : base;
+
+      // Web（viewer）：不本地建会话（reconcile 在 viewer 不跑，addTab-without-sid 会成孤儿），
+      // 改经 POST /api/launch → 后端 LaunchTask → 广播 orchestrator:launch → 桌面 + 本端同时
+      // 开窗附着同 sid（P7 D1/D2）。新任务（带 prompt）走 WebLauncher；此处覆盖 resume 等场景。
+      // 不记启动历史（LaunchHistory 是桌面专属 binding，未在 Web 暴露）。
+      if (lifecycleRole === 'viewer') {
+        void OrchestratorService.launch({
+          projectPath: input.projectPath,
+          cliTool: effectiveCliTool,
+          resumeId: input.resumeId,
+          title,
+        }).catch(() => {});
+        return;
+      }
+
       dispatch({
         type: 'addTab',
         paneId: state.activePaneId,
@@ -228,6 +244,12 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
   }, []);
 
   useEffect(() => {
+    // viewer（Web）生命周期守护（P7 D1/D4）：绝不跑「孤儿 kill」与「建会话」——
+    //   - Web 的 Tab 只经 orchestrator:launch 带 sid 入树（无需 create）；
+    //   - Web 关窗 = 纯 detach（移本地 Tab，不 kill），否则一端关 Tab 会杀掉另一端正用的会话。
+    // kill 永远显式即时（桌面关 Tab / Web「终止会话」M5 / 进程自退），后端不做引用计数。
+    if (lifecycleRole === 'viewer') return;
+
     const tabs = collectTabsWithPane(state.rootPane);
 
     // 1) 为「有 projectPath 且无 session」的 Tab 创建 PTY，完成后回填 sessionId。

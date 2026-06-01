@@ -51,7 +51,10 @@ export const buildMuiTheme = (preset: FoundationThemePreset): Theme => {
           body: {
             margin: 0,
             padding: 0,
-            height: '100vh',
+            // 可见视口高度（移动端关键）：index.html 内联脚本把 visualViewport.height 写进 --xk-vh。
+            // 不能用 100vh —— 手机 100vh 含地址栏遮挡区，比可见区高 → 底部(对话输入条)被推到屏外。
+            // 这里必须与 index.html 的 html/body/#root 一致，否则 MUI 全局样式（运行时注入、cascade 靠后）会盖回 100vh。
+            height: 'var(--xk-vh, 100dvh)',
             overflow: 'hidden',
             backgroundColor: palette.bg.content,
             color: palette.text.primary,
@@ -60,7 +63,7 @@ export const buildMuiTheme = (preset: FoundationThemePreset): Theme => {
             WebkitFontSmoothing: 'antialiased',
           },
           '#root': {
-            height: '100vh',
+            height: 'var(--xk-vh, 100dvh)', // 同 body：跟随可见视口，勿用 100vh（见上）
             display: 'flex',
             flexDirection: 'column',
           },

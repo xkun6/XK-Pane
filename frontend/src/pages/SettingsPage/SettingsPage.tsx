@@ -6,6 +6,7 @@ import { Personalization } from './personalization';
 import { Language } from './language';
 import { Database } from './database';
 import { ProviderSettings } from './provider';
+import { WebAccess } from './webaccess';
 
 // 设置页（两列）：
 //   左列：选项列表（personalization / language / database）
@@ -61,6 +62,7 @@ export const SettingsPage = () => {
         {vm.activeItem.id === 'language' && <Language />}
         {vm.activeItem.id === 'provider' && <ProviderSettings />}
         {vm.activeItem.id === 'database' && <Database />}
+        {vm.activeItem.id === 'webaccess' && <WebAccess />}
       </Box>
     </Box>
   );

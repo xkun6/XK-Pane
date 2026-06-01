@@ -1,7 +1,10 @@
 // 面板树纯函数 —— 忠实移植 cc-pane `web/stores/paneTreeHelpers.ts`。
-// 全部为无副作用纯函数（仅依赖入参 + crypto.randomUUID），便于将来 Vitest 覆盖。
+// 全部为无副作用纯函数（仅依赖入参 + randomId），便于将来 Vitest 覆盖。
 // 与 cc-pane 的差异（MVP 有意调整，非 drift）：createTab 的可选参从 cc-pane 的
 // resumeId/workspaceName/providerId（Phase 3 字段）换成 MVP 相关的 cliTool/workspacePath/title。
+// 相对路径（非 @ 别名）：paneTree 在 vitest 的 reducer/sessionReconcile 测试图里被传递 import，
+// 而 vitest 不对「传递 import 的源文件」套用 vite 的 @ 别名 → 用相对路径才能在 build 与 test 都解析。
+import { randomId } from '../shared/uuid';
 import type {
   CliTool,
   PaneNode,
@@ -13,9 +16,13 @@ import type {
   TerminalPaneSplit,
 } from './types';
 
-/** 生成带前缀的唯一 id。 */
+/**
+ * 生成带前缀的唯一 id。用 randomId（安全上下文兜底）而非裸 crypto.randomUUID ——
+ * 后者在 LAN IP + HTTP（P7 Web 访问，非安全上下文）为 undefined，会在 TerminalProvider
+ * 初始化建树时抛 TypeError 致整页挂载失败（卡启动骨架）。见 @/shared/uuid。
+ */
 export function generateId(prefix: string): string {
-  return `${prefix}-${crypto.randomUUID()}`;
+  return `${prefix}-${randomId()}`;
 }
 
 /** 创建一个新面板（默认含一个空终端 Tab）。 */

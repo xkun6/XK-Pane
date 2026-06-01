@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/wails.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>XK-Pane</title>
     <style>
       /* ===== 启动骨架 (Startup Skeleton) =====
@@ -38,16 +38,19 @@
           color-scheme: dark;
         }
       }
+      /* --xk-vh：可见视口高度（px），由下方内联脚本写 visualViewport.height。
+         手机浏览器地址栏 / 软键盘会改变可见高度，纯 100vh 会比可见区高 → 底部(输入框)被裁到屏外。
+         用 var(--xk-vh, 100dvh)：脚本就绪前回退 100dvh(已排除地址栏)，就绪后精确跟随(含键盘)。 */
       html, body {
         margin: 0;
         padding: 0;
-        height: 100vh;
+        height: var(--xk-vh, 100dvh);
         overflow: hidden;
         background-color: var(--fdn-bg-content);
         font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       }
       #root {
-        height: 100vh;
+        height: var(--xk-vh, 100dvh);
         display: flex;
         flex-direction: column;
       }
@@ -181,6 +184,63 @@
     </div>
 
     <div id="root"></div>
+    <!--
+      冷启动竞态自愈看门狗（一次性）：Wails+Vite 首次 dev 时，窗口常在 Vite 冷预打包依赖完成前
+      就打开，main.tsx 模块图可能卡住 → React 未挂载、骨架不消（首次 dev 卡、第二次正常）。
+      此处纯内联脚本（独立于 main.tsx，故 main.tsx 卡住时仍会执行）：若 8s 后 #root 仍为空（未
+      挂载），自动重载一次（届时 Vite 已热 → 干净挂载）。用 window.name 守卫，绝不循环；生产构建
+      bundle 本地秒挂载，#root 早已填充，看门狗永不触发。配合 vite.config 的 optimizeDeps.include。
+    -->
+    <script>
+      (function () {
+        try {
+          if (window.name === "xk-devreload") {
+            window.name = "";
+            return;
+          }
+          setTimeout(function () {
+            var root = document.getElementById("root");
+            if (root && root.childElementCount === 0) {
+              window.name = "xk-devreload";
+              location.reload();
+            }
+          }, 8000);
+        } catch (e) {
+          /* 看门狗自身失败绝不影响应用 */
+        }
+      })();
+    </script>
+    <!--
+      可见视口高度同步（移动端关键）：把 visualViewport.height 写进 --xk-vh，驱动 html/body/#root 高度。
+      解决两件事：① 手机地址栏占位时 100vh 比可见区高 → 底部输入框被裁到屏外（不可见）；
+      ② 软键盘弹出时 visualViewport.height 收缩 → 整体收缩 → 输入框始终浮在键盘之上。
+      桌面 webview：visualViewport.height = 窗口内容高，等价于原 100vh，无副作用。脚本失败则回退 CSS 100dvh。
+    -->
+    <script>
+      (function () {
+        try {
+          var root = document.documentElement;
+          var sync = function () {
+            var vv = window.visualViewport;
+            var h = vv ? vv.height : window.innerHeight;
+            if (h > 0) root.style.setProperty("--xk-vh", h + "px");
+          };
+          sync();
+          window.addEventListener("resize", sync);
+          window.addEventListener("orientationchange", sync);
+          if (window.visualViewport) {
+            window.visualViewport.addEventListener("resize", sync);
+            window.visualViewport.addEventListener("scroll", sync);
+          }
+          // 软键盘聚焦/失焦后视口为异步变化，补几拍重算。
+          var resync = function () { setTimeout(sync, 120); setTimeout(sync, 320); };
+          window.addEventListener("focusin", resync);
+          window.addEventListener("focusout", resync);
+        } catch (e) {
+          /* 视口同步失败不影响应用（CSS 回退 100dvh） */
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

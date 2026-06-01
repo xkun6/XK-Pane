@@ -67,9 +67,11 @@ export {
 } from './subprocess/SubprocessService';
 export {
   TerminalService,
+  attachSessionOutput,
   type CreateSpec,
   type SessionInfo,
   type TerminalOutput,
+  type RawReplay,
   type TerminalStatus,
   type TerminalStatusKind,
   type TerminalExit,
@@ -81,6 +83,15 @@ export {
 } from './clitools/CliToolService';
 export { SessionScanService, type ResumeSession } from './sessionscan/SessionScanService';
 export {
+  TranscriptService,
+  type Timeline,
+  type TimelineEvent,
+  type TimelineKind,
+} from './transcript/TranscriptService';
+export {
   OrchestratorService,
   type OrchestratorLaunchPayload,
+  type LaunchInput,
+  type LaunchResult,
 } from './orchestrator/OrchestratorService';
+export { WebAccessService, type AccessInfo } from './webaccess/WebAccessService';

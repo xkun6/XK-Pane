@@ -18,7 +18,8 @@ import { useEffect, useRef } from 'react';
 import { useTheme } from '@mui/material';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal, type ITheme } from '@xterm/xterm';
-import { TerminalService } from '@/services';
+import { TerminalService, attachSessionOutput } from '@/services';
+import { lifecycleRole } from '@/services/transport';
 import { isMac, isWindows } from '@/shared/platform';
 import {
   createTerminalLayoutScheduler,
@@ -139,8 +140,12 @@ export function useTerminalView({
 
     // ── TUI 兼容层：注册 CSI/OSC 应答处理器，回应经 PTY 写回 ──
     // reply: 有应答则写回 PTY 并返回 true（抑制 xterm 默认处理，避免重复应答）；否则放行。
+    // 多端去重（P7 M6）：仅 owner（桌面）回写 TUI 自动应答（CPR/DA/OSC/Kitty）。viewer（Web）
+    // 仍返回 true 抑制本端默认处理，但**不**回写 —— 否则桌面 + 手机同时应答，CLI 收到双份应答会乱。
+    // viewer 的普通键入（onData / 虚拟键栏）不受影响，照常写回。
     const reply = (payload: string | null): boolean => {
       if (!payload) return false;
+      if (lifecycleRole !== 'owner') return true;
       const sid = sessionIdRef.current;
       if (sid) void TerminalService.write(sid, payload).catch(() => {});
       return true;
@@ -244,12 +249,18 @@ export function useTerminalView({
     });
     observer.observe(host);
 
+    // 移动端：点触终端区域即聚焦 xterm 隐藏 textarea，唤起软键盘（P7 M6）。桌面点击 xterm 本就
+    // 聚焦，此举对触摸更可靠；不抢已聚焦态，无副作用。
+    const focusOnTap = () => termRef.current?.focus();
+    host.addEventListener('pointerup', focusOnTap);
+
     // 首次布局：非活动 tab 会留 pending，切回可见时 flush。
     scheduler.schedule('initial.fit');
 
     return () => {
       onData.dispose();
       for (const d of disposables) d.dispose();
+      host.removeEventListener('pointerup', focusOnTap);
       observer.disconnect();
       scheduler.dispose();
       term.dispose();
@@ -265,8 +276,11 @@ export function useTerminalView({
   // 订阅当前会话的输出 / 退出；会话变更时重订阅。
   useEffect(() => {
     if (!sessionId) return;
-    const offOutput = TerminalService.onOutput(sessionId, (data) => {
-      // agent CLI（claude/reclaude/codex）：剥离切屏序列，让输出留 normal buffer。
+    // attachSessionOutput（P7 M4）：先重放原始 ANSI 历史画面再切 live（不漏不重），让中途
+    // attach 到已运行会话（如桌面手点开的、Web 端点击「运行中」attach）能立即看到完整画面。
+    // 桌面 replay 暂返回空 → 等价于纯 live（同步订阅 + 缓冲 catch-up，零回归）。处理逻辑（agent CLI
+    // 切屏序列剥离 + 写入流控）对 replay 与 live 同样适用，故包在 write 回调里。
+    const offOutput = attachSessionOutput(sessionId, (data) => {
       const tool = cliToolRef.current;
       const processed =
         tool && shouldKeepCliOutputInNormalBuffer(tool)

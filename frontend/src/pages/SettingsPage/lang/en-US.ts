@@ -23,6 +23,10 @@ export const settingsPageEnUS: Messages = {
         label: 'Data storage',
         description: 'Database location and disk usage',
       },
+      webaccess: {
+        label: 'Web access',
+        description: 'LAN access from phone / tablet, shared sessions',
+      },
     },
     themes: {
       system: { label: 'Follow system', description: 'Tracks the OS light / dark preference' },

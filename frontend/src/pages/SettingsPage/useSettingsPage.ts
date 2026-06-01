@@ -44,6 +44,11 @@ export const useSettingsPage = (): UseSettingsPageResult => {
         labelKey: 'settings.list.database.label',
         descriptionKey: 'settings.list.database.description',
       },
+      {
+        id: 'webaccess',
+        labelKey: 'settings.list.webaccess.label',
+        descriptionKey: 'settings.list.webaccess.description',
+      },
     ],
     [],
   );

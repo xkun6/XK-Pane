@@ -10,6 +10,7 @@ import {
   type Project,
 } from '@/services';
 import { useProjects } from '@/project';
+import { randomId } from '@/shared/uuid';
 
 // HistoryPage ViewModel：消费全局 ProjectProvider 选项目 + 按 path 浏览本地历史（两阶段 + 4-tab）+
 // 标签 / 手动快照 / 单文件回滚 / 配置 / 统计 / 清理 + watcher live 刷新。
@@ -448,7 +449,7 @@ export const useHistoryPage = (): UseHistoryPageResult => {
       if (!filePath) return;
       try {
         await LocalHistoryService.putLabel(path, {
-          id: crypto.randomUUID(),
+          id: randomId(),
           name,
           labelType: 'manual',
           source: 'user',

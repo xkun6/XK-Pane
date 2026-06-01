@@ -8,6 +8,7 @@
 // History 文件监视）——那是独立子系统，本 MVP 不接，留 Phase 4/5。
 import { Service as Binding } from '@bindings/xkpane/internal/services/project';
 import type { Project as RawProject } from '@bindings/xkpane/internal/storage/models';
+import { httpClient, isDesktop } from '@/services/transport';
 
 // Project 对外的纯接口（与生成类解耦，供 ViewModel 消费）。对齐后端
 // storage.Project 的 json camelCase。createdAt/updatedAt 是后端 time.Time 序列化的
@@ -35,7 +36,13 @@ function toProject(p: RawProject): Project {
 
 export const ProjectService = {
   // 全部项目，最新在前（后端已 created_at DESC 排序）。
+  // 浏览器（viewer）走 GET /api/projects（只读白名单，供 Web 启动器选合法 projectPath）；
+  // add/remove/updateName/updateAlias 等写方法不在 Web 暴露（fail-closed §9，桌面专属）。
   async list(): Promise<Project[]> {
+    if (!isDesktop) {
+      const res = await httpClient.get<{ projects?: RawProject[] }>('/api/projects');
+      return (res.projects ?? []).map(toProject);
+    }
     const rows = await Binding.List();
     return (rows ?? []).map(toProject);
   },

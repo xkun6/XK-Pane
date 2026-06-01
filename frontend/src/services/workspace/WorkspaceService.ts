@@ -9,6 +9,7 @@ import type {
   Workspace as RawWorkspace,
   WorkspaceProject as RawWorkspaceProject,
 } from '@bindings/xkpane/internal/storage/models';
+import { httpClient, isDesktop } from '@/services/transport';
 
 // WorkspaceProject 对外纯接口（树第二层节点）。path = PTY cwd / 操作目标（原样存储）。
 export interface WorkspaceProject {
@@ -61,8 +62,11 @@ function toWorkspace(w: RawWorkspace): Workspace {
 
 export const WorkspaceService = {
   // 全部工作空间（含内联 projects），Pinned → SortOrder → CreatedAt 排序。
+  // 桌面走 bindings；Web（viewer）走网关 GET /api/workspaces（只读；写方法仍仅桌面用）。
   async list(): Promise<Workspace[]> {
-    const rows = await Binding.List();
+    const rows = isDesktop
+      ? await Binding.List()
+      : (await httpClient.get<{ workspaces?: RawWorkspace[] }>('/api/workspaces')).workspaces;
     return (rows ?? []).map(toWorkspace);
   },
 

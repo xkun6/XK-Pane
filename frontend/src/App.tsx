@@ -6,6 +6,9 @@ import { registerGitPageLocales } from '@/pages/GitPage';
 import { registerHistoryPageLocales } from '@/pages/HistoryPage';
 import { registerWorkspaceTreeLocales } from '@/components/WorkspaceTree';
 import { registerPaneTreeLocales } from '@/components/PaneTree';
+import { registerWebWorkspaceTreeLocales } from '@/components/WebWorkspaceTree';
+import { registerTerminalKeyBarLocales } from '@/components/TerminalKeyBar';
+import { registerSessionTimelineLocales } from '@/components/SessionTimeline';
 import { PreferencesProvider } from '@/preferences';
 import { ProjectProvider } from '@/project';
 import { WorkspaceProvider } from '@/workspace';
@@ -30,6 +33,9 @@ registerGitPageLocales();
 registerHistoryPageLocales();
 registerWorkspaceTreeLocales();
 registerPaneTreeLocales();
+registerWebWorkspaceTreeLocales();
+registerTerminalKeyBarLocales();
+registerSessionTimelineLocales();
 
 // Provider 嵌套顺序（自外向内）：
 //  ① I18nProvider —— 文案是任何子组件都可能用到的最基础上下文
