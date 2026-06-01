@@ -1300,3 +1300,25 @@ common:build:hook（go build → bin/xkpane-cli-hook[.exe]）；root dev 前置�
 **M6（双向输入）**：`webapi POST /api/sessions/input`{sessionId,data} → `terminal.WriteInput`（`SessionWriter` 接口，requirePaired，写已存在可见会话 stdin = 远程键入，非任意 spawn）；`TerminalService.write` viewer 改走该端点（原只读 no-op）。**TUI 应答去重（关键正确性）**：`useTerminalView.reply()` 仅 `lifecycleRole==='owner'` 回写 CPR/DA/OSC/Kitty 应答，viewer 抑制不回写——否则桌面+手机同 attach 时双发应答打乱 CLI。**resize 权属=owner**：viewer resize 仍 no-op（PTY 尺寸归桌面，viewer 本地 fit 显示）。移动端：host `pointerup` 聚焦 xterm 唤软键盘 + 新组件 `components/TerminalKeyBar`（Esc/Tab/Ctrl+C/方向键，仅 viewer 在 TerminalView 内渲染，按钮 onMouseDown preventDefault 防抢焦点收键盘）。**主动简化（Simplicity First）**：不做重型「写锁」UI（单用户手机控自机场景价值低；真正会乱的 TUI 双应答已根治）；已向用户说明，如需显式互斥再加。
 
 验证：typecheck 0 / vitest 64 全过 / 前端 build 绿 / `go build ./internal/... .`（含 main embed）+ `go test ./internal/services/terminal/ ./internal/webapi/ ./internal/services/orchestrator/` 全绿 / `go vet` 绿（唯一报错仍是无关的 build/ios 平台 stub）。**本批改了 .go，重启 `wails3 dev` 重嵌新 dist（并自动 regen bindings：seq 字段 + SessionReplay binding 届时就位，可后续接桌面 attach 重放）。** 剩 M7（TLS+PWA）；可选补强：Web 主动终止会话、桌面 attach 重放接 binding、「运行中」列表自动刷新。
+
+---
+
+## 会话（2026-06-01）— P6e MC PE 控制（规划 + P6e-1 桥协议/TCP server 落地）
+
+承 P6d 全栈手测通过 → 用户「读 P6E_HANDOFF.md，按它开始 P6e」。P6e = 忠实移植 cc-pane MC PE 子系统全栈（XL）。
+
+### 规划（10-agent 并行精读 → P6e_PLAN.md）
+`wf_7078158a`（~657k token）逐文件精读 cc-pane：`mc_pe/` 11 文件（service/launcher/paths/pack/world_copy/symlink/level_data/safety/bridge_mod/log_buffer/log_filter）+ `mcdk_bridge/` 6 文件（protocol/bridge/capture/click/window/mod）+ orchestrator_service.rs 5 工具 + 游戏内 Python 桥模组（IPCSystem/Config/modMain/Game/QuModLibs）+ 前端 5 组件/store/service/types + XK 现状（orchestrator/terminal/app/storage/go.mod），全部带 file:line。产出 **P6e_PLAN.md**（双侧映射 + 命门常量 + 7 单元切分 + 拍板记录）。
+- **关键发现**：(B) 桥/5 工具离不开 (A) 启动 —— PID（active_run_pids）/ 桥端口注入（MCDEV_DEBUG_IPC_PORT）/ 日志缓冲全来自 launch。⇒ XK 必须自己启动 MC PE 才能驱动它。
+- **可行性已逐项落实**：go-sdk `mcp.ImageContent` 传原始字节自动 base64（capture 可行）；ConPTY 经既有 `ptyx.Spawn`；Win32 走 x/sys/windows + 手写 LazyDLL；embed Python 桥模组 ~57KB；仅需补 `golang.org/x/image`（缩放）。
+- **命门已锁**：桥帧 6 字节**大端** type 3-8 裸 UTF-8 fire-and-forget；level.dat **小端** NBT（与桥帧相反）；Python connect `localhost` → Go 必 bind `127.0.0.1`（防 IPv6 坑）；env 三名 + 桥模组 UUID `183b0dc7…` 照搬；capture 用 GetWindowRect / click 用 GetClientRect（基准差异照搬，手测验偏移）；PW_RENDERFULLCONTENT=0x2 / 最长边 480 / JPEG q75。
+- **拍板（AskUserQuestion）**：前端**全量 5 组件**（MUI+MVVM 重写）；Win32 截图/点击**拆独立单元最后做**（去风险）；启动子系统**全忠实照搬**（mklink /D + UAC 提权 + 回收站删除）。默认采纳：bind 127.0.0.1 / 复用桥 UUID / Lanczos3→CatmullRom（显式偏离）/ ptyx ConPTY / mc_pe_* 表走 AllModels / MCStudio 路径扫盘+手填 / 5 工具走 MCP。
+- **7 单元**：P6e-1 桥协议+TCP server → P6e-2 embed+路径/安全/包 → P6e-3 world/level.dat NBT/symlink → P6e-4 launch 12 步+launcher(ConPTY)+日志+表+events+装配 → P6e-5 前端 5 组件（首个 live 手测）→ P6e-6 execute/reload/logs 三 MCP 工具 → P6e-7 Win32 capture/click。
+
+### P6e-1 桥协议 + TCP server（`internal/services/mcdkbridge`）
+忠实移植 protocol.rs + bridge.rs：
+- `protocol.go`：`PacketType`（uint16，3-8，未知值原样透传替代 Rust Unknown 变体）+ `Packet` + `Encode/Decode/WriteTo(io.WriterTo)/ReadFrom`（`encoding/binary.BigEndian`，HeaderLen=6）+ 6 语义构造器（payload 裸 UTF-8）。
+- `bridge.go`：`Service`（`net.Listen("tcp","127.0.0.1:0")` → accept goroutine）+ 单 active client（新连顶替旧连，nextID 从 1，按 id「只清自己」）+ `SendPacket`（fire-and-forget，无 client→NO_CLIENT，写失败→清状态+WRITE_FAILED）+ `Status/Port/Disconnect`；read-drain goroutine 仅检 EOF（buf 1024，mod 不回数据，关 conn 即 unblock，省去 tokio shutdown 通道）；新增 `Stop()`（XK 生命周期约定，cc-pane 无）。
+- `errors.go`：`CodedError{Code,Message}` + 错误码常量（MCDK_PROTOCOL_INCOMPLETE_HEADER/PAYLOAD、MCDK_BRIDGE_BIND_FAILED/NO_CLIENT/WRITE_FAILED），对齐 cc-pane AppError::coded。
+- **铁律核对**：bind 127.0.0.1（防 IPv6）；裸 TCP 用标准库 net（非 httpx/procx，本就网络 server）；logx.For("mcdk-bridge")；包注释标 cc-pane 映射 + 偏离（Stop 新增、Unknown 变体省略、shutdown 通道→Close conn）。
+- **验证**：gofmt 干净 / `go build ./internal/...` + `go vet ./internal/services/mcdkbridge/` 绿 / 15 测试（协议字节布局/往返/分帧/错误码 + 桥 端口/连接/发帧/顶替/无client/断连）×3 轮全 PASS 无 flaky（`-race` 因环境无 cgo/gcc 跳过）。未接入任何调用方（独立可编译，P6e-6 才接 orchestrator）。
