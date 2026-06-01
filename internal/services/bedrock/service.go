@@ -82,3 +82,14 @@ func (s *Service) GetJSONSpec(contentType *string) (string, error) { return json
 func (s *Service) BedrockHelp() (string, error) { return helpText() }
 
 func (s *Service) ListModPacks() (string, error) { return listModPacks() }
+
+// ── Phase 4：静态代码审查（1）→ 委托 review ─────────────────────────────
+
+// ReviewCode ← bedrock_review_code。filename 默认在 service 层解析（对齐 service.rs:150）。
+func (s *Service) ReviewCode(code string, filename *string) (string, error) {
+	fn := "unknown.py"
+	if filename != nil {
+		fn = *filename
+	}
+	return reviewCode(code, fn)
+}

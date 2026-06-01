@@ -73,6 +73,10 @@ func (f *fakeBedrock) GetJSONSpec(contentType *string) (string, error) {
 }
 func (f *fakeBedrock) BedrockHelp() (string, error)  { return "HELP", nil }
 func (f *fakeBedrock) ListModPacks() (string, error) { return "MODPACKS", nil }
+func (f *fakeBedrock) ReviewCode(code string, filename *string) (string, error) {
+	f.gotSide, f.gotSideCalled = filename, true
+	return "REVIEW_CODE:" + code, nil
+}
 
 func TestBedrockTools_NilFallback(t *testing.T) {
 	ctx := context.Background()

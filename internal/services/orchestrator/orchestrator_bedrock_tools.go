@@ -45,6 +45,8 @@ type Bedrock interface {
 	GetJSONSpec(contentType *string) (string, error)
 	BedrockHelp() (string, error)
 	ListModPacks() (string, error)
+	// P6f-5：静态代码审查（1）。
+	ReviewCode(code string, filename *string) (string, error)
 }
 
 // registerBedrockTools 注册 Bedrock 只读知识库工具（由 registerTools 末尾调用）。
@@ -139,6 +141,12 @@ func (s *Service) registerBedrockTools(srv *mcp.Server) {
 		Name:        "bedrock_list_mod_packs",
 		Description: "按 mod_name 分组列出全部内嵌模板，渲染 Markdown 汇总。",
 	}, s.toolBedrockListModPacks)
+
+	// ── Phase 4：静态代码审查（1，P6f-5）───────────────────────────────
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "bedrock_review_code",
+		Description: "对一段 Python 2.7 代码跑 ModSDK 静态审查规则，返回 Markdown 报告（按 Critical/Warning/Suggestion 分级）。可选 filename 用于报告标题（默认 unknown.py）。",
+	}, s.toolBedrockReviewCode)
 }
 
 // ── 参数结构（camelCase wire 名，对齐 cc-pane McpBedrock*Params）─────────────
@@ -375,4 +383,18 @@ func (s *Service) toolBedrockListModPacks(_ context.Context, _ *mcp.CallToolRequ
 		return textResult(bedrockUnavailable), nil, nil
 	}
 	return bedrockResult(s.deps.Bedrock.ListModPacks())
+}
+
+// ── Phase 4 参数 + 工具（P6f-5）─────────────────────────────────────────
+
+type bedrockReviewCodeParams struct {
+	Code     string  `json:"code" jsonschema:"要审查的 Python 2.7 源代码"`
+	Filename *string `json:"filename,omitempty" jsonschema:"报告标题用的文件名（默认 unknown.py）"`
+}
+
+func (s *Service) toolBedrockReviewCode(_ context.Context, _ *mcp.CallToolRequest, in bedrockReviewCodeParams) (*mcp.CallToolResult, any, error) {
+	if s.deps.Bedrock == nil {
+		return textResult(bedrockUnavailable), nil, nil
+	}
+	return bedrockResult(s.deps.Bedrock.ReviewCode(in.Code, in.Filename))
 }
