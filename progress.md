@@ -1407,4 +1407,6 @@ P6e 收尾单元（技术风险最高）：手写 LazyDLL FFI 复刻 cc-pane mcd
 ---
 
 ## ✅ P6e 全部完成（P6e-1 ~ P6e-7，2026-06-02）
-cc-pane MC PE 控制子系统（启动 + 桥 + 5 工具 + 全量前端面板）已完整忠实移植到 XK-Pane。10+ 提交，每单元自洽可编译 + 独立中文 commit，未 push。P6e-5 已 live 手测通过；P6e-6/P6e-7 待 live 手测（需真机 + 游戏内桥连入）。
+cc-pane MC PE 控制子系统（启动 + 桥 + 5 工具 + 全量前端面板）已完整忠实移植到 XK-Pane。10+ 提交，每单元自洽可编译 + 独立中文 commit，未 push。
+
+**✅ 全部 live 手测通过（2026-06-02，用户真机）**：P6e-5（建包/启动/日志/桥连入/停重启）、P6e-6（execute_mc_code 带前缀 print 端到端可见 + reload_mc / get_mc_pe_logs）、P6e-7（capture_window 480p JPEG 看图 + click_window 归一化点击）全部确认可用。手测要点已沉淀：MC PE 日志走 MC Studio 白名单，`execute_mc_code` 验证需带 `[大写]mod-tag` 前缀（裸 print 被过滤是忠实行为，非 bug）。P6e 收官。
