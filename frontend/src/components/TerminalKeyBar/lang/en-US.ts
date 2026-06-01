@@ -10,5 +10,7 @@ export const terminalKeyBarEnUS: Messages = {
     down: 'Down',
     left: 'Left',
     right: 'Right',
+    enter: 'Enter',
+    space: 'Space',
   },
 };

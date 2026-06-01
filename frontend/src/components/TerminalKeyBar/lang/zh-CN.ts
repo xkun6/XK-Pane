@@ -10,5 +10,7 @@ export const terminalKeyBarZhCN: Messages = {
     down: '下',
     left: '左',
     right: '右',
+    enter: '回车',
+    space: '空格',
   },
 };

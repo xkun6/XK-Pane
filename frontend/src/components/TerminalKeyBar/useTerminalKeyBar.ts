@@ -11,6 +11,8 @@ export const KEY_SEQUENCES = {
   down: '\x1b[B',
   left: '\x1b[D',
   right: '\x1b[C',
+  enter: '\r', // 确认选择 / 提交（TUI 选单按 Enter 选定）
+  space: ' ', // 多选切换 / 勾选（TUI 选单按空格 toggle）
 } as const;
 
 export type KeyId = keyof typeof KEY_SEQUENCES;
@@ -41,6 +43,8 @@ export function useTerminalKeyBar(): UseTerminalKeyBar {
     { id: 'up', seq: KEY_SEQUENCES.up, kind: 'arrow', ariaKey: 'terminalKeyBar.up' },
     { id: 'down', seq: KEY_SEQUENCES.down, kind: 'arrow', ariaKey: 'terminalKeyBar.down' },
     { id: 'right', seq: KEY_SEQUENCES.right, kind: 'arrow', ariaKey: 'terminalKeyBar.right' },
+    { id: 'enter', seq: KEY_SEQUENCES.enter, kind: 'text', labelKey: 'terminalKeyBar.enter', ariaKey: 'terminalKeyBar.enter' },
+    { id: 'space', seq: KEY_SEQUENCES.space, kind: 'text', labelKey: 'terminalKeyBar.space', ariaKey: 'terminalKeyBar.space' },
   ];
   return { keys };
 }
