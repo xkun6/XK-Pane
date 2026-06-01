@@ -8,7 +8,7 @@
 //   - OSC 4/10/11 颜色查询应答
 //   - 写入流控（Windows 高吞吐防卡）
 //   - agent CLI 输出剥离 alternate-buffer 切屏序列（输出留 normal buffer，滚轮滚历史）
-//   - Ctrl/Cmd+V 粘贴（读剪贴板写 PTY）/ 有选区时 Ctrl/Cmd+C 复制（无选区透传 SIGINT）
+//   - Ctrl/Cmd+V 粘贴（拦掉 xterm 默认 ^V，交浏览器原生 paste 写一份）/ 有选区时 Ctrl/Cmd+C 复制（无选区透传 SIGINT）
 // 仍刻意延后：WebGL 渲染器、运行时切主题热更、内层分屏、reconnect/restore、wheel→方向键、
 //   剪贴板文件路径/图片粘贴（Tauri 专有，依赖未移植能力）。
 //
@@ -184,20 +184,14 @@ export function useTerminalView({
     );
     flowRef.current = flow;
 
-    // 键盘：Ctrl/Cmd+V 粘贴（读剪贴板写 PTY）；有选区时 Ctrl/Cmd+C 复制、无选区放行透传 SIGINT。
+    // 键盘：
+    //   Ctrl/Cmd+V —— 仅 return false：拦掉 xterm 默认把它编码成 ^V（\x16）的行为，但「不」
+    //     preventDefault，于是浏览器原生 paste 事件照常触发 → xterm 自带 paste 监听写入一份
+    //     （自动套 bracketed-paste 标记 \x1b[200~…\x1b[201~，对 claude/codex 多行粘贴更正确）。
+    //     切勿在此再手动读剪贴板写 PTY —— 原生 paste 已写一份，手动再写就会双份（"你好"→"你好你好"）。
+    //   Ctrl/Cmd+C —— 有选区则复制、无选区 return true 放行透传 SIGINT。
     term.attachCustomKeyEventHandler((event) => {
-      if (isTerminalPasteShortcut(event, isMac)) {
-        if (navigator.clipboard?.readText) {
-          void navigator.clipboard
-            .readText()
-            .then((text) => {
-              const sid = sessionIdRef.current;
-              if (sid && text) void TerminalService.write(sid, text).catch(() => {});
-            })
-            .catch(() => {});
-        }
-        return false;
-      }
+      if (isTerminalPasteShortcut(event, isMac)) return false;
       if (isTerminalCopyShortcut(event, isMac)) {
         const sel = termRef.current?.getSelection();
         if (sel && navigator.clipboard?.writeText) {

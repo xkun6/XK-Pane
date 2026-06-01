@@ -13,12 +13,16 @@ createRoot(container).render(
   </StrictMode>,
 );
 
-// 禁用 webview 默认右键菜单（桌面应用不该出现「返回 / 刷新 / 另存为 / 检查」等浏览器菜单）。
-// 例外：可编辑元素（input / textarea / contenteditable）保留系统复制 / 粘贴菜单。
+// 禁用 webview 默认右键菜单（桌面应用不该出现「返回 / 刷新 / 另存为」等浏览器菜单）。
+// 例外：可编辑元素（input / textarea / contenteditable）与终端（.xterm）保留系统菜单
+//   —— 表情符号 / 撤消 / 复制 / 粘贴 / 粘贴为纯文本 等。
+// 终端右键时 xterm 会把隐藏 textarea 移到光标下，但首次右键的 e.target 仍是 .xterm 内部的行
+//   容器 div（不是 textarea）；若只匹配 textarea，首次会被 preventDefault 屏蔽，需右键多次才弹。
+//   故把 .xterm 一并加入白名单，首次右键即可弹出系统菜单。
 // 应用内自定义右键菜单由各组件 onContextMenu + preventDefault 弹出，不受此影响。
 document.addEventListener('contextmenu', (e) => {
   const target = e.target as HTMLElement | null;
-  if (target?.closest('input, textarea, [contenteditable="true"]')) return;
+  if (target?.closest('input, textarea, [contenteditable="true"], .xterm')) return;
   e.preventDefault();
 });
 
