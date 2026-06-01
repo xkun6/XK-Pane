@@ -1410,3 +1410,26 @@ P6e 收尾单元（技术风险最高）：手写 LazyDLL FFI 复刻 cc-pane mcd
 cc-pane MC PE 控制子系统（启动 + 桥 + 5 工具 + 全量前端面板）已完整忠实移植到 XK-Pane。10+ 提交，每单元自洽可编译 + 独立中文 commit，未 push。
 
 **✅ 全部 live 手测通过（2026-06-02，用户真机）**：P6e-5（建包/启动/日志/桥连入/停重启）、P6e-6（execute_mc_code 带前缀 print 端到端可见 + reload_mc / get_mc_pe_logs）、P6e-7（capture_window 480p JPEG 看图 + click_window 归一化点击）全部确认可用。手测要点已沉淀：MC PE 日志走 MC Studio 白名单，`execute_mc_code` 验证需带 `[大写]mod-tag` 前缀（裸 print 被过滤是忠实行为，非 bug）。P6e 收官。
+
+---
+
+## P6f Bedrock 知识库 MCP（cc-pane bedrock_query 忠实重建，进行中）
+计划见 [P6f_PLAN.md](./P6f_PLAN.md)（7-agent 精读产出 + 拍板：全做 OTA + 全量前端面板 + 26 工具全做 + 全量内嵌）。每单元自洽可编译 + 独立中文 commit，未 push。
+
+### ✅ Baseline 只读知识库（P6f-1 ~ P6f-6，26 工具全部落地）
+- **P6f-1 内嵌资源 + 双源加载 + 模型 + loader**（`214736f`）：基线数据 ~26MB（api 2.28MB + components + templates + docs 1982 + standards 17）→ **打成 resources.zip（Deflate 5.6MB）经 //go:embed 内嵌**（`*zip.Reader` 当 fs.FS）。**不用 //go:embed all:resources**——docs 树 471+ 文件名含 CJK 标点（、，（）：《》），Go embed 的 fileNameOK 对非 ASCII 只允许 unicode.IsLetter 一律拒绝；路径是查询契约不能改名。genresources.go 确定性生成器（//go:generate），原始 resources/ 树 .gitignore 只作重生成源。source.go 双源（readResource 用户文件读失败报错不回退 / walkResourceDir 目录级整树替换）+ SetDataRoot（失效缓存）。loader 四槽可失效缓存（RWMutex+指针，**非 sync.Once**，因 OTA 需 invalidate）。ComponentEntry 自定义 UnmarshalJSON 保 flatten Extra。
+- **P6f-2 索引 + 搜索算法**（`f4e43ab`）：index（apiByName/eventByName lower、apisByCategory api+event 混、components/templates/guides/standards）+ deriveCategory（接口/事件锚点）+ scanGuides/parseHeadings。fuzzy（nameScore 20/15/10/+3、guideScore 字段加权 matched*3，**无 BM25/Levenshtein**）+ truncateChars 80 rune。splitLines 复刻 str::lines()（供 review 复用）。search_*：api/event/component/category/guide（Fields tokenizer，CJK 不分词）/template。排序统一 sort.SliceStable 二级键。getComponent 的 Definition JSON 用 json.Encoder（关 HTML 转义 + 2 空格 + map 键排序）复刻 serde to_string_pretty（字节级单测）。**结构偏离**：cc-pane 子模块 → Go **单包扁平多文件**（避免循环依赖）。50 单测。
+- **P6f-3 查询服务 + 10 Phase2 工具 + orchestrator + app**（`42d2c24`，**首个 MCP 手测点**）：bedrock.Service 零状态委托层 + orchestrator Bedrock 窄接口（随单元增长）+ registerBedrockTools（中文 description、side/componentType *string 表 Option、错误走 `textResult("错误: <忠实英文消息>")`、nil 兜底）+ app.go 注入（**不进 Wails Services**，仅 MCP 暴露）。
+- **P6f-4 指南/模板/标准 12 工具**（`9fc0f92`）：standards.go（getStandard 精确/.md/模糊 + fetchRequired 不加头 + jsonSpec netease/modsdk/both + helpText 逐字照搬含 cc-pane「13 rules」措辞）+ guide/template 接线。
+- **P6f-5 review_code 12 规则**（`62c6fa9`）：纯行扫描 + 缩进状态机 + 引号态剥注释，**无 AST**。lineIndex（indentOf/stripComment/docstringMask）+ 12 规则逐字对齐（fstring/print_call/type_hints/async_await/walrus/cross_side〔Critical〕/engine_factory/fn_import/tick_throttle/block_entity_salt〔Warning〕/magic_number≤3/dict_access≤5〔Suggestion〕），column=字节偏移。full_house 集成单测（12 规则全触发）。注：mod.rs 注释「13」实注册 12。
+- **P6f-6 validate_* 3 校验器**（`21b1fab`，**26 工具收口**）：共享报告骨架 + validateTest（纯 JSON，含 `{:?}` 调试格式）+ validateJSONDefinitions（4 SCAN_DIRS + C1-C5，.json **大小写敏感**，serde line:column 自算，find_description 排序键遍历）+ validateAddonAssets（textures + A1-A4，扩展名**大小写不敏感**，PNG IHDR BigEndian 手解析）。
+- **验证（全单元）**：`go build ./internal/... .` + `go vet` + bedrock 包 78 单测全绿；26 个 bedrock 工具注册无 panic（jsonschema 未踩 `词=` 坑）；bedrock 包交叉编译 linux/arm64 + darwin/amd64 通过。orchestrator MCP-only 无 bindings 变更。
+- **⚠️ 待 live 手测（用户，4 个手测点累积，可一次性测）**：pane 内 Agent 调
+  - P6f-3：`bedrock_search_api(name="AddActorAnimation")` / `bedrock_get_api` / `bedrock_validate_call(name="CanSee",side="server")` / `bedrock_search_component(query="armor")`
+  - P6f-4：`bedrock_search_guide(keyword="自定义")` / `bedrock_get_standard(name="modsdk-expert")` / `bedrock_get_json_spec` / `bedrock_match_template(keyword="UI")`
+  - P6f-5：`bedrock_review_code(code="msg = f'{x}'")` 报 fstring Critical
+  - P6f-6：`bedrock_validate_test(testJson=...)` VALID/INVALID
+  前置：重启 `wails3 dev`（后端改动需重启 + 重嵌 dist）。
+
+### ⏳ OTA 同步（P6f-7 ~ P6f-10，未开始）
+`bedrock_doc_sync` ≈ 6200 行 Rust：httpx 代理扩展 + manifest/progress/proxy 数据层（P6f-7）→ gitea/VuePress 爬取 + HTML→MD（P6f-8，**动手前须精读 4 大文件 + 选 Go HTML→MD 库小验证**）→ 索引构建器 + service 编排（原子换目录 + set_data_root，P6f-9）→ 前端知识库面板（P6f-10，OTA live 手测）。
