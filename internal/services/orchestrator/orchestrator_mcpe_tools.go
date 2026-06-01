@@ -35,6 +35,7 @@ func (s *Service) registerMCPETools(srv *mcp.Server) {
 		Name:        "get_mc_pe_logs",
 		Description: "读取当前活跃 MC PE 运行的最近 N 行日志（环形缓冲，cap=2000）。返回纯文本，每行 `HH:MM:SS [Category] [LEVEL] message` 格式——内容跟 MC PE Panel 左下日志区一致（同样的 MC Studio 白名单过滤）。无活跃运行时返回错误。lines 默认 200，最大 2000。",
 	}, s.toolGetMcPeLogs)
+	s.registerMCPECaptureTools(srv) // capture_window / click_window 仅 Windows 注册（P6e-7）；非 Windows no-op
 }
 
 // ── 参数结构（camelCase，对齐 cc-pane McpExecuteMcCodeParams / McpReloadMcParams / McpGetMcPeLogsParams）──

@@ -10,6 +10,13 @@ const (
 	CodeBridgeBindFailed          = "MCDK_BRIDGE_BIND_FAILED"
 	CodeBridgeNoClient            = "MCDK_BRIDGE_NO_CLIENT"
 	CodeBridgeWriteFailed         = "MCDK_BRIDGE_WRITE_FAILED"
+
+	// 截图 / 点击（P6e-7，Windows-only；非 Windows 桩返回 CodeCaptureFailed/CodeClickFailed）。
+	CodeCaptureNoWindow  = "MCDK_CAPTURE_NO_WINDOW"
+	CodeCaptureFailed    = "MCDK_CAPTURE_FAILED"
+	CodeClickOutOfBounds = "MCDK_CLICK_OUT_OF_BOUNDS"
+	CodeClickNoWindow    = "MCDK_CLICK_NO_WINDOW"
+	CodeClickFailed      = "MCDK_CLICK_FAILED"
 )
 
 // CodedError 携带一个稳定错误码 + 人类可读消息，对齐 cc-pane AppError::coded。

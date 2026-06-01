@@ -14,6 +14,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.3.1
 	github.com/sergi/go-diff v1.4.0
 	github.com/wailsapp/wails/v3 v3.0.0-alpha.96
+	golang.org/x/image v0.40.0
 	golang.org/x/sys v0.44.0
 	gorm.io/gorm v1.31.1
 )
