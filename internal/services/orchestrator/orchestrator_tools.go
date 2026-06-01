@@ -55,6 +55,7 @@ func (s *Service) registerTools(srv *mcp.Server) {
 		Name:        "kill_session",
 		Description: "终止指定的终端会话（PTY 进程被立即关闭）。",
 	}, s.toolKillSession)
+	s.registerMCPETools(srv) // P6e：MC PE 控制工具（execute/reload/日志，截图/点击在 Windows 单元补）
 }
 
 // ── 参数结构（json 名 + jsonschema 描述；omitempty = 可选）─────────────────

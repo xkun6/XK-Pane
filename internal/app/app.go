@@ -203,6 +203,8 @@ func Run(assets embed.FS, trayIcon []byte) error {
 		Projects:   projSvc,
 		Workspaces: wsSvc,
 		Notifier:   notifSvc,
+		MCPE:       mcpeSvc,    // P6e-6：get_mc_pe_logs 读日志缓冲（+ P6e-7 capture/click 取 PID）
+		Bridge:     mcdkBridge, // P6e-6：execute_mc_code / reload_mc 经桥 fire-and-forget 发帧
 	})
 	orchSvc.SetEmitter(mirrorEmit) // 编排工具 Emit orchestrator:launch 经双路达桌面 + Web
 	// Web 网关远程端点的下游能力（fail-closed 白名单 §9）：launch（公共化 LaunchTask）+ 只读列表。

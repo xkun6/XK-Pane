@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"xkpane/internal/services/mcdkbridge"
 	"xkpane/internal/services/notification"
 	"xkpane/internal/services/terminal"
 	"xkpane/internal/storage"
@@ -62,12 +63,27 @@ type Notifier interface {
 	Trigger(req notification.Request) (notification.Result, error)
 }
 
+// MCPE 是 MC PE 启动子系统的只读子集（*mcpe.Service 满足）。nil = MC PE 工具返回「错误: …」。
+// RecentLogs 供 get_mc_pe_logs；ActiveRunPIDs 供 P6e-7 capture/click 定位窗口（一并声明，接口稳定）。
+type MCPE interface {
+	RecentLogs(runID string, lines int) []string
+	ActiveRunPIDs() []int
+}
+
+// Bridge 是 MCDK 调试桥的发送 + 状态子集（*mcdkbridge.Service 满足）。nil = 桥工具返回「错误: …」。
+type Bridge interface {
+	SendPacket(p mcdkbridge.Packet) error
+	Status() mcdkbridge.ClientStatus
+}
+
 // Deps 是 orchestrator 编排工具的下游依赖（app 装配阶段注入既有 service）。
 type Deps struct {
 	Terminal   Terminal
 	Projects   Projects
 	Workspaces Workspaces
 	Notifier   Notifier // P6d-4：cli-hook notify → /api/notifications/trigger
+	MCPE       MCPE     // P6e-6：get_mc_pe_logs（+ P6e-7 capture/click 取 PID）
+	Bridge     Bridge   // P6e-6：execute_mc_code / reload_mc fire-and-forget 发帧
 }
 
 // orchestratorVersion 报给 MCP 客户端的 server 版本（与应用版本解耦，独立演进）。
