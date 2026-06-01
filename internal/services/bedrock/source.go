@@ -24,7 +24,7 @@ func SetDataRoot(root string) {
 	userDataRoot = root
 	rootMu.Unlock()
 	invalidateLoaders()
-	// index 缓存失效在 P6f-2（index.go）落地后于此追加 invalidateIndices()。
+	invalidateIndices()
 }
 
 // CurrentDataRoot 返回当前安装的用户数据根（空字符串表示无）。对齐 mod.rs:52-54。
