@@ -12,6 +12,10 @@ export const AppEvents = {
   TerminalOutput: 'terminal:output',
   TerminalStatus: 'terminal:status',
   TerminalExit: 'terminal:exit',
+  // MC PE 运行事件（后端 launcher PTY reader/wait → 前端 MC PE 面板）。payload 按 runId 路由。P6e。
+  MCPeOutput: 'mc_pe:output',
+  MCPeLaunched: 'mc_pe:launched',
+  MCPeExited: 'mc_pe:exited',
 } as const;
 
 export type AppEventName = (typeof AppEvents)[keyof typeof AppEvents];

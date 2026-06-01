@@ -95,3 +95,14 @@ export {
   type LaunchResult,
 } from './orchestrator/OrchestratorService';
 export { WebAccessService, type AccessInfo } from './webaccess/WebAccessService';
+export {
+  MCPEService,
+  type MCPackage,
+  type MCWorldConfig,
+  type MCDebugOptions,
+  type MCRunSessionInfo,
+  type McdkBridgeStatus,
+  type MCOutputPayload,
+  type MCLaunchedPayload,
+  type MCExitedPayload,
+} from './mcpe/MCPEService';
