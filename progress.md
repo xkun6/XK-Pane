@@ -1211,3 +1211,92 @@ common:build:hook（go build → bin/xkpane-cli-hook[.exe]）；root dev 前置�
 - **② plan-archive**：claude Write `~/.claude/plans/xk-test.md` → PostToolUse(Write) async hook 触发 → 归档 `.xkpanes/plans/eddb95e6_20260601_084256_xk-test.md`，命名 `<会话id前8>_<yyyyMMdd_HHmmss>_<原名>` 分毫不差、内容正确。
 - **③ notify**：claude 经继承 env 跑 `& "<bin>" notify --title "XK 手测" --body ...` → 命令返回 `{"sent":true,"skipped":false}`（HTTP 200）；app.log `trigger component=notification kind=custom title="XK 手测" source=cli`（08:44:50）。端点解析（env 优先）→ POST /api/notifications/trigger → 通知服务 Trigger → SendNotification 成功。⚠️ dev 未安装态系统 toast 可能不弹窗（缺 AUMID），但整条 API 链路完整。
 - 测试残留（`~/.claude/plans/xk-test.md` + 归档副本）已清理。**P6d cli-hook 全栈：规划→5 单元落地→codex 根因修复→全手测通过，闭环完成。**
+
+---
+
+## 会话（2026-06-01）— P7 纯 Web 界面 + 桌面/Web 会话级互通（规划 + M1 网关地基落地）
+
+承 P6 自我编排闭环 → 用户要「仿 mindfs 加纯 Web 界面，让 web 和桌面互通」。核心诉求精化为**会话级互通**：Web 能 `launch_task` 新建窗口，**同一 sessionID 的窗口桌面 / Web 实时同步显示**；主用例**手机局域网访问**。
+
+### 规划（深读 mindfs + XK 现状 → `P7_WEB_PLAN.md`）
+- **路线选定 Route B**：在 `internal/` 新增独立 `webapi`（chi 风格 HTTP+WS 网关，复用现有 service 实例）；桌面继续走 Wails 桥（**零回归**），HTTP/WS 是叠加。否决 Wails 自带 server build（阉割 systray/dialog/通知 + 无 per-method 鉴权）。
+- **会话生命周期决策（拍板，非对称·桌面为主）**：桌面关 Tab = 真 kill（一律，不分谁发起）；Web「关闭窗口」= 仅 detach（会话后台续跑）；Web「终止会话」= kill（同桌面关）。**Why**：绕开 mindfs「最后一个 client 离开才 kill」的引用计数难题——kill 永远显式即时，`Kill()` 幂等，桌面代码零改。
+- **镜像范围**：Web 不自动镜像全部会话，显示**活跃会话列表**按需 attach；Web 自己 launch 的才在 Web 立即开窗。
+- **部署**：webapi 直接 bind `0.0.0.0:9317`（手机优先）。安全=独立 listener（不复用 orchestrator 的 127.0.0.1）+ 稳定 token（cryptox 落库）+ 二维码配对 + httpOnly cookie + 同源免 CORS；resize 权属=owner（桌面），手机 viewer 只 fit/scroll。
+- **里程碑**：M1 网关地基 → M2 前端 transport 抽象 → M3 launch+只读镜像 → M4 attach 重放 → M5 viewer 生命周期+会话列表 → M6 双向输入+写锁+resize 权属+TUI 去重+移动软键盘 → M7 TLS+PWA。**待拍板已定**：P3=B（明文先验证 TLS 留 M7）、P5=前端 qrcode.react。
+
+### ⚠️ 关键架构事实（已读码核对，指导后续 M）
+- 架构本就近镜像就绪：PTY 会话存 `terminal.Service.sessions[sid]`（内存 SSOT）；`terminal:output/status/exit` + `orchestrator:launch` 都是按 sessionID 的**广播**（`app.Event.Emit`），前端按 `payload.sessionId` 过滤——多端 attach 同 sid 即镜像。缺的只是把广播经 WebSocket 送浏览器、动作经 HTTP 暴露。
+- **命门**：`frontend/src/terminal/TerminalContext.tsx` 的 reconcile（孤儿 kill）把「本端面板树」当会话生死权威。Web 端**绝不能跑这套**——Web `closeTab` 必须纯 detach（M5 落 `lifecycleRole: owner|viewer`）。
+- **attach 重放**：`terminal.go` 的 outBuf 入缓冲即 stripANSI（给 agent 读文本），重建不了 xterm 画面 → M4 另开**保留原始 ANSI 的有界环形缓冲**。
+- **emit 双路**：`terminal.setEmit` / orchestrator `emit` 已是可注入字段 → 改组合双路（webview 同步 / 远程 per-conn 有界队列、慢端断开重连重放、**绝不反压回 PTY**）。
+- **launch 公共化**：把 `orchestrator_tools.go:toolLaunchTask` 核心抽成 `Service.LaunchTask(ctx,params)`，MCP 工具与 `POST /api/launch` 共用（M3）。
+
+### M1 — 网关地基（已完成，端到端实证）
+- **后端** `internal/webapi/{gateway,http,service}.go`：`Gateway`（holder + 嵌入 dist 的 `fs.FS`）bind `0.0.0.0:9317`；`ensureToken` 经 cryptox 读 / 建 token 存 `app_settings.web_gateway_token_enc`（**不进前端 Snapshot**，网关直读本表）；`GET /api/health`（公开）/ `GET /pair?token=`（校验→种 httpOnly cookie〔值=hex(HMAC-SHA256(token,purpose))〕→302 /）/ `/`（`requirePaired` 门控→SPA 静态托管，未配对回 401+极简双语页）；`Service.GetAccessInfo()`（薄 Wails facade，返回端口 + 各局域网 IPv4 配对 URL〔内嵌明文 token，仅桌面可信路径展示〕）。`gateway_test.go` 7 项（health 公开 / 静态门控 / 伪造 cookie 拒 / cookie 绑 token / 带 cookie 取静态 / genToken 唯一 / lanIPv4s 不 panic）。
+- **接线** `app.go`：`fs.Sub(assets,"frontend/dist")` → `NewGateway(holder, webFS)` → `NewService(gw)` 入 Services；orchestrator 块后 `webGateway.Start()`（fail-open，失败仅 warn）+ `defer Stop()`。
+- **前端**「设置 → Web 访问」子页 `pages/SettingsPage/webaccess/`（View/VM/Style/lang/index，命名空间 `settings.webaccess.*`）+ `services/webaccess/WebAccessService.ts`：用 `qrcode.react@4.2.0` 的 `QRCodeSVG` 渲染 primaryUrl 二维码 + URL 复制 / 备用 IP / 端口 / 防火墙提示 / token 警示 / 刷新；states loading/unavailable/ready。`useSettingsPage` 入口、`SettingsPage` 派发、lang 注册、services barrel 全接线。
+- **坑（记牢）**：webapi 在 `internal/webapi`（**非** `internal/services/`），绑定路径 `@bindings/xkpane/internal/webapi`（一度误写 `internal/services/webapi` 致 typecheck 失败）。
+- **验证**：go build ./internal/... + 全量 `go build .`（exit 0）/ webapi 7 测试 / `wails3 generate bindings`（18 services 含 webapi）/ pnpm install（qrcode.react 4.2.0）/ pnpm typecheck（0）/ pnpm build 全绿。
+- **铁律核对**：token cryptox 落库（敏感串加密铁律）+ 不进 Snapshot（明文密钥红线）；配置 / 持久化全走 SQLite（无 localStorage）；前端文案 t()；图标 @mui/icons-material *Rounded；二维码前端生成（无 CORS、同源）。
+- **手机自测路径**：设置 → Web 访问 → 扫码 → 允许 Windows 防火墙「专用网络」→ 同 WiFi。⚠️ **手机界面 M1 仍是外壳**（transport 未抽象），M2 后才真正可用。
+
+### M2 transport 抽象 + M3 launch + 只读镜像（已完成，构建/测试全绿，待手测）
+承 M1 → 用户「先记 progress.md，再 M2、M3 一起做」。
+
+**M3 后端**：
+- `orchestrator.LaunchTask` 公共化（新 `launch.go`）：抽出 `toolLaunchTask` 核心（校验项目注册 + 解析 workspace/cliTool 缺省 + CreateSpec + CreateSession + 广播 orchestrator:launch），MCP 工具与 `POST /api/launch` 共用；`toolLaunchTask` 仅保留 caller_tool 同源继承（MCP 专属，读 HTTP 头）再委托 LaunchTask。错误：LaunchTask 返 Go error，MCP 侧包「错误: 」、HTTP 侧 400。
+- `terminal`/`orchestrator` 导出 `SetEmitter`（AttachApp 保留供单测）。
+- `webapi`：`hub.go`（每连接有界 send 队列 256、慢端 kill 剔除、**broadcast 非阻塞绝不反压**）+ `ws.go`（coder/websocket〔已是间接依赖，go mod tidy 转直接〕、`Accept` 默认同源、`CloseRead` 纯下行推送、写循环 10s 超时）+ `rest.go`（`POST /api/launch`、`GET /api/sessions|projects|workspaces`，**fail-closed 白名单 §9**，红线方法不挂）+ gateway 持 `hub`/`deps`、`RouteEvent`（白名单 mirroredEvents 过滤）、`AttachServices`。
+- `app.go`：`mirrorEmit := func(name,payload){ app.Event.Emit(...); webGateway.RouteEvent(...) }`，经 `SetEmitter` 注入 term+orch（取代 AttachApp）；orchSvc 建好后 `AttachServices(Launcher=orchSvc, Sessions=termSvc, Projects=projSvc, Workspaces=wsSvc)`。
+- 测试：webapi 新增 launch/sessions 鉴权 + hub 广播/剔除 + WS 端到端 + RouteEvent 白名单 + 标记注入共 9 项，全绿。go build/vet/test 全后端干净。
+
+**M2 前端**：
+- `services/transport/{types,wails,http,index}.ts`：环境探针 + `lifecycleRole`（owner/viewer）；浏览器 `wsEventTransport`（重连指数退避 1→30s、按事件名本地扇出、cookie 握手自动带）+ `httpClient`（fetch credentials:'include'，桌面用会抛错的 stub）。
+- `shared/events.ts` 设为前后端事件名**唯一源**（补终端三事件）+ `events.test.ts` 清单断言（铁律 5）。
+- `TerminalService`/`OrchestratorService` 事件订阅走 eventTransport；RPC 按 isDesktop 分流（浏览器 write/resize/kill 只读 no-op〔输入/尺寸/终止 = M5/M6〕，list 走 GET /api/sessions，新增 `OrchestratorService.launch`→POST /api/launch）；`ProjectService.list` 浏览器走 GET /api/projects。
+- `TerminalContext`：**reconcile 在 viewer 早退**（不跑孤儿 kill / CreateSession —— 命门）；viewer `launchProject` 走 `/api/launch`（不本地 addTab、不记历史）。
+- `WebLauncher`（viewer-only 左栏 + MUI 内嵌对话框：选项目〔/api/projects〕 + 输入 prompt + 选 CLI → /api/launch；非 NativeDialogs，那是 Wails 专属，i18n 走 t()）；TerminalPage 按角色渲染（owner=WorkspaceTree / viewer=WebLauncher）。
+- 验证：typecheck 0、vitest 64 全过、production build 成功。
+
+**⚠️ 对抗式审查抓到 1 个致命 bug（37 raw findings → verifier 独立反驳后仅 1 确认）并已修**：
+- `isDesktop` 原用 `'_wails' in window` **错**：`@wailsio/runtime` 在**任意平台**（含浏览器）模块顶层都 `window._wails = window._wails || {}`（transport/wails.ts 静态 import 了它），故浏览器里 `_wails` 恒存在 → 误判 isDesktop=true → 整条 Web 路径死（用不存在的 bindings、httpClient stub 抛错、不连 /ws、WorkspaceTree 替了 WebLauncher，且 **viewer 守护失灵→孤儿 kill 会在 web 跑**）。verifier 已查内置 bundle + Node 复现坐实。
+- **修法**：改用**网关注入的自控标记**——`webapi` 的 `serveIndex` 在所托管 HTML 的 `</head>` 前注入 `<script>window.__XKPANE_WEB__=true;</script>`（classic inline 先于 deferred module bundle 执行），并把 `/index.html` 也路由经 serveIndex；前端探针 `isDesktop = !(window.__XKPANE_WEB__===true)`。桌面 webview 经 Wails AssetServer 加载（不经网关、无标记）= owner；浏览器经网关（有标记）= viewer。**不依赖 Wails 运行时 `_wails.*` 的注入时序，跨平台无歧义**。加后端断言测试防回归；重建 bundle 验证旧探针消失、新标记在位。
+
+**bindings 插曲**：用户后台 `wails3 dev` 的 Vite watcher 递归占用 `frontend/bindings`，`wails3 generate bindings` 原子 rename 被拒并删空目录 → 改为生成到仓库根 `_bindings_out`（不被监视）再就地拷回，已恢复含 webapi 绑定。注：M2/M3 未新增任何 Wails 绑定签名（SetEmitter 带 func 参被跳过、LaunchTask 在非绑定 orchestrator 上），绑定内容实际未变。
+
+**待用户 `wails3 dev` 手测**（⚠️ 改后端必完全重启 dev 以重嵌新 dist）：手机同 WiFi 扫码配对 → 导航到终端页 → 「新建会话」选项目 + 输入 prompt 启动 → **桌面与手机同步出现同 sid 窗口、输出实时同步滚动**（M3 只读：手机暂不能输入，输入/写锁/移动键盘 = M6；attach 中途接入重放 = M4；会话列表 + 关窗 detach/终止 = M5）。
+
+### 手测发现并修复（2026-06-01，用 chrome-devtools MCP 实证定位）
+用户电脑浏览器访问 LAN IP（`http://192.168.10.10:9317`）持续"纯色"。用 chrome-devtools MCP 逐层定位（不靠猜）：
+1. **网关健康**：`/api/health`=ok、`/`未配对正确 401、配对后 `/` 返回 SPA(200，含 webMarker)、bundle 200 served。服务端无问题。
+2. **127.0.0.1 上 SPA 正常渲染**（Home + 终端页 WebLauncher 都出来，`/api/projects`=200 → viewer/HTTP 路径活、isDesktop 标记修复生效）。
+3. **真因（LAN IP 专属）**：截图实为**卡在启动骨架**（React 没挂载）。`192.168.10.10` 走 HTTP 是**非安全上下文**，而 `paneTree.ts:generateId` 用 `crypto.randomUUID()` —— **该 API 仅安全上下文（https/localhost）可用**，非安全上下文为 undefined，调用抛 `TypeError`。它在 `TerminalProvider` 初始化建面板树时就执行、而该 Provider 包整个应用 → 抛错致整树挂载失败 → 骨架不被移除 = 纯色。`127.0.0.1`/localhost 被视为安全上下文,故我之前在 127 测正常、漏了它。chrome-devtools 在 LAN IP 页 evaluate 实证：`isSecureContext=false`、`crypto.randomUUID` 不存在、旧代码抛 TypeError、新 `randomId` 兜底产出合法 uuid。
+- **修复**：新增 `src/shared/uuid.ts` 的 `randomId()`（randomUUID〔安全上下文〕→ getRandomValues 拼 RFC4122 v4〔非安全上下文也可用〕→ Date+Math.random 末路兜底）；`paneTree.ts:generateId` 与 `HistoryPage/useHistoryPage.ts` 改用之。⚠️ paneTree 用**相对路径** `../shared/uuid`（非 `@` 别名）——vitest 不对"传递 import 的源文件"套 vite `@` 别名，相对路径才能 build+test 双解析（reducer/sessionReconcile 测试图踩过）。
+- **顺带后端加固**：`webapi/http.go` serveIndex 给 index.html 加 `Cache-Control: no-store`（杜绝"陈旧 index 指向已删 chunk → chunk 404 → SPA 加载失败纯色"复发）；`/wails/*` 显式 404（清掉 `@wailsio/runtime` 浏览器探测落 SPA 回退返回 HTML 被当 JS 解析的 `Unexpected token '<'` 噪声）。
+- 验证：typecheck 0 / vitest 64 全过 / build 绿 / webapi go test 绿。**注：网关服务的是嵌入 dist，需 dev 重新构建 Go 二进制（任意 .go 改动或重启 dev）才重嵌新 bundle；纯前端改动不触发 Go 重建。** 故修复落地后需重启一次 `wails3 dev`。
+
+### M5 部分：Web viewer 工作区树（2026-06-01，用户拍板「跟桌面端一样 + 移动端弹菜单」）
+用户诉求：viewer 左栏不要只是单个「新建会话」按钮，要**跟桌面端一样按工作区组织**，能**恢复历史会话 + 新建会话**，且考虑**移动端交互（无右键如何弹菜单）**。先用 workflow 并行精读 5 子系统（桌面 WorkspaceTree 交互 / WebLauncher / 后端 webapi / resume 数据流 / 移动端菜单范式），再就三点拍板（均选推荐）：
+- **弹菜单** = 行尾常驻「⋮」IconButton 锚定 MUI Menu（anchorEl）。项目里**零移动端代码**（无 useMediaQuery/breakpoints/触摸/长按），现有菜单全是右键 anchorPosition 手机点不出 → 改 ⋮ 按钮锚定，桌面/手机一套。
+- **范围** = 只读浏览 + 恢复/新建，**无管理**（改名/删/导入/拖拽不暴露；WorkspaceService 写方法仅桌面、ProjectService 写 fail-closed）。
+- **会话来源** = 历史可恢复会话（扫盘）+ 新建 → 后端补扫盘端点。
+
+**后端**：新增 `GET /api/sessions/scan?projectPath=&limit=`（`webapi.SessionScanner` 接口 → `sessionscan.Service.ListProjectSessions`，纯文件系统只读、过 requirePaired）；`app.go` 把 `sessionscan.New()` 提为 `scanSvc` 变量注入 `ServiceDeps.Scanner`；`rest_test.go` 加 fakeScanner（缺 projectPath→400 / 带 cookie+limit→200 且参数透传 / 无 cookie→401）。`GET /api/sessions`（活跃快照）与 `/api/sessions/scan`（磁盘历史）Go1.22 ServeMux 精确路径不冲突。
+
+**前端**：删除 `components/WebLauncher/`（单按钮占位，已被取代），新增 `components/WebWorkspaceTree/`（View+VM+styles+lang+index）。三层树 workspace→project→session：workspace 点击展开（+项目数 pill）；project 点击展开会话、⋮=新建会话/复制路径；session 点行=恢复、⋮=恢复/以reclaude恢复(claude)/复制ID。恢复=`OrchestratorService.launch({projectPath,resumeId,cliTool})`（resume 不传 prompt，后端 prompt⊕resumeId 互斥）；新建=launch 带 prompt（项目固定为菜单目标，对话框选 CLI+输入 prompt）。`SessionScanService.listProjectSessions` / `WorkspaceService.list` 各加 viewer 分支（GET /api/sessions/scan、/api/workspaces）。`TerminalPage` viewer 分支换 `<WebWorkspaceTree/>`，`App.tsx` 换 `registerWebWorkspaceTreeLocales`。
+
+**坑（secure-context 续）**：`navigator.clipboard` 同 `crypto.*` 也是**安全上下文限定**，LAN IP+HTTP 下为 undefined、裸 `?.writeText` 被静默吞（手机复制无反应）。新增 `src/shared/clipboard.ts` 的 `copyText()`：Clipboard API → 失败回退临时 textarea+`execCommand('copy')`（非安全上下文可用），返回成功与否 → WebWorkspaceTree 用 Snackbar 反馈（copied/copyFailed/resumeFailed）。
+
+验证：typecheck 0 / vitest 64 全过 / 前端 build 绿（新 main-BgL9nmhz.js）/ `go build ./internal/...` + `go test ./internal/webapi/` + `go vet` 绿（唯一报错是无关的 build/ios 平台 stub）。**本次改了 .go，重启 `wails3 dev` 即重嵌新 dist。** M5 剩余（关窗 detach / 终止 kill 的生命周期 D1/D2、活跃会话 attach）未做。
+
+### M4 + M5 + M6：attach 重放 / 活跃会话 attach / 双向输入（2026-06-01，用户「按顺序 M4→M5→M6」）
+用户追问「桌面端开的会话 web 在哪看到」——暴露功能边界：web 自动开窗唯一入口是 orchestrator:launch 广播，而桌面手点开的会话走本地 launchProject 不广播 → web 看不到。遂按用户指示按序补 M4/M5/M6。
+
+**M4（attach 历史重放）**：现有 `outBuf` 是 stripANSI 文本（重建不了画面），新增 `terminal/rawbuffer.go` 每会话**原始 ANSI 有界环形缓冲**（512KB，整段淘汰，单调 seq 不随淘汰回退）。`batchLoop.flush` emit 时 `rawBuf.append(data)` 取 seq 一并写入 `events.TerminalOutputPayload.Seq`。`terminal.SessionReplay(sid)→{data,lastSeq}` → `webapi GET /api/sessions/replay?sessionId=`（未知会话 200 空重放，优雅 attach）。前端：`TerminalOutput.seq` + `TerminalService.replay()`（viewer 走端点；桌面空 stub）+ `attachSessionOutput(sid,write)`（先订阅缓冲 live→拉 replay 写入→回放 seq>lastSeq→切 live，seq 兜底不漏不重）；`useTerminalView` 输出订阅换用它（桌面 replay 空=纯 live，零回归）。单测 `rawbuffer_test.go`（seq 单调/整段淘汰/保留末段/空快照）+ replay 端点测试。
+
+**M5（活跃会话 attach）**：`WebWorkspaceTree` 顶部加「运行中」区（消费 `GET /api/sessions`，**含桌面手点开的会话**——web 唯一能看到非 Web/MCP 发起会话的入口）；点击 attach → `useTerminal().newTab(activePaneId,{sessionId})` 开只读面板 → TerminalView 经 attachSessionOutput 重放历史 + 接 live。闭环达成：**桌面开会话 → web「运行中」列出 → 点击 → 完整画面 + 实时同步**。SessionSnapshot 缺 workspace 字段 → 扁平列（basename(cwd)+cliTool）。
+
+**M6（双向输入）**：`webapi POST /api/sessions/input`{sessionId,data} → `terminal.WriteInput`（`SessionWriter` 接口，requirePaired，写已存在可见会话 stdin = 远程键入，非任意 spawn）；`TerminalService.write` viewer 改走该端点（原只读 no-op）。**TUI 应答去重（关键正确性）**：`useTerminalView.reply()` 仅 `lifecycleRole==='owner'` 回写 CPR/DA/OSC/Kitty 应答，viewer 抑制不回写——否则桌面+手机同 attach 时双发应答打乱 CLI。**resize 权属=owner**：viewer resize 仍 no-op（PTY 尺寸归桌面，viewer 本地 fit 显示）。移动端：host `pointerup` 聚焦 xterm 唤软键盘 + 新组件 `components/TerminalKeyBar`（Esc/Tab/Ctrl+C/方向键，仅 viewer 在 TerminalView 内渲染，按钮 onMouseDown preventDefault 防抢焦点收键盘）。**主动简化（Simplicity First）**：不做重型「写锁」UI（单用户手机控自机场景价值低；真正会乱的 TUI 双应答已根治）；已向用户说明，如需显式互斥再加。
+
+验证：typecheck 0 / vitest 64 全过 / 前端 build 绿 / `go build ./internal/... .`（含 main embed）+ `go test ./internal/services/terminal/ ./internal/webapi/ ./internal/services/orchestrator/` 全绿 / `go vet` 绿（唯一报错仍是无关的 build/ios 平台 stub）。**本批改了 .go，重启 `wails3 dev` 重嵌新 dist（并自动 regen bindings：seq 字段 + SessionReplay binding 届时就位，可后续接桌面 attach 重放）。** 剩 M7（TLS+PWA）；可选补强：Web 主动终止会话、桌面 attach 重放接 binding、「运行中」列表自动刷新。
