@@ -77,6 +77,13 @@ func (f *fakeBedrock) ReviewCode(code string, filename *string) (string, error) 
 	f.gotSide, f.gotSideCalled = filename, true
 	return "REVIEW_CODE:" + code, nil
 }
+func (f *fakeBedrock) ValidateJSONDefinitions(addonDir string) (string, error) {
+	return "VJD:" + addonDir, nil
+}
+func (f *fakeBedrock) ValidateAddonAssets(addonDir string) (string, error) {
+	return "VAA:" + addonDir, nil
+}
+func (f *fakeBedrock) ValidateTest(testJSON string) (string, error) { return "VT:" + testJSON, nil }
 
 func TestBedrockTools_NilFallback(t *testing.T) {
 	ctx := context.Background()

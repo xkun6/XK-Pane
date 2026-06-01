@@ -93,3 +93,15 @@ func (s *Service) ReviewCode(code string, filename *string) (string, error) {
 	}
 	return reviewCode(code, fn)
 }
+
+// ── Phase 5：文件系统 / JSON 校验器（3）→ 委托 validate ──────────────────
+
+func (s *Service) ValidateJSONDefinitions(addonDir string) (string, error) {
+	return validateJSONDefinitions(addonDir)
+}
+
+func (s *Service) ValidateAddonAssets(addonDir string) (string, error) {
+	return validateAddonAssets(addonDir)
+}
+
+func (s *Service) ValidateTest(testJSON string) (string, error) { return validateTest(testJSON) }

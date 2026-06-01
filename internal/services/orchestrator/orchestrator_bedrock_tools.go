@@ -47,6 +47,10 @@ type Bedrock interface {
 	ListModPacks() (string, error)
 	// P6f-5：静态代码审查（1）。
 	ReviewCode(code string, filename *string) (string, error)
+	// P6f-6：文件系统 / JSON 校验（3）。
+	ValidateJSONDefinitions(addonDir string) (string, error)
+	ValidateAddonAssets(addonDir string) (string, error)
+	ValidateTest(testJSON string) (string, error)
 }
 
 // registerBedrockTools 注册 Bedrock 只读知识库工具（由 registerTools 末尾调用）。
@@ -147,6 +151,20 @@ func (s *Service) registerBedrockTools(srv *mcp.Server) {
 		Name:        "bedrock_review_code",
 		Description: "对一段 Python 2.7 代码跑 ModSDK 静态审查规则，返回 Markdown 报告（按 Critical/Warning/Suggestion 分级）。可选 filename 用于报告标题（默认 unknown.py）。",
 	}, s.toolBedrockReviewCode)
+
+	// ── Phase 5：文件系统 / JSON 校验（3，P6f-6）──────────────────────
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "bedrock_validate_json_definitions",
+		Description: "扫描 addon 行为包根下的 JSON 定义（netease_items_beh / netease_blocks / netease_recipes / entities），检查 BOM / UTF-8 / 解析 / format_version / 命名空间。addonDir 须为绝对路径。",
+	}, s.toolBedrockValidateJSONDefinitions)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "bedrock_validate_addon_assets",
+		Description: "扫描 addon 根目录 textures/ 下的纹理资产，检查格式 / 文件名 / 大小 / PNG 尺寸（2 的幂、宽高比）。addonDir 须为绝对路径。",
+	}, s.toolBedrockValidateAddonAssets)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "bedrock_validate_test",
+		Description: "对一段声明式测试用例 JSON 字符串做 schema 校验（name + steps，每步 type ∈ wait/assert/action/screenshot），返回 VALID/INVALID。",
+	}, s.toolBedrockValidateTest)
 }
 
 // ── 参数结构（camelCase wire 名，对齐 cc-pane McpBedrock*Params）─────────────
@@ -397,4 +415,35 @@ func (s *Service) toolBedrockReviewCode(_ context.Context, _ *mcp.CallToolReques
 		return textResult(bedrockUnavailable), nil, nil
 	}
 	return bedrockResult(s.deps.Bedrock.ReviewCode(in.Code, in.Filename))
+}
+
+// ── Phase 5 参数 + 工具（P6f-6）─────────────────────────────────────────
+
+type bedrockAddonDirParams struct {
+	AddonDir string `json:"addonDir" jsonschema:"addon / 行为包根目录的绝对路径"`
+}
+
+type bedrockValidateTestParams struct {
+	TestJSON string `json:"testJson" jsonschema:"声明式测试用例 JSON（字符串本身，非文件路径）"`
+}
+
+func (s *Service) toolBedrockValidateJSONDefinitions(_ context.Context, _ *mcp.CallToolRequest, in bedrockAddonDirParams) (*mcp.CallToolResult, any, error) {
+	if s.deps.Bedrock == nil {
+		return textResult(bedrockUnavailable), nil, nil
+	}
+	return bedrockResult(s.deps.Bedrock.ValidateJSONDefinitions(in.AddonDir))
+}
+
+func (s *Service) toolBedrockValidateAddonAssets(_ context.Context, _ *mcp.CallToolRequest, in bedrockAddonDirParams) (*mcp.CallToolResult, any, error) {
+	if s.deps.Bedrock == nil {
+		return textResult(bedrockUnavailable), nil, nil
+	}
+	return bedrockResult(s.deps.Bedrock.ValidateAddonAssets(in.AddonDir))
+}
+
+func (s *Service) toolBedrockValidateTest(_ context.Context, _ *mcp.CallToolRequest, in bedrockValidateTestParams) (*mcp.CallToolResult, any, error) {
+	if s.deps.Bedrock == nil {
+		return textResult(bedrockUnavailable), nil, nil
+	}
+	return bedrockResult(s.deps.Bedrock.ValidateTest(in.TestJSON))
 }
