@@ -19,6 +19,8 @@ import (
 	"xkpane/internal/services/launchhistory"
 	"xkpane/internal/services/lhwatcher"
 	"xkpane/internal/services/localhistorysvc"
+	"xkpane/internal/services/mcdkbridge"
+	"xkpane/internal/services/mcpe"
 	"xkpane/internal/services/notification"
 	"xkpane/internal/services/orchestrator"
 	"xkpane/internal/services/preferences"
@@ -31,9 +33,9 @@ import (
 	"xkpane/internal/services/terminal"
 	"xkpane/internal/services/workspace"
 	"xkpane/internal/storage"
-	"xkpane/internal/webapi"
 	"xkpane/internal/utils/httpx"
 	"xkpane/internal/utils/logx"
+	"xkpane/internal/webapi"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
@@ -111,6 +113,12 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	webGateway := webapi.NewGateway(holder, webFS)
 	webAccessSvc := webapi.NewService(webGateway)
 
+	// MC PE 控制（P6e）：mcpeSvc 注册给前端（包管理 / 启动 / 日志），经 SetEmitter 双路推日志事件；
+	// mcdkBridge 是后端 TCP 桥（127.0.0.1:0，等游戏内 Python 模组反向连入），非 Wails service，
+	// 生命周期由本装配处直接管（Start/Stop，fail-open）。
+	mcpeSvc := mcpe.New(holder)
+	mcdkBridge := mcdkbridge.New()
+
 	app := application.New(application.Options{
 		Name:        "XK-Pane",
 		Description: "Claude Code 多实例分屏管理桌面应用",
@@ -133,6 +141,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(wailsNotifier), // Wails 通知 service（跑 ServiceStartup 注册 toast）
 			application.NewService(childWinSvc),   // 子窗口系统
 			application.NewService(webAccessSvc),  // Web 网关门面（GetAccessInfo → 配对二维码）
+			application.NewService(mcpeSvc),       // MC PE 控制（包管理 / 启动 / 日志 / 桥状态）
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -150,6 +159,8 @@ func Run(assets embed.FS, trayIcon []byte) error {
 		webGateway.RouteEvent(name, payload)
 	}
 	termSvc.SetEmitter(mirrorEmit)
+	mcpeSvc.SetEmitter(mirrorEmit) // MC PE 日志/退出事件双路（桌面 webview + Web 网关）
+	mcpeSvc.SetBridge(mcdkBridge)  // 取桥端口注入 MCDEV_DEBUG_IPC_PORT + 查桥状态
 	childWinSvc.AttachApp(app)
 	lhWatcher.AttachApp(app) // watcher 经此向前端 Emit localhistory:changed（live 刷新）
 	// Local History 启停补启接线（决策 D4-4）：
@@ -217,6 +228,14 @@ func Run(assets embed.FS, trayIcon []byte) error {
 		logx.For("app").Warn("webapi start failed (Web 访问不可用，fail-open)", "err", err)
 	}
 	defer func() { _ = webGateway.Stop() }()
+
+	// —— MCDK 调试桥（P6e）：bind 127.0.0.1:0 等游戏内 Python 桥模组反向连入。失败 fail-open
+	// （桥不可用 → 截图/点击/execute/reload 工具报错，但不阻断应用与 MC PE 启动）。——
+	if err := mcdkBridge.Start(); err != nil {
+		logx.For("app").Warn("mcdk bridge start failed (MC PE 调试桥不可用，fail-open)", "err", err)
+	}
+	defer func() { _ = mcdkBridge.Stop() }()
+	defer mcpeSvc.CleanupAll() // app 退出时杀所有 MC PE 子进程
 
 	go emitTimeLoop(app)
 

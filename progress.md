@@ -1340,3 +1340,18 @@ common:build:hook（go build → bin/xkpane-cli-hook[.exe]）；root dev 前置�
 - `trash_windows.go`：moveToTrash 经 `shell32.SHFileOperationW`（手写 SHFILEOPSTRUCTW + FO_DELETE + **FOF_ALLOWUNDO** 进回收站，pFrom 双 NUL 结尾 UTF-16）。`trash_other.go`：stub err。
 - **有意偏离 cc-pane（已标注理由）**：① bat 名前缀 ccpanes→xkpane（避免与 cc-pane 临时文件混淆）；② 子进程用 procx 而非 cc-pane 的 no_window_tokio_command（铁律 + procx 已 HideWindow）；③ createSymlink 用 `os.Symlink`（Go 对已存在目录 target 自动建目录软链，等价 symlink_dir）。
 - **验证**：gofmt 干净 / Windows `go build`+`go vet`+`go test`（36 测试：NBT 默认往返/改字段/过短/非Compound + worldcopy 白名单/缺level.dat/缺db/递归/缺源/删除安全 + symlink 移除/保留实体/bat内容/注入拒绝/空 + P6e-2 的 18）×2 轮全绿 / **GOOS=linux+darwin 交叉编译绿** / `go build ./internal/...` 绿。未接入调用方（service.go 编排在 P6e-4）。
+
+### P6e-4 launch 12 步编排 + launcher(ConPTY) + 日志 + 表 + events + app 装配
+忠实移植 log_buffer.rs + log_filter.rs + launcher.rs + service.rs（含 ConfigRunTask.run 12 步）+ models/mc_pe.rs，并接入 storage/events/app。分两提交：
+
+**P6e-4a（`80a7ac8`）日志层（纯逻辑）**：`logbuffer.go`（定长环形数组 + sync.Mutex〔Rust 靠外层锁，Go 跨 goroutine 须自带〕+ tail + formatLogLine `HH:MM:SS [Cat] [LEVEL] line` + shortTS）；`logfilter.go`（LogSeverity 小写常量 + ParsedLog + parseStdoutLine 5 规则白名单 + leadingModTag + detectSeverity + parsePythonHeader，纯函数不 emit〔emit 移到 launcher〕）。
+
+**P6e-4b（本提交）编排 + 装配**：
+- `internal/storage/models_mcpe.go`：MCPackage（GORM，World/DebugOptions/IncludedModDirs 走 `serializer:json` 嵌套 JSON 列）+ MCGameMode/MCLevelType（string + Code()）+ NewMCPackage（默认配置，seed=rand.Uint64）+ MCRunSessionInfo + McdkBridgeStatus；`init()` append AllModels（mc_packages，Clearable:false 保护用户配置）。时间戳用 time.Time（GORM 自管，JSON→RFC3339）。
+- `internal/events/events.go`：mc_pe:output/launched/exited 事件名 + MCOutputPayload（Timestamp/Category/Level 用 `*string` 序列化 null 对齐 cc-pane）/MCLaunchedPayload/MCExitedPayload + Register。
+- `mcpe/launcher.go`：runSession + spawnRun（**ptyx.Spawn ConPTY** cols=200/rows=50，cwd=exe 父目录，env=mergeEnv(os.Environ(), mcEnv)〔ptyx 替换语义，故并入系统环境〕）+ readLoop（bufio ReadBytes('\n') → 剥 ANSI 正则 → strings.ToValidUTF8 lossy → parseStdoutLine → emit）+ wait goroutine（铁律 Wait→宽限→Close→emit exited）+ exitCode/mergeEnv/strPtr/derefStr。
+- `mcpe/service.go`：MCPEService（holder + bridge + emit + runs map）+ **Launch 12 步**（校验路径→清 symlink→扫包→重建 symlink〔不足 UAC〕→桥模组解压→world 准备→level.dat 写 11 字段〔强制 permissionsLevel=1〕→world_*_packs.json〔uuid 去重〕→cppconfig→env〔reload_addon/shaders_key 为字符串、其余数字，忠实〕→spawnRun〔capturingEmit 把本 run 日志抄进环形缓冲〕→注册 runs + emit launched）+ CRUD（List/Create/Update/Delete via GORM holder）+ ScanLaunchers/MoveWorldToTrash/OpenWorldFolder/GetMcdkBridgeStatus + ActiveRunPIDs/RecentLogs（供 P6e-6 orchestrator）+ Stop/CleanupAll。
+- `internal/app/app.go`：`mcpeSvc := mcpe.New(holder)` 注册进 Services（前端可调）；`mcdkBridge := mcdkbridge.New()`（非 Wails service）；`mcpeSvc.SetEmitter(mirrorEmit)`〔日志双路桌面+Web〕+ `SetBridge(mcdkBridge)`；生命周期区 `mcdkBridge.Start()`（fail-open）+ `defer Stop()` + `defer mcpeSvc.CleanupAll()`〔退出杀 MC 子进程〕。
+- **有意偏离 cc-pane（已标注）**：① 桥端口注入经注入的 *mcdkbridge.Service（cc-pane 经 Tauri State + 命令层传 mcdk_port 参数）；② mc_pe:exited 在 Wait 后经宽限+Close 才 emit（ConPTY 需 Close 让 reader EOF；cc-pane 靠 portable-pty 自然 EOF 立即 emit）；③ GBK 日志默认 lossy 解码（待手测看中文是否乱，再上 simplifiedchinese）。
+- **验证**：gofmt 干净（我的文件）/ Windows `go build ./internal/... .`（含 main embed）+ `go vet` + `go test`（mcpe 61 测试含日志缓冲/过滤/helpers + mcdkbridge 15 + storage AutoMigrate mc_packages）全绿。**linux/darwin 交叉编译失败是 Wails GTK/CGO 平台限制**（mcpe 经 events 引入 wails application，同 terminal/webapi，非本单元问题）。bindings（MCPackage/MCRunSessionInfo/McdkBridgeStatus + 10 方法）下次 `wails3 dev` 自动重生，P6e-5 前端消费。
+- **后端可启动但无 UI 触发点**：launch 由前端 mc_pe 面板驱动（P6e-5），故 P6e-4 验收为 build/test；首个 live 手测在 P6e-5。

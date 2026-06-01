@@ -24,6 +24,12 @@ const (
 	// → orchestrator 转发）。payload 见 OrchestratorSessionStartedPayload。P6d-3：本轮仅
 	// log + emit（XK 暂无 LaunchCwd 消费方，不回填 launch_history；前端订阅留后续）。
 	OrchestratorSessionStarted = "orchestrator:session-started"
+
+	// MC PE 运行事件（后端 launcher PTY reader/wait goroutine → 前端 MC PE 面板）。P6e。
+	// payload 见 MCOutputPayload / MCLaunchedPayload / MCExitedPayload；前端按 runId 分发。
+	MCPeOutput   = "mc_pe:output"   // 一行已过滤/分类的 MC PE 日志
+	MCPeLaunched = "mc_pe:launched" // 一次启动已建 run
+	MCPeExited   = "mc_pe:exited"   // MC PE 进程退出
 )
 
 // TerminalOutputPayload 是 TerminalOutput 事件载荷。
@@ -82,6 +88,31 @@ type OrchestratorSessionStartedPayload struct {
 	Cwd             string `json:"cwd,omitempty"`
 }
 
+// MCOutputPayload 是 MCPeOutput 事件载荷。Timestamp/Category/Level 为 nil 时序列化成
+// JSON null（对齐 cc-pane emit 行为，前端按可选字段处理）。
+type MCOutputPayload struct {
+	RunID     string  `json:"runId"`
+	PackageID string  `json:"packageId"`
+	Line      string  `json:"line"`
+	Severity  string  `json:"severity"` // error|warn|success|info|verbose|developer|plain
+	Timestamp *string `json:"timestamp"`
+	Category  *string `json:"category"`
+	Level     *string `json:"level"`
+}
+
+// MCLaunchedPayload 是 MCPeLaunched 事件载荷。
+type MCLaunchedPayload struct {
+	RunID     string `json:"runId"`
+	PackageID string `json:"packageId"`
+}
+
+// MCExitedPayload 是 MCPeExited 事件载荷。
+type MCExitedPayload struct {
+	RunID     string `json:"runId"`
+	PackageID string `json:"packageId"`
+	Code      int    `json:"code"`
+}
+
 // Register 在 application 初始化前注册所有强类型事件，
 // Wails 的 binding 生成器会据此为前端生成类型化 API。
 func Register() {
@@ -92,4 +123,7 @@ func Register() {
 	application.RegisterEvent[LocalHistoryChangedPayload](LocalHistoryChanged)
 	application.RegisterEvent[OrchestratorLaunchPayload](OrchestratorLaunch)
 	application.RegisterEvent[OrchestratorSessionStartedPayload](OrchestratorSessionStarted)
+	application.RegisterEvent[MCOutputPayload](MCPeOutput)
+	application.RegisterEvent[MCLaunchedPayload](MCPeLaunched)
+	application.RegisterEvent[MCExitedPayload](MCPeExited)
 }
