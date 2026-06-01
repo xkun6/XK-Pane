@@ -32,6 +32,19 @@ type Bedrock interface {
 	ListApisByCategory(category string) (string, error)
 	SearchComponent(query, componentType string) (string, error)
 	GetComponent(componentID string) (string, error)
+	// P6f-4：指南 / 模板 / 标准（12）。
+	SearchGuide(keyword string, source *string) (string, error)
+	ReadGuide(path string, maxLines *uint32) (string, error)
+	MatchTemplate(tags []string, keyword string) (string, error)
+	GetTemplateInfo(templateID string) (string, error)
+	GetTemplateFile(templateID, filePath string) (string, error)
+	GetStandard(name string) (string, error)
+	GetExpertGuide() (string, error)
+	GetReviewRules() (string, error)
+	GetOptimizationRules() (string, error)
+	GetJSONSpec(contentType *string) (string, error)
+	BedrockHelp() (string, error)
+	ListModPacks() (string, error)
 }
 
 // registerBedrockTools 注册 Bedrock 只读知识库工具（由 registerTools 末尾调用）。
@@ -76,6 +89,56 @@ func (s *Service) registerBedrockTools(srv *mcp.Server) {
 		Name:        "bedrock_get_component",
 		Description: "按精确 id 获取组件的完整定义卡片（含 JSON 定义）。",
 	}, s.toolBedrockGetComponent)
+
+	// ── Phase 3：指南 / 模板 / 标准（12，P6f-4）─────────────────────────
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "bedrock_search_guide",
+		Description: "多 token 子串搜索内嵌文档（mcguide / mconline / wiki / ui_templates）。可选 source 限定单一来源。返回最多 20 条排名结果。中文关键词建议用单个核心词。",
+	}, s.toolBedrockSearchGuide)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "bedrock_read_guide",
+		Description: "读取一个内嵌 Markdown 指南。path 相对 data/docs/（用 bedrock_search_guide 返回的路径）。可选 maxLines 限制起始行数（默认 200，最大 2000）。",
+	}, s.toolBedrockReadGuide)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "bedrock_match_template",
+		Description: "按 tags / keyword 对官方示例模板打分排名。tags 与 keyword 至少给一个。",
+	}, s.toolBedrockMatchTemplate)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "bedrock_get_template_info",
+		Description: "获取单个模板的完整元数据卡片（mod / 路径 / 标签 / 标志 / 系统 / API）。",
+	}, s.toolBedrockGetTemplateInfo)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "bedrock_get_template_file",
+		Description: "读取模板目录内的某个文件（当前模板源未内嵌，通常返回提示改用 bedrock_get_template_info）。",
+	}, s.toolBedrockGetTemplateFile)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "bedrock_get_standard",
+		Description: "按名称（文件 stem，可带或不带 .md）获取任意 standards/*.md 规范文档，支持精确或模糊匹配。",
+	}, s.toolBedrockGetStandard)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "bedrock_get_expert_guide",
+		Description: "返回 modsdk-expert.md 专家指南全文。",
+	}, s.toolBedrockGetExpertGuide)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "bedrock_get_review_rules",
+		Description: "返回 netease-code-review.md 代码审查规则全文。",
+	}, s.toolBedrockGetReviewRules)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "bedrock_get_optimization_rules",
+		Description: "返回 netease-optimization-expert.md 优化专家规则全文。",
+	}, s.toolBedrockGetOptimizationRules)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "bedrock_get_json_spec",
+		Description: "JSON 编写规范。contentType：netease（仅网易）/ modsdk（仅 ModSDK）/ both 或省略（两者拼接）。",
+	}, s.toolBedrockGetJSONSpec)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "bedrock_help",
+		Description: "Bedrock 知识库全部工具的速览说明。",
+	}, s.toolBedrockHelp)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "bedrock_list_mod_packs",
+		Description: "按 mod_name 分组列出全部内嵌模板，渲染 Markdown 汇总。",
+	}, s.toolBedrockListModPacks)
 }
 
 // ── 参数结构（camelCase wire 名，对齐 cc-pane McpBedrock*Params）─────────────
@@ -192,4 +255,124 @@ func (s *Service) toolBedrockGetComponent(_ context.Context, _ *mcp.CallToolRequ
 		return textResult(bedrockUnavailable), nil, nil
 	}
 	return bedrockResult(s.deps.Bedrock.GetComponent(in.ComponentID))
+}
+
+// ── Phase 3 参数结构（P6f-4）─────────────────────────────────────────────
+
+type bedrockSearchGuideParams struct {
+	Keyword string  `json:"keyword" jsonschema:"空白分隔的多 token 关键词查询（中文连续串当单 token）"`
+	Source  *string `json:"source,omitempty" jsonschema:"可选来源过滤：mcguide / mconline / wiki / ui_templates"`
+}
+
+type bedrockReadGuideParams struct {
+	Path     string  `json:"path" jsonschema:"内嵌指南路径（如 mcguide/foo.md），由 bedrock_search_guide 返回"`
+	MaxLines *uint32 `json:"maxLines,omitempty" jsonschema:"从开头最多读取的行数（默认 200，最大 2000）"`
+}
+
+type bedrockMatchTemplateParams struct {
+	Tags    []string `json:"tags,omitempty" jsonschema:"可选标签列表（如 [\"ui\", \"dimension\"]）"`
+	Keyword string   `json:"keyword,omitempty" jsonschema:"可选自由文本关键词"`
+}
+
+type bedrockTemplateIDParams struct {
+	TemplateID string `json:"templateId" jsonschema:"模板 id（如 ui_demo）"`
+}
+
+type bedrockGetTemplateFileParams struct {
+	TemplateID string `json:"templateId" jsonschema:"模板 id"`
+	FilePath   string `json:"filePath" jsonschema:"模板目录内的相对文件路径"`
+}
+
+type bedrockGetStandardParams struct {
+	Name string `json:"name" jsonschema:"规范文档名（文件 stem，可带或不带 .md，精确或模糊）"`
+}
+
+type bedrockGetJSONSpecParams struct {
+	ContentType *string `json:"contentType,omitempty" jsonschema:"可选内容类型：netease / modsdk / both（默认 both）"`
+}
+
+// ── Phase 3 工具实现（P6f-4）────────────────────────────────────────────
+
+func (s *Service) toolBedrockSearchGuide(_ context.Context, _ *mcp.CallToolRequest, in bedrockSearchGuideParams) (*mcp.CallToolResult, any, error) {
+	if s.deps.Bedrock == nil {
+		return textResult(bedrockUnavailable), nil, nil
+	}
+	return bedrockResult(s.deps.Bedrock.SearchGuide(in.Keyword, in.Source))
+}
+
+func (s *Service) toolBedrockReadGuide(_ context.Context, _ *mcp.CallToolRequest, in bedrockReadGuideParams) (*mcp.CallToolResult, any, error) {
+	if s.deps.Bedrock == nil {
+		return textResult(bedrockUnavailable), nil, nil
+	}
+	return bedrockResult(s.deps.Bedrock.ReadGuide(in.Path, in.MaxLines))
+}
+
+func (s *Service) toolBedrockMatchTemplate(_ context.Context, _ *mcp.CallToolRequest, in bedrockMatchTemplateParams) (*mcp.CallToolResult, any, error) {
+	if s.deps.Bedrock == nil {
+		return textResult(bedrockUnavailable), nil, nil
+	}
+	return bedrockResult(s.deps.Bedrock.MatchTemplate(in.Tags, in.Keyword))
+}
+
+func (s *Service) toolBedrockGetTemplateInfo(_ context.Context, _ *mcp.CallToolRequest, in bedrockTemplateIDParams) (*mcp.CallToolResult, any, error) {
+	if s.deps.Bedrock == nil {
+		return textResult(bedrockUnavailable), nil, nil
+	}
+	return bedrockResult(s.deps.Bedrock.GetTemplateInfo(in.TemplateID))
+}
+
+func (s *Service) toolBedrockGetTemplateFile(_ context.Context, _ *mcp.CallToolRequest, in bedrockGetTemplateFileParams) (*mcp.CallToolResult, any, error) {
+	if s.deps.Bedrock == nil {
+		return textResult(bedrockUnavailable), nil, nil
+	}
+	return bedrockResult(s.deps.Bedrock.GetTemplateFile(in.TemplateID, in.FilePath))
+}
+
+func (s *Service) toolBedrockGetStandard(_ context.Context, _ *mcp.CallToolRequest, in bedrockGetStandardParams) (*mcp.CallToolResult, any, error) {
+	if s.deps.Bedrock == nil {
+		return textResult(bedrockUnavailable), nil, nil
+	}
+	return bedrockResult(s.deps.Bedrock.GetStandard(in.Name))
+}
+
+func (s *Service) toolBedrockGetExpertGuide(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+	if s.deps.Bedrock == nil {
+		return textResult(bedrockUnavailable), nil, nil
+	}
+	return bedrockResult(s.deps.Bedrock.GetExpertGuide())
+}
+
+func (s *Service) toolBedrockGetReviewRules(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+	if s.deps.Bedrock == nil {
+		return textResult(bedrockUnavailable), nil, nil
+	}
+	return bedrockResult(s.deps.Bedrock.GetReviewRules())
+}
+
+func (s *Service) toolBedrockGetOptimizationRules(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+	if s.deps.Bedrock == nil {
+		return textResult(bedrockUnavailable), nil, nil
+	}
+	return bedrockResult(s.deps.Bedrock.GetOptimizationRules())
+}
+
+func (s *Service) toolBedrockGetJSONSpec(_ context.Context, _ *mcp.CallToolRequest, in bedrockGetJSONSpecParams) (*mcp.CallToolResult, any, error) {
+	if s.deps.Bedrock == nil {
+		return textResult(bedrockUnavailable), nil, nil
+	}
+	return bedrockResult(s.deps.Bedrock.GetJSONSpec(in.ContentType))
+}
+
+func (s *Service) toolBedrockHelp(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+	if s.deps.Bedrock == nil {
+		return textResult(bedrockUnavailable), nil, nil
+	}
+	return bedrockResult(s.deps.Bedrock.BedrockHelp())
+}
+
+func (s *Service) toolBedrockListModPacks(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+	if s.deps.Bedrock == nil {
+		return textResult(bedrockUnavailable), nil, nil
+	}
+	return bedrockResult(s.deps.Bedrock.ListModPacks())
 }

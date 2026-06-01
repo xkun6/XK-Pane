@@ -46,3 +46,39 @@ func (s *Service) SearchComponent(query, componentType string) (string, error) {
 }
 
 func (s *Service) GetComponent(componentID string) (string, error) { return getComponent(componentID) }
+
+// ── Phase 3：指南 / 模板 / 标准工具（12）→ 委托 search_guide/template + standards ──────
+
+func (s *Service) SearchGuide(keyword string, source *string) (string, error) {
+	return searchGuide(keyword, source)
+}
+
+func (s *Service) ReadGuide(path string, maxLines *uint32) (string, error) {
+	return readGuide(path, maxLines)
+}
+
+func (s *Service) MatchTemplate(tags []string, keyword string) (string, error) {
+	return matchTemplate(tags, keyword)
+}
+
+func (s *Service) GetTemplateInfo(templateID string) (string, error) {
+	return templateInfo(templateID)
+}
+
+func (s *Service) GetTemplateFile(templateID, filePath string) (string, error) {
+	return templateFile(templateID, filePath)
+}
+
+func (s *Service) GetStandard(name string) (string, error) { return getStandard(name) }
+
+func (s *Service) GetExpertGuide() (string, error) { return expertGuide() }
+
+func (s *Service) GetReviewRules() (string, error) { return reviewRules() }
+
+func (s *Service) GetOptimizationRules() (string, error) { return optimizationRules() }
+
+func (s *Service) GetJSONSpec(contentType *string) (string, error) { return jsonSpec(contentType) }
+
+func (s *Service) BedrockHelp() (string, error) { return helpText() }
+
+func (s *Service) ListModPacks() (string, error) { return listModPacks() }

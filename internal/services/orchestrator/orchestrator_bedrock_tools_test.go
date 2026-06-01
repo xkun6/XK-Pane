@@ -47,6 +47,32 @@ func (f *fakeBedrock) SearchComponent(query, componentType string) (string, erro
 func (f *fakeBedrock) GetComponent(componentID string) (string, error) {
 	return "GC:" + componentID, nil
 }
+func (f *fakeBedrock) SearchGuide(keyword string, source *string) (string, error) {
+	f.gotSide, f.gotSideCalled = source, true
+	return "SG:" + keyword, nil
+}
+func (f *fakeBedrock) ReadGuide(path string, maxLines *uint32) (string, error) {
+	return "RG:" + path, nil
+}
+func (f *fakeBedrock) MatchTemplate(tags []string, keyword string) (string, error) {
+	return "MT:" + strings.Join(tags, ",") + ":" + keyword, nil
+}
+func (f *fakeBedrock) GetTemplateInfo(templateID string) (string, error) {
+	return "TI:" + templateID, nil
+}
+func (f *fakeBedrock) GetTemplateFile(id, fp string) (string, error) {
+	return "TF:" + id + ":" + fp, nil
+}
+func (f *fakeBedrock) GetStandard(name string) (string, error) { return "STD:" + name, nil }
+func (f *fakeBedrock) GetExpertGuide() (string, error)         { return "EXPERT", nil }
+func (f *fakeBedrock) GetReviewRules() (string, error)         { return "REVIEW", nil }
+func (f *fakeBedrock) GetOptimizationRules() (string, error)   { return "OPT", nil }
+func (f *fakeBedrock) GetJSONSpec(contentType *string) (string, error) {
+	f.gotSide, f.gotSideCalled = contentType, true
+	return "JSON", nil
+}
+func (f *fakeBedrock) BedrockHelp() (string, error)  { return "HELP", nil }
+func (f *fakeBedrock) ListModPacks() (string, error) { return "MODPACKS", nil }
 
 func TestBedrockTools_NilFallback(t *testing.T) {
 	ctx := context.Background()
