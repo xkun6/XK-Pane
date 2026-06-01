@@ -78,6 +78,10 @@ export const databaseEnUS: Messages = {
           label: 'Workspace projects',
           description: 'Project nodes under a workspace (tier 2 of the two-level tree).',
         },
+        mcPackages: {
+          label: 'MC PE packages',
+          description: 'MC PE dev package configs (project / launcher / world / debug hotkeys). Curated, not eligible for bulk clear.',
+        },
       },
     },
   },

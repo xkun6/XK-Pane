@@ -83,6 +83,10 @@ export const databaseZhCN: Messages = {
           label: '工作空间项目',
           description: '工作空间下的项目节点（两层树第二层）。',
         },
+        mcPackages: {
+          label: 'MC PE 包',
+          description: 'MC PE 开发包配置（项目 / 启动器 / 世界 / 调试热键）。含精心配置，不允许一键清空。',
+        },
       },
     },
   },

@@ -3,9 +3,11 @@ import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
+import VideogameAssetRoundedIcon from '@mui/icons-material/VideogameAssetRounded';
 import { lazy } from 'react';
 import { HomePage } from '@/pages/HomePage/HomePage';
 import { GitPage } from '@/pages/GitPage';
+import { McpePage } from '@/pages/McpePage';
 import { HistoryPage, HistoryPageSkeleton } from '@/pages/HistoryPage';
 import { HomePageSkeleton } from '@/pages/HomePage/HomePage.skeleton';
 import { SettingsPageSkeleton } from '@/pages/SettingsPage/SettingsPage.skeleton';
@@ -75,6 +77,15 @@ export const routes: RouteDefinition[] = [
     fallback: <HistoryPageSkeleton />,
     slot: 'primary',
     keepAlive: true, // 保活：保留所选项目 / 文件 / 时间线滚动（自动捕获时 live 刷新）
+  },
+  {
+    id: 'mcpe',
+    labelKey: 'route.mcpe',
+    label: 'MC PE',
+    icon: VideogameAssetRoundedIcon,
+    element: <McpePage />,
+    slot: 'primary',
+    keepAlive: true, // 保活：保留 packages / runs / 日志 + 事件订阅（离开页面不丢运行态）
   },
   {
     id: 'settings',

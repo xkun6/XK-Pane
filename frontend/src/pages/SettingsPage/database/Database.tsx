@@ -207,6 +207,7 @@ const StatusLine = ({ status, styles, t }: StatusLineProps) => {
 const TABLE_NAME_TO_KEY: Record<string, string> = {
   preferences: 'preferences',
   app_settings: 'appSettings',
+  mc_packages: 'mcPackages',
 };
 const tableKeyOf = (name: string): string => TABLE_NAME_TO_KEY[name] ?? name;
 
