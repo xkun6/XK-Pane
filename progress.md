@@ -1322,3 +1322,11 @@ common:build:hook（go build → bin/xkpane-cli-hook[.exe]）；root dev 前置�
 - `errors.go`：`CodedError{Code,Message}` + 错误码常量（MCDK_PROTOCOL_INCOMPLETE_HEADER/PAYLOAD、MCDK_BRIDGE_BIND_FAILED/NO_CLIENT/WRITE_FAILED），对齐 cc-pane AppError::coded。
 - **铁律核对**：bind 127.0.0.1（防 IPv6）；裸 TCP 用标准库 net（非 httpx/procx，本就网络 server）；logx.For("mcdk-bridge")；包注释标 cc-pane 映射 + 偏离（Stop 新增、Unknown 变体省略、shutdown 通道→Close conn）。
 - **验证**：gofmt 干净 / `go build ./internal/...` + `go vet ./internal/services/mcdkbridge/` 绿 / 15 测试（协议字节布局/往返/分帧/错误码 + 桥 端口/连接/发帧/顶替/无client/断连）×3 轮全 PASS 无 flaky（`-race` 因环境无 cgo/gcc 跳过）。未接入任何调用方（独立可编译，P6e-6 才接 orchestrator）。
+
+### P6e-2 embed 桥模组 + 路径/安全/包解析（`internal/services/mcpe`）
+忠实移植 bridge_mod.rs + paths.rs + safety.rs + pack.rs。先把 cc-pane `mc_pe/resources/` 的 `include_test_mod/`（17 文件 ~57KB，含 5 个 `__init__.py`）+ `license/{mcdk,nbt}` 复制进 `internal/services/mcpe/resources/`。
+- `bridgemod.go`：`//go:embed all:resources/include_test_mod`（**必须 all: 前缀**，否则 `_` 开头的 `__init__.py` Python 包标记被默认忽略）+ `BridgeUUID="183b0dc7…"` + `ExtractTo`（`fs.WalkDir` 覆盖写，embed "/" 路径经 TrimPrefix+FromSlash 转 OS 路径）。
+- `paths.go`（跨平台）：mcDir(`%APPDATA%\MinecraftPE_Netease`，fallback home\AppData\Roaming)/gameDir/behaviorPacksDir/resourcePacksDir/worldsDir 返回 (path, ok) 对齐 Rust Option；validateLauncher（is_file + .exe）；isDir/isFile helper。`paths_windows.go`（GetLogicalDrives 扫盘）+ `paths_other.go`（stub nil）。
+- `safety.go`：validateRelativeName（拒 空/分隔符/`.`/`..`/NUL/控制字符）+ validateCommandLinePath（forbiddenCmdChars `" \r \n < > | & ^ % ` $ !` + 控制字符，逐字照搬 FORBIDDEN）。
+- `pack.go`：PackType("behavior"/"resource") + PackInfo + parsePack（深度≤2，深度1命中不下钻）+ parseManifest（encoding/json，header.uuid/version[]→点连接、modules type data→Behavior/resources→Resource、末个匹配胜）。
+- **验证**：gofmt 干净 / Windows `go build`+`go vet`+`go test` 绿（18 测试：bridgemod UUID 一致/解压含 `_` 文件/覆盖 + paths launcher/扫盘/mcDir + safety 遍历/注入/正常 + pack 行为/资源/未知/缺失/根/子目录/空/深度2/深度1不下钻）×2 轮 / **GOOS=linux+darwin 交叉编译绿**（stub 生效）/ `go build ./internal/...` 绿。未接入调用方（独立可编译，service.go P6e-4 才调）。
