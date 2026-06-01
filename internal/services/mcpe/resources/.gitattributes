@@ -1,0 +1,4 @@
+# 游戏内 Python 桥模组（include_test_mod）+ level.dat 等资源按原样经 embed.FS 编进二进制。
+# 禁止 CRLF 行尾转换，保证嵌入字节与 cc-pane 源一致 —— level.dat 是二进制 NBT，
+# 任何行尾“转换”都会损坏它；Python 桥模组也以 LF 保真。
+* -text
