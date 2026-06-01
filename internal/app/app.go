@@ -39,7 +39,7 @@ import (
 
 // Run 创建 Wails 应用、注册服务、打开主窗口并启动事件循环。
 // assets 由调用方（main.go）通过 //go:embed 注入。
-func Run(assets embed.FS) error {
+func Run(assets embed.FS, trayIcon []byte) error {
 	// —— 工具层先就绪：日志 → HTTP UA → 后续模块都能直接用 ——
 	if err := logx.Init(logx.Config{
 		Level:          slog.LevelInfo,
@@ -92,6 +92,9 @@ func Run(assets embed.FS) error {
 	// 注册 toast GUID/激活器）+ XK notification 服务（读 app_settings 开关 + 去重 + 聚焦判定）。
 	wailsNotifier := notifications.New()
 	notifSvc := notification.New(holder, wailsNotifier)
+	// 子窗口系统（foundation 框架能力）：类型化子窗口（confirm / message / blank）+ 事件总线通信。
+	// 同 subprocess 用预创建 + AttachApp 回填 app 引用模式。
+	childWinSvc := NewChildWindowService()
 
 	app := application.New(application.Options{
 		Name:        "XK-Pane",
@@ -113,6 +116,7 @@ func Run(assets embed.FS) error {
 			application.NewService(wsSvc),
 			application.NewService(sessionscan.New()),
 			application.NewService(wailsNotifier), // Wails 通知 service（跑 ServiceStartup 注册 toast）
+			application.NewService(childWinSvc),   // 子窗口系统
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -123,6 +127,7 @@ func Run(assets embed.FS) error {
 	})
 	subSvc.AttachApp(app)
 	termSvc.AttachApp(app)
+	childWinSvc.AttachApp(app)
 	lhWatcher.AttachApp(app) // watcher 经此向前端 Emit localhistory:changed（live 刷新）
 	// Local History 启停补启接线（决策 D4-4）：
 	//   - SaveConfig(enabled=true) 即时启 / (false) 即时停该项目 watcher；
@@ -153,6 +158,9 @@ func Run(assets embed.FS) error {
 	mainWindow := app.Window.NewWithOptions(windowOptions())
 	// 通知 only_when_unfocused 判定：注入主窗口聚焦查询（解耦 notification service 与 Wails 窗口 API）。
 	notifSvc.SetFocusCheck(func() bool { return mainWindow.IsFocused() })
+
+	// 系统托盘（foundation 框架能力，本项目启用）：托盘图标 + 隐藏面板窗口 + 右键菜单。
+	setupSystray(app, trayIcon)
 
 	// —— MCP/Orchestrator 地基（P6a）：本地 HTTP+MCP server，让 pane 内 CLI 经 MCP 反向调用宿主。——
 	// 启动失败 fail-open（CLI 裸跑无 MCP 注入，不阻断应用启动）；端口/token 注入 terminal 供 P6b 生成 MCP 配置。
