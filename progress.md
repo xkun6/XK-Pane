@@ -1390,3 +1390,21 @@ common:build:hook（go build → bin/xkpane-cli-hook[.exe]）；root dev 前置�
 - **jsonschema 坑（已修）**：go-sdk 把 tag 里 `词=` 开头的串当 key 指令解析 → isClient（`true=…`）/ fileName（`kind=…`）描述改为不以 `词=` 起头，否则 AddTool panic。
 - **验证**：gofmt 干净（新文件 LF；改过的 orchestrator.go/orchestrator_tools.go 经 LF 转换后 gofmt 一致，working tree 仅差仓库既有 CRLF；app.go 修了一处行尾注释对齐）/ `go build ./...`〔仅 build/ios 既有 stub 报错，无关〕 + `go vet` + `go test ./internal/services/orchestrator/`（含原 9 工具测试 + 新 3 工具）全绿。orchestrator 非 Wails service（MCP-only），无 bindings 变更。
 - **⚠️ live 手测（待用户真机）**：重启 `wails3 dev` → 启动 MC PE（勾桥）+ 游戏内桥连入 → pane 内 Claude 调 `mcp__panes__execute_mc_code(code="print('hi')", isClient=true)` → `get_mc_pe_logs` 看到输出；`reload_mc(kind="game")` 游戏重启世界。注意 isClient 默认 false 走 type3 服务端，游戏侧 ExecuteServerCode 是 stub 会拒，agent 通常传 isClient=true（P6e_PLAN.md §4）。
+
+### P6e-7 Win32 截图/点击 MCP 工具（capture_window / click_window）（`5673ea5`）
+P6e 收尾单元（技术风险最高）：手写 LazyDLL FFI 复刻 cc-pane mcdk_bridge window.rs/capture.rs/click.rs。**至此 cc-pane MC PE 5 工具全部移植完成。**
+- `mcdkbridge/window_windows.go`（//go:build windows）：user32/gdi32 LazyDLL proc 声明 + 命门常量（PW_RENDERFULLCONTENT=0x2 / SRCCOPY / SM_*VIRTUALSCREEN=76-79 / MOUSEEVENTF_* / DPI ctx=-4=`^uintptr(3)`）+ ABI 敏感 struct + findMCWindowForPID（EnumWindows 用包级锁串行化、回调只建一次防 NewCallback 泄漏；标题含 minecraft/我的世界 优先，否则客户区面积最大）+ setThreadDpi/restoreThreadDpi/lastErr。
+- `mcdkbridge/capture_windows.go`：CaptureWindowByPID（DPI→IsIconic 拒→GetWindowRect→captureRawBGRA→encodeJPEG）；captureRawBGRA 桌面 DC 兼容位图 + PrintWindow，FALSE 降级窗口 DC BitBlt，GetDIBits biHeight 负=自顶向下；defer LIFO 对齐 Rust RAII drop 序（还原 Select→DeleteObject→DeleteDC→ReleaseDC）；encodeJPEG BGRA→RGBA 原地交换 + 最长边 480 CatmullRom 缩放 + jpeg.Encode q75（自动丢 alpha）。**返回原始 JPEG 字节**（orchestrator 包 ImageContent，go-sdk 自动 base64）。
+- `mcdkbridge/click_windows.go`：ClickWindowByPID（[0,1] 校验→找窗口→还原最小化 sleep50ms→bringToForeground〔AttachThreadInput+SetForegroundWindow+BringWindowToTop+轮询 25×10ms〕→DPI 内 computeScreenPoint〔GetClientRect+(n*dim+0.5)+ClientToScreen〕→GetSystemMetrics 虚拟桌面归一化→sendLeftClick 三段 MOVE/DOWN/UP ABSOLUTE|VIRTUALDESK）。
+- `mcdkbridge/win32calc.go`（跨平台纯函数）：clientToCoord/normalizeVirtualAxis/scaledDimensions/inUnitRange。`errors.go` 加 capture/click 错误码。
+- orchestrator：`orchestrator_mcpe_capture_windows.go`（//go:build windows）注册 capture_window（ImageContent）+ click_window（x/y 无 camelCase）+ currentMCPEPID〔ActiveRunPIDs()[0]，不枚举进程避免 exe 名硬编码〕+ 桥未连/无 run 文本兜底；`orchestrator_mcpe_capture_other.go`（!windows）no-op；registerMCPETools 末尾调用。
+- **有意偏离（已标注）**：① Lanczos3→x/image/draw.CatmullRom（Go 无原生，画质略降，§2 拍板）；② 截图基准 GetWindowRect（整窗）vs 点击基准 GetClientRect（客户区）不一致——忠实照搬，手测验证点击偏移；③ orchestrator capture/click 注册走 Windows build tag（mcdkbridge 无需 _other stub，因非 Windows 无人引用 Win32 函数）。
+- **依赖**：新增 `golang.org/x/image v0.40.0`（`go mod tidy` direct）。
+- **单测**：`win32_windows_test.go` struct size（INPUT=40/MOUSEINPUT=32/BITMAPINFOHEADER=40）+ DPI 常量=-4 + 无效 pid→NO_WINDOW + 越界→OUT_OF_BOUNDS；`win32calc_test.go` 坐标/缩放纯函数。
+- **验证**：Windows `go build ./...`〔仅 build/ios stub 无关〕+ `go vet` + `go test`（mcdkbridge + orchestrator）全绿；**mcdkbridge 交叉编译 linux 通过**（_windows/_other tag 正确）；gofmt 干净。orchestrator MCP-only，无 bindings 变更。
+- **⚠️ live 手测（待用户真机）**：重启 `wails3 dev` → 启动 MC PE（勾桥）+ 游戏内桥连入 → 多模态 Claude 调 `mcp__panes__capture_window` 拿 480p JPEG 看图 → `click_window(x=0.5,y=0.5)` 归一化点击命中游戏内 UI。验证点：截图非全白（PrintWindow D3D 路径生效）、中文窗口标题匹配、点击坐标偏移（GetWindowRect vs GetClientRect 基准差）。
+
+---
+
+## ✅ P6e 全部完成（P6e-1 ~ P6e-7，2026-06-02）
+cc-pane MC PE 控制子系统（启动 + 桥 + 5 工具 + 全量前端面板）已完整忠实移植到 XK-Pane。10+ 提交，每单元自洽可编译 + 独立中文 commit，未 push。P6e-5 已 live 手测通过；P6e-6/P6e-7 待 live 手测（需真机 + 游戏内桥连入）。
