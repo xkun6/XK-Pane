@@ -33,3 +33,8 @@ build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 # OS 元数据
 .DS_Store
 Thumbs.db
+
+# Bedrock 知识库基线数据：原始 resources/ 树（~26MB；471+ 文件名含 CJK 标点，go:embed 拒绝）
+# 不入库，仅作 resources.zip 的重生成源（cd internal/services/bedrock && go run genresources.go）。
+# 入库并真正内嵌的是 resources.zip（Deflate ~5.6MB）。
+internal/services/bedrock/resources/

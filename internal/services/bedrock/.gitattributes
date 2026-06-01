@@ -1,0 +1,3 @@
+# resources.zip 是 Bedrock 知识库基线数据归档（~26MB 树 → Deflate 5.6MB），按字节经 //go:embed
+# 编进二进制。禁止任何 eol/CRLF 转换，保证内嵌 zip 字节稳定、解出内容与 cc-pane 源一致。
+resources.zip -text
