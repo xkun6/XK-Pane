@@ -134,6 +134,10 @@ type session struct {
 	pid     int
 	cwd     string
 	cliTool string
+	// claudeSessionID 是该会话对应的 Claude/Reclaude 转录文件 id（= ~/.claude/projects/<cwd>/<id>.jsonl）：
+	// 新会话 = 启动时经 --session-id 钉死的本会话 id；恢复 = ResumeID。供「结构化时间线」精确定位转录,
+	// 避免同 cwd 多会话取最新的歧义。非 claude/reclaude 为空。
+	claudeSessionID string
 
 	// cancelled / cancelCh：Kill 时设置标志并关闭 channel，让 reader 的阻塞发送能确定性打断。
 	cancelled atomic.Bool
@@ -148,6 +152,8 @@ type session struct {
 	// outBuf 累积本会话纯文本输出（ANSI 已剥离）供 get_session_output；lastOutputMs 记最近输出时刻（unix ms）。
 	outBuf       *outputBuffer
 	lastOutputMs atomic.Int64
+	// rawBuf 保留原始 ANSI 输出（有界）供 attach 重放重建 xterm 画面（P7 M4，区别于 stripANSI 的 outBuf）。
+	rawBuf *rawRingBuffer
 }
 
 // New 构造终端服务。registry 提供 CLI 工具命令拼装（Phase 1 cliadapters）。
@@ -174,6 +180,13 @@ func (s *Service) setEmit(fn func(name string, payload any)) {
 	s.emitMu.Lock()
 	s.emit = fn
 	s.emitMu.Unlock()
+}
+
+// SetEmitter 注入事件发射器（导出版 setEmit）。app 装配处用它注入「组合双路」emit
+// （webview app.Event.Emit + Web 网关 RouteEvent），取代 AttachApp 让终端事件同时到达
+// 桌面 webview 与远程浏览器（P7 §6.1）。AttachApp 仍保留供单测/无网关场景。
+func (s *Service) SetEmitter(fn func(name string, payload any)) {
+	s.setEmit(fn)
 }
 
 func (s *Service) emitEvent(name string, payload any) {
@@ -215,6 +228,19 @@ type SessionInfo struct {
 	CliTool string `json:"cliTool"`
 }
 
+// claudeTranscriptID 计算会话对应的 Claude 转录文件 id（~/.claude/projects/<cwd>/<id>.jsonl）：
+// 仅 claude/reclaude 有结构化转录；恢复 = ResumeID（--resume 续写原 <ResumeID>.jsonl）；
+// 新会话 = 本会话 id（启动时经 --session-id 钉死 → 转录即 <id>.jsonl）。其余引擎/裸 shell 返回 ""。
+func claudeTranscriptID(cliTool, resumeID, sessionID string) string {
+	if cliTool != "claude" && cliTool != "reclaude" {
+		return ""
+	}
+	if strings.TrimSpace(resumeID) != "" {
+		return resumeID
+	}
+	return sessionID
+}
+
 // CreateSession 在 ProjectPath 下用 CliTool（或裸 shell）启动 PTY 会话，返回 sessionId。
 // 启动后输出经 terminal:output 事件流式推送，退出经 terminal:exit 通知。
 func (s *Service) CreateSession(ctx context.Context, spec CreateSpec) (string, error) {
@@ -253,16 +279,18 @@ func (s *Service) CreateSession(ctx context.Context, spec CreateSpec) (string, e
 	}
 
 	sess := &session{
-		id:          id,
-		pty:         pt,
-		pid:         pt.PID(),
-		cwd:         spec.ProjectPath,
-		cliTool:     spec.CliTool,
-		cancelCh:    make(chan struct{}),
-		batchCh:     make(chan string, batchChanCap),
-		readerDone:  make(chan struct{}),
-		batcherDone: make(chan struct{}),
-		outBuf:      newOutputBuffer(liveOutputMaxLines, liveOutputMaxBytes),
+		id:              id,
+		pty:             pt,
+		pid:             pt.PID(),
+		cwd:             spec.ProjectPath,
+		cliTool:         spec.CliTool,
+		claudeSessionID: claudeTranscriptID(spec.CliTool, spec.ResumeID, id),
+		cancelCh:        make(chan struct{}),
+		batchCh:         make(chan string, batchChanCap),
+		readerDone:      make(chan struct{}),
+		batcherDone:     make(chan struct{}),
+		outBuf:          newOutputBuffer(liveOutputMaxLines, liveOutputMaxBytes),
+		rawBuf:          newRawRingBuffer(rawReplayMaxBytes),
 	}
 
 	s.mu.Lock()
@@ -333,12 +361,13 @@ type SessionOutput struct {
 
 // SessionSnapshot 是 list_sessions / get_session_status 的单会话视图（活跃会话）。
 type SessionSnapshot struct {
-	ID           string `json:"id"`
-	PID          int    `json:"pid"`
-	Cwd          string `json:"cwd"`
-	CliTool      string `json:"cliTool"`
-	Status       string `json:"status"`       // 活跃会话恒 "active"（XK 暂不推断 idle/waiting）
-	LastOutputAt int64  `json:"lastOutputAt"` // 最近输出时刻 unix ms；无输出则为创建后的 0
+	ID              string `json:"id"`
+	PID             int    `json:"pid"`
+	Cwd             string `json:"cwd"`
+	CliTool         string `json:"cliTool"`
+	ClaudeSessionID string `json:"claudeSessionId"` // claude/reclaude 转录文件 id（结构化时间线精确定位用）；其余为空
+	Status          string `json:"status"`          // 活跃会话恒 "active"（XK 暂不推断 idle/waiting）
+	LastOutputAt    int64  `json:"lastOutputAt"`    // 最近输出时刻 unix ms；无输出则为创建后的 0
 }
 
 // SessionSnapshots 返回当前活跃会话快照（含 status + 最近输出时刻），供 orchestrator
@@ -349,12 +378,13 @@ func (s *Service) SessionSnapshots() []SessionSnapshot {
 	out := make([]SessionSnapshot, 0, len(s.sessions))
 	for _, sess := range s.sessions {
 		out = append(out, SessionSnapshot{
-			ID:           sess.id,
-			PID:          sess.pid,
-			Cwd:          sess.cwd,
-			CliTool:      sess.cliTool,
-			Status:       "active",
-			LastOutputAt: sess.lastOutputMs.Load(),
+			ID:              sess.id,
+			PID:             sess.pid,
+			Cwd:             sess.cwd,
+			CliTool:         sess.cliTool,
+			ClaudeSessionID: sess.claudeSessionID,
+			Status:          "active",
+			LastOutputAt:    sess.lastOutputMs.Load(),
 		})
 	}
 	return out
@@ -378,6 +408,26 @@ func (s *Service) SessionOutput(sessionID string, lines int) (SessionOutput, err
 		return SessionOutput{SessionID: sessionID, Lines: d.buf.getRecent(lines)}, nil
 	}
 	return SessionOutput{}, fmt.Errorf("terminal: session %q not found or expired", sessionID)
+}
+
+// RawReplay 是 attach 重放快照（P7 M4）：原始 ANSI 数据 + 该快照覆盖到的最大 seq。
+// 客户端先 xterm.write(Data) 重建画面，再对 live 的 terminal:output 去重（seq ≤ LastSeq 丢弃）。
+type RawReplay struct {
+	SessionID string `json:"sessionId"`
+	Data      string `json:"data"`
+	LastSeq   uint64 `json:"lastSeq"`
+}
+
+// SessionReplay 返回活跃会话的原始输出重放快照（供 attach 时重建 xterm 画面，再切 live）。
+// 未知/已退出会话返回 ok=false（调用方按空重放处理：无历史画面，仅接后续 live）。
+// 不含 dead-buffers：dead 缓冲是 stripANSI 文本（重建不了画面），且 attach 只针对活跃会话。
+func (s *Service) SessionReplay(sessionID string) (RawReplay, bool) {
+	sess, ok := s.get(sessionID)
+	if !ok {
+		return RawReplay{}, false
+	}
+	data, lastSeq := sess.rawBuf.snapshot()
+	return RawReplay{SessionID: sessionID, Data: data, LastSeq: lastSeq}, true
 }
 
 // retireBuffer 把已退出会话的输出缓冲缩到 dead 上限后存入 dead-buffers（带退出时刻）。
@@ -517,9 +567,13 @@ func (s *Service) batchLoop(sess *session) {
 		if b.Len() == 0 {
 			return
 		}
+		data := b.String()
+		// 入原始 ANSI 重放缓冲并取单调 seq（与本条 terminal:output 一致）；attach 重放据此去重。
+		seq := sess.rawBuf.append(data)
 		s.emitEvent(events.TerminalOutput, events.TerminalOutputPayload{
 			SessionID: sess.id,
-			Data:      b.String(),
+			Data:      data,
+			Seq:       seq,
 		})
 		b.Reset()
 	}

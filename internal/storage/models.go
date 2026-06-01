@@ -72,6 +72,11 @@ type AppSettings struct {
 	NotificationEnabled           bool `gorm:"not null;default:true"`
 	NotificationOnlyWhenUnfocused bool `gorm:"not null;default:false"`
 
+	// Web 网关 Bearer token（P7 M1）：跨重启稳定，手机配对凭它换 httpOnly cookie。
+	// cryptox 加密落库（持久化铁律），**不进前端 Snapshot** —— 由 webapi.Gateway 直接读本表，
+	// 只有桌面端「设置 → Web 访问」的配对二维码 URL 里才内嵌明文 token（本地可信路径）。
+	WebGatewayTokenEnc string `gorm:"type:text"`
+
 	UpdatedAt int64 `gorm:"autoUpdateTime:milli"`
 }
 

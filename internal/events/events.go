@@ -28,9 +28,12 @@ const (
 
 // TerminalOutputPayload 是 TerminalOutput 事件载荷。
 // Data 是 PTY 原始输出（含 ANSI / 控制序列），前端直接喂 xterm.write()。
+// Seq 是该会话内单调递增的 chunk 序号（P7 M4）：attach 重放快照带 lastSeq，客户端据 seq
+// 丢弃 live 中已被重放覆盖的 chunk（seq ≤ lastSeq）、写入新 chunk（seq > lastSeq），不漏不重。
 type TerminalOutputPayload struct {
 	SessionID string `json:"sessionId"`
 	Data      string `json:"data"`
+	Seq       uint64 `json:"seq"`
 }
 
 // TerminalStatusPayload 是 TerminalStatus 事件载荷。

@@ -57,6 +57,10 @@ func (a *ClaudeAdapter) BuildCommand(ctx *Context) (CommandResult, error) {
 	var args []string
 	if ctx.ResumeID != "" {
 		args = append(args, "--resume", ctx.ResumeID)
+	} else if ctx.SessionID != "" {
+		// 新会话：用本会话 id（UUID）钉死 Claude 转录 id → 转录即 <id>.jsonl，供「结构化时间线」
+		// 精确定位（避免同 cwd 多会话取最新的歧义）。恢复时不加（--resume 续写原 <ResumeID>.jsonl）。
+		args = append(args, "--session-id", ctx.SessionID)
 	}
 	args = append(args, buildAddDirArgs(ctx)...)
 	if !ctx.SkipMCP {

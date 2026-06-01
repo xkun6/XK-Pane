@@ -6,6 +6,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	"xkpane/internal/services/terminal"
 	"xkpane/internal/services/workspace"
 	"xkpane/internal/storage"
+	"xkpane/internal/webapi"
 	"xkpane/internal/utils/httpx"
 	"xkpane/internal/utils/logx"
 
@@ -86,6 +88,9 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	// project / workspace service 提为变量：既注册给前端，又供 watcher 启动扫描「已登记项目」。
 	projSvc := project.New(holder)
 	wsSvc := workspace.New(holder)
+	// 扫盘历史会话 service（无状态、纯文件系统只读）。提为变量：既注册给前端 bindings，
+	// 又注入 Web 网关供 GET /api/sessions/scan（手机「按项目恢复会话」）。
+	scanSvc := sessionscan.New()
 	// Local History 自动捕获 watcher（决策 D4-1 独立包）。依赖 lhSvc（窄接口 Saver：读配置 + 保存）。
 	lhWatcher := lhwatcher.New(lhSvc)
 	// 桌面通知（P6d-4）：Wails 通知 service 单例（须注册进 Services 跑 Windows ServiceStartup，
@@ -95,6 +100,16 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	// 子窗口系统（foundation 框架能力）：类型化子窗口（confirm / message / blank）+ 事件总线通信。
 	// 同 subprocess 用预创建 + AttachApp 回填 app 引用模式。
 	childWinSvc := NewChildWindowService()
+
+	// Web 网关（P7 M1）：独立 0.0.0.0 HTTP server，托管同一份 frontend/dist 供手机/平板局域网访问。
+	// 与 orchestrator（127.0.0.1 + MCP）物理隔离。webAccessSvc 是薄 Wails 门面（只暴露 GetAccessInfo
+	// 给「设置 → Web 访问」卡片渲染配对二维码）；网关生命周期（Start/Stop）由本装配处直接管。
+	webFS, err := fs.Sub(assets, "frontend/dist")
+	if err != nil {
+		return fmt.Errorf("sub web assets: %w", err)
+	}
+	webGateway := webapi.NewGateway(holder, webFS)
+	webAccessSvc := webapi.NewService(webGateway)
 
 	app := application.New(application.Options{
 		Name:        "XK-Pane",
@@ -114,9 +129,10 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(termSvc),
 			application.NewService(clitools.New(cliRegistry)),
 			application.NewService(wsSvc),
-			application.NewService(sessionscan.New()),
+			application.NewService(scanSvc),
 			application.NewService(wailsNotifier), // Wails 通知 service（跑 ServiceStartup 注册 toast）
 			application.NewService(childWinSvc),   // 子窗口系统
+			application.NewService(webAccessSvc),  // Web 网关门面（GetAccessInfo → 配对二维码）
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -126,7 +142,14 @@ func Run(assets embed.FS, trayIcon []byte) error {
 		},
 	})
 	subSvc.AttachApp(app)
-	termSvc.AttachApp(app)
+	// 组合双路 emit（P7 §6.1）：会话事件同时推给 ① 桌面 webview（app.Event.Emit，进程内同步、
+	// 零回归）② Web 网关（RouteEvent → 浏览器 WS，白名单过滤 + 慢端剔除，绝不反压回 PTY）。
+	// 取代 termSvc/orchSvc.AttachApp（二者原本仅注入 app.Event.Emit 单路；AttachApp 保留供单测）。
+	mirrorEmit := func(name string, payload any) {
+		app.Event.Emit(name, payload)
+		webGateway.RouteEvent(name, payload)
+	}
+	termSvc.SetEmitter(mirrorEmit)
 	childWinSvc.AttachApp(app)
 	lhWatcher.AttachApp(app) // watcher 经此向前端 Emit localhistory:changed（live 刷新）
 	// Local History 启停补启接线（决策 D4-4）：
@@ -170,13 +193,30 @@ func Run(assets embed.FS, trayIcon []byte) error {
 		Workspaces: wsSvc,
 		Notifier:   notifSvc,
 	})
-	orchSvc.AttachApp(app) // 编排工具经此 Emit orchestrator:launch 给前端
+	orchSvc.SetEmitter(mirrorEmit) // 编排工具 Emit orchestrator:launch 经双路达桌面 + Web
+	// Web 网关远程端点的下游能力（fail-closed 白名单 §9）：launch（公共化 LaunchTask）+ 只读列表。
+	webGateway.AttachServices(webapi.ServiceDeps{
+		Launcher:   orchSvc,
+		Sessions:   termSvc,
+		Projects:   projSvc,
+		Workspaces: wsSvc,
+		Scanner:    scanSvc,
+		Replayer:   termSvc,
+		Writer:     termSvc,
+	})
 	if err := orchSvc.Start(); err != nil {
 		logx.For("app").Warn("orchestrator start failed (CLI 将无 MCP 注入，fail-open)", "err", err)
 	} else {
 		termSvc.SetOrchestrator(orchSvc.Port(), orchSvc.Token())
 	}
 	defer func() { _ = orchSvc.Stop() }()
+
+	// —— Web 网关（P7 M1）：bind 0.0.0.0，手机/平板经局域网访问。失败 fail-open（Web 访问不可用，
+	// 不阻断桌面应用）。端口被占等启动失败仅 warn。——
+	if err := webGateway.Start(); err != nil {
+		logx.For("app").Warn("webapi start failed (Web 访问不可用，fail-open)", "err", err)
+	}
+	defer func() { _ = webGateway.Stop() }()
 
 	go emitTimeLoop(app)
 

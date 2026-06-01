@@ -14,9 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"xkpane/internal/events"
-	"xkpane/internal/services/terminal"
-
 	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -89,67 +86,28 @@ type writeParams struct {
 // ── 工具实现 ────────────────────────────────────────────────────────────
 
 func (s *Service) toolLaunchTask(ctx context.Context, req *mcp.CallToolRequest, in launchTaskParams) (*mcp.CallToolResult, any, error) {
-	hasPrompt := strings.TrimSpace(in.Prompt) != ""
-	hasResume := strings.TrimSpace(in.ResumeID) != ""
-	if hasPrompt && hasResume {
-		return textResult("错误: prompt 和 resumeId 互斥，不能同时提供"), nil, nil
-	}
-	if !hasPrompt && !hasResume {
-		return textResult("错误: 必须提供 prompt 或 resumeId 其中之一"), nil, nil
-	}
-	if !s.isProjectRegistered(ctx, in.ProjectPath) {
-		return textResult(fmt.Sprintf("错误: 项目路径 '%s' 未注册", in.ProjectPath)), nil, nil
-	}
-
-	// 工作空间解析：workspace_name → workspacePath（未找到则忽略，对齐 cc-pane warn-then-none）。
-	var wsPath string
-	if in.WorkspaceName != "" {
-		if p, ok := s.workspacePath(ctx, in.WorkspaceName); ok {
-			wsPath = p
-		}
-	}
-	// cli_tool 缺省时同源继承发起方 CLI（reclaude 启动的子会话仍走 reclaude）；
-	// 无法识别发起方（如裸 shell / 直连）才回落 claude。显式传参始终优先。
+	// cli_tool 缺省时同源继承发起方 CLI（reclaude 启动的子会话仍走 reclaude）；无法识别发起方
+	// （如裸 shell / 直连）则留空交给 LaunchTask 回落 claude。显式传参始终优先。caller_tool 同源
+	// 继承是 MCP 专属（读 HTTP 请求头），故在此解析好 cli_tool 再调公共 LaunchTask。
 	cliTool := in.CliTool
 	if cliTool == "" {
 		cliTool = callerTool(req)
 	}
-	if cliTool == "" {
-		cliTool = "claude"
-	}
 
-	spec := terminal.CreateSpec{
+	res, err := s.LaunchTask(ctx, LaunchParams{
 		ProjectPath:   in.ProjectPath,
-		WorkspacePath: wsPath,
+		Prompt:        in.Prompt,
+		ResumeID:      in.ResumeID,
 		CliTool:       cliTool,
-		ProviderID:    in.ProviderID,
-		Cols:          120,
-		Rows:          30,
-	}
-	if hasResume {
-		spec.ResumeID = in.ResumeID
-	} else {
-		spec.InitialPrompt = in.Prompt
-	}
-
-	sid, err := s.deps.Terminal.CreateSession(ctx, spec)
-	if err != nil {
-		return textResult(fmt.Sprintf("错误: 创建会话失败: %v", err)), nil, nil
-	}
-
-	taskID := genID()
-	// 通知前端开新面板附着该会话（events.go 注册的 orchestrator:launch；前端 listener 见 P6c-3）。
-	s.emitEvent(events.OrchestratorLaunch, events.OrchestratorLaunchPayload{
-		TaskID:        taskID,
-		SessionID:     sid,
-		ProjectPath:   in.ProjectPath,
 		WorkspaceName: in.WorkspaceName,
 		ProviderID:    in.ProviderID,
 		Title:         in.Title,
-		ResumeID:      in.ResumeID,
-		CliTool:       cliTool,
 	})
-	return jsonResult(map[string]any{"taskId": taskID, "sessionId": sid, "status": "launching"}), nil, nil
+	if err != nil {
+		// MCP 约定：错误以「错误: …」文本作为正常结果返回（不返回 Go error）。
+		return textResult("错误: " + err.Error()), nil, nil
+	}
+	return jsonResult(map[string]any{"taskId": res.TaskID, "sessionId": res.SessionID, "status": "launching"}), nil, nil
 }
 
 func (s *Service) toolListProjects(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {

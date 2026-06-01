@@ -110,6 +110,15 @@ func (s *Service) AttachApp(app *application.App) {
 	s.emitMu.Unlock()
 }
 
+// SetEmitter 注入事件发射器（导出版）。app 装配处用它注入「组合双路」emit（webview
+// app.Event.Emit + Web 网关 RouteEvent），取代 AttachApp 让 orchestrator:launch 同时到达
+// 桌面 webview 与远程浏览器（P7 §6.1）。AttachApp 仍保留供单测/无网关场景。
+func (s *Service) SetEmitter(fn func(name string, payload any)) {
+	s.emitMu.Lock()
+	s.emit = fn
+	s.emitMu.Unlock()
+}
+
 func (s *Service) emitEvent(name string, payload any) {
 	s.emitMu.RLock()
 	fn := s.emit

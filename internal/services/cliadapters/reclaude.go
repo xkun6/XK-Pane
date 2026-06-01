@@ -57,6 +57,9 @@ func (a *ReclaudeAdapter) BuildCommand(ctx *Context) (CommandResult, error) {
 	var args []string
 	if ctx.ResumeID != "" {
 		args = append(args, "--resume", ctx.ResumeID)
+	} else if ctx.SessionID != "" {
+		// 新会话：用本会话 id 钉死 Reclaude/Claude 转录 id（同 ClaudeAdapter），供结构化时间线精确定位。
+		args = append(args, "--session-id", ctx.SessionID)
 	}
 	args = append(args, buildAddDirArgs(ctx)...)
 	if !ctx.SkipMCP {
