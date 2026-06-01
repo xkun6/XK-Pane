@@ -12,6 +12,7 @@ import (
 
 	"xkpane/internal/events"
 	"xkpane/internal/services/appsettings"
+	"xkpane/internal/services/bedrock"
 	"xkpane/internal/services/cliadapters"
 	"xkpane/internal/services/clitools"
 	"xkpane/internal/services/gitsvc"
@@ -118,6 +119,9 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	// 生命周期由本装配处直接管（Start/Stop，fail-open）。
 	mcpeSvc := mcpe.New(holder)
 	mcdkBridge := mcdkbridge.New()
+	// Bedrock 知识库（P6f）：只读查询服务，注入 orchestrator 供 bedrock_* MCP 工具调用。
+	// 查询本身无状态、无 storage holder，**不进 Wails Services 列表**（无前端绑定，仅 MCP 暴露）。
+	bedrockSvc := bedrock.New()
 
 	app := application.New(application.Options{
 		Name:        "XK-Pane",
@@ -205,6 +209,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 		Notifier:   notifSvc,
 		MCPE:       mcpeSvc,    // P6e-6：get_mc_pe_logs 读日志缓冲（+ P6e-7 capture/click 取 PID）
 		Bridge:     mcdkBridge, // P6e-6：execute_mc_code / reload_mc 经桥 fire-and-forget 发帧
+		Bedrock:    bedrockSvc, // P6f：bedrock_* 只读知识库查询（API/事件/组件/分类…）
 	})
 	orchSvc.SetEmitter(mirrorEmit) // 编排工具 Emit orchestrator:launch 经双路达桌面 + Web
 	// Web 网关远程端点的下游能力（fail-closed 白名单 §9）：launch（公共化 LaunchTask）+ 只读列表。

@@ -84,6 +84,7 @@ type Deps struct {
 	Notifier   Notifier // P6d-4：cli-hook notify → /api/notifications/trigger
 	MCPE       MCPE     // P6e-6：get_mc_pe_logs（+ P6e-7 capture/click 取 PID）
 	Bridge     Bridge   // P6e-6：execute_mc_code / reload_mc fire-and-forget 发帧
+	Bedrock    Bedrock  // P6f：bedrock_* 只读知识库查询（nil = 工具返回「错误: …」）
 }
 
 // orchestratorVersion 报给 MCP 客户端的 server 版本（与应用版本解耦，独立演进）。
