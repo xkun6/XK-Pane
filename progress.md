@@ -1355,3 +1355,15 @@ common:build:hook（go build → bin/xkpane-cli-hook[.exe]）；root dev 前置�
 - **有意偏离 cc-pane（已标注）**：① 桥端口注入经注入的 *mcdkbridge.Service（cc-pane 经 Tauri State + 命令层传 mcdk_port 参数）；② mc_pe:exited 在 Wait 后经宽限+Close 才 emit（ConPTY 需 Close 让 reader EOF；cc-pane 靠 portable-pty 自然 EOF 立即 emit）；③ GBK 日志默认 lossy 解码（待手测看中文是否乱，再上 simplifiedchinese）。
 - **验证**：gofmt 干净（我的文件）/ Windows `go build ./internal/... .`（含 main embed）+ `go vet` + `go test`（mcpe 61 测试含日志缓冲/过滤/helpers + mcdkbridge 15 + storage AutoMigrate mc_packages）全绿。**linux/darwin 交叉编译失败是 Wails GTK/CGO 平台限制**（mcpe 经 events 引入 wails application，同 terminal/webapi，非本单元问题）。bindings（MCPackage/MCRunSessionInfo/McdkBridgeStatus + 10 方法）下次 `wails3 dev` 自动重生，P6e-5 前端消费。
 - **后端可启动但无 UI 触发点**：launch 由前端 mc_pe 面板驱动（P6e-5），故 P6e-4 验收为 build/test；首个 live 手测在 P6e-5。
+
+### P6e-5 前端 MC PE 面板（全量 5 组件，进行中）
+先 `wails3 generate bindings`（dev 未运行，无锁冲突）重生绑定：mcpe 服务 10 方法 + `storage.MCPackage`/`MCWorldConfig`/`MCDebugOptions`/`MCRunSessionInfo`/`McdkBridgeStatus`/`MCGameMode`/`MCLevelType` 模型已生成（`@bindings/xkpane/internal/services/mcpe` + `.../internal/storage/models`）。再用 workflow（`wf_3e1c8e9e`）并行精读 cc-pane 5 组件完整 UI/逻辑规格 + XK 前端视图层/数据层约定（GitPage MVVM 范本 / routes.tsx 注册 / NativeDialogs / 主题 / transport / 事件 / WorkspaceProvider 状态范式）。
+
+**关键约定（落地依据）**：① 页面走 `routes.tsx` 注册（非 App.tsx 硬编码）+ keepAlive:true（保运行态/日志）；② service = `const X={...} as const` 单例 + isDesktop 守门（MC PE 纯 Windows 桌面，后端无 HTTP RPC → viewer 全 reject）；③ 状态用 React Context（**项目已弃 zustand**），仿轻量 WorkspaceProvider（useState+reload+aliveRef）+ 事件订阅；④ 业务类型直接引 `@bindings/.../storage/models`（camelCase 契约共用，零转换透传），事件 payload 前端重定义；⑤ 图标 *Rounded、圆角 6/8、配色 foundation.*、文案全 t()、对话框全 NativeDialogs。
+
+**子单元划分**：
+- **P6e-5a（`ae578f7`，已落地）数据层**：`shared/events.ts` + `events.test.ts` 加 mc_pe:output/launched/exited（防漂移测试同步）；`services/mcpe/MCPEService.ts`（单例：10 方法 isDesktop 守门 + onOutput/onLaunched/onExited 全局订阅，业务类型从 bindings models 透传 + 事件 payload 重定义）；`services/index.ts` 导出。验证：`pnpm typecheck` 0 + events.test 2/2。
+- **P6e-5b（待做）状态 Context**：`pages/McpePage/McpeContext.tsx`（packages/activePackageId/runs〔key=runId,{info,output,exited}〕+ actions〔load/setActive/create置顶+active/update/delete/launch〔清同包旧run〕/stop/restart〔等exited或5s超时〕/moveWorldToTrash/scanLaunchers〕+ 事件订阅〔output 合批 50ms + 2000 行截断；exited 打标记不删〕+ MCRunRuntime/MCOutputLine 类型）。仿 useMCPEStore.ts §7 语义 1:1。
+- **P6e-5c（待做）5 组件**：McpePage（容器：顶栏刷新/新建 + 列表 + 详情/空态）+ PackageList（行：图标/名/路径/RUN/删除）+ PackageDetail（config/run Tabs，运行自动切 run）+ ConfigPanel（全字段表单：名称/项目/启动器手选+扫描/附加目录/世界设置/热键/桥开关 + 脏检查 + 保存/保存并启动 + 导入/重置存档 + 桥状态一次性）+ LaunchPanel（启停重启 + PID/退出码 + 桥徽章 2s 轮询 + 日志 severity 着色 + file:line tokenize 跳转）。纯函数 shortTs/tokenize(PY_RE/JSON_RE)/resolvePath/severity 映射原样移植。
+- **P6e-5d（待做）接线**：`routes.tsx` 加 mcpe 路由（icon `*Rounded`，keepAlive:true）+ `App.tsx` registerMcpePageLocales + `i18n/locales/{zh-CN,en-US}.ts` route.mcpe + 页面 lang 包 + `SettingsPage/database/lang` 加 `mcPackages` 表文案 + `Database.tsx` TABLE_NAME_TO_KEY 加 `mc_packages:'mcPackages'`。验证 typecheck/vitest/build。首个 live 手测在此后（⚠️ 改 .go 已重生 bindings；前端改完重启 dev 重嵌 dist）。
+- cc-pane 组件完整规格 + XK 约定见 workflow 输出（`wf_3e1c8e9e` / `wf_7078158a` G 组）。
