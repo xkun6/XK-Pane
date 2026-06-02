@@ -94,5 +94,14 @@ export const todoPageEnUS: Messages = {
       ok: 'Delete',
       cancel: 'Cancel',
     },
+    dispatch: {
+      title: 'Dispatch Task',
+      tip: 'Dispatch to Agent',
+      project: 'Target Project',
+      cliTool: 'CLI Tool',
+      noProject: 'No registered project',
+      confirm: 'Dispatch',
+      cancel: 'Cancel',
+    },
   },
 };

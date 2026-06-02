@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Box, Button, CircularProgress, Typography, useTheme } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import ChecklistRoundedIcon from '@mui/icons-material/ChecklistRounded';
@@ -12,7 +13,8 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { useT } from '@/i18n';
-import type { Todo } from '@/services';
+import { useRegisteredProjects } from '@/project';
+import type { Project, Todo } from '@/services';
 import { todoPageStyles } from './TodoPage.styles';
 import { useTodoPage } from './useTodoPage';
 import { TodoSidebar } from './components/TodoSidebar';
@@ -21,6 +23,7 @@ import { SortableTodoListItem } from './components/SortableTodoListItem';
 import { TodoTagGroup } from './components/TodoTagGroup';
 import { TodoEditor } from './components/TodoEditor';
 import { TodoOverview } from './components/TodoOverview';
+import { TodoDispatchDialog } from './components/TodoDispatchDialog';
 
 // TodoPage：三栏 TodoManager（左栏导航 / 中栏过滤+列表 / 右栏编辑器+概览）。
 // 忠实复刻 cc-pane web/components/todo/TodoManager，状态由 useTodoPage（自包含 query 模型）承载。
@@ -29,6 +32,8 @@ export const TodoPage = () => {
   const styles = todoPageStyles(theme);
   const t = useT();
   const vm = useTodoPage();
+  const projects = useRegisteredProjects();
+  const [dispatchTarget, setDispatchTarget] = useState<Todo | null>(null);
 
   const currentViewLabel =
     vm.viewMode === 'my_day'
@@ -68,6 +73,11 @@ export const TodoPage = () => {
     if (vm.groupMode === 'priority') return t(`todo.priority.${key}`);
     if (vm.groupMode === 'scope') return t(`todo.scope.${key}`);
     return key;
+  };
+
+  const handleDispatchConfirm = (project: Project, cliTool: string): void => {
+    if (dispatchTarget) void vm.dispatchTodo(dispatchTarget, project, cliTool);
+    setDispatchTarget(null);
   };
 
   const showEditor = vm.isCreating || vm.selectedTodo !== null;
@@ -142,6 +152,7 @@ export const TodoPage = () => {
                   onToggleStatus={vm.toggleStatus}
                   onToggleMyDay={vm.toggleMyDay}
                   onDelete={handleDelete}
+                  onDispatch={setDispatchTarget}
                 />
               ))
             ) : (
@@ -156,6 +167,7 @@ export const TodoPage = () => {
                       onToggleStatus={vm.toggleStatus}
                       onToggleMyDay={vm.toggleMyDay}
                       onDelete={handleDelete}
+                      onDispatch={setDispatchTarget}
                     />
                   ))}
                 </SortableContext>
@@ -194,6 +206,14 @@ export const TodoPage = () => {
           />
         )}
       </Box>
+
+      <TodoDispatchDialog
+        open={dispatchTarget !== null}
+        todo={dispatchTarget}
+        projects={projects}
+        onClose={() => setDispatchTarget(null)}
+        onConfirm={handleDispatchConfirm}
+      />
     </Box>
   );
 };

@@ -3,9 +3,13 @@ import {
   TodoService,
   PreferencesService,
   NativeDialogs,
+  TerminalService,
+  TaskBindingService,
   type Todo,
   type TodoStats,
 } from '@/services';
+import { useTerminal } from '@/terminal';
+import { useRouter } from '@/router';
 
 // ViewModel：三栏 TodoManager 的全部状态与回调（自包含 query 模型，忠实移植 cc-pane useTodoStore）。
 // 不依赖全局 Provider；不返回 JSX；不持翻译串——只暴露数据 + 回调 + 选项「值」，标签由 View 经 t() 渲染。
@@ -86,6 +90,15 @@ function nextStatus(s: string): string {
   return 'todo';
 }
 
+// 分派 prompt 模板（对齐 ccpanes-dispatch-todos skill 的「任务来源/内容/要求」结构）。
+// 这是发给 CLI Agent 的 prompt（机器面，非 UI 文案），故为代码常量、不走 i18n。
+function buildDispatchPrompt(todo: Todo): string {
+  const lines = ['## 任务来源', '', '来自 XK-Pane Todo 系统的待办任务。', '', '## 任务内容', '', `标题: ${todo.title}`];
+  if (todo.description) lines.push(`描述: ${todo.description}`);
+  lines.push(`优先级: ${todo.priority}`, '', '## 要求', '', '完成上述任务。完成后告知用户。');
+  return lines.join('\n');
+}
+
 export const useTodoPage = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [filterScope, setFilterScope] = useState<string | null>(null);
@@ -106,6 +119,10 @@ export const useTodoPage = () => {
 
   const [stats, setStats] = useState<TodoStats | null>(null);
   const [customTypes, setCustomTypes] = useState<string[]>([]);
+
+  // 分派依赖：终端启动入口（newTab 绑定预建会话）+ 路由跳转。
+  const { newTab, activePaneId } = useTerminal();
+  const { navigate } = useRouter();
 
   const aliveRef = useRef(true);
   useEffect(() => {
@@ -299,6 +316,41 @@ export const useTodoPage = () => {
     [loadList],
   );
 
+  // ── 分派（结合 ccpane）：把 Todo 交给一个 Agent 会话执行 ──────────────────
+  // 1) 先建会话（注入 todo 内容作 initialPrompt）→ 2) newTab 绑定该会话（编排场景，reconcile 不再建）
+  // → 3) 落库 TaskBinding(todoId↔sessionId) → 4) Todo 标 in_progress → 5) 跳转终端页。
+  const dispatchTodo = useCallback(
+    async (todo: Todo, project: { id: string; name: string; path: string }, cliTool: string): Promise<void> => {
+      const prompt = buildDispatchPrompt(todo);
+      const sessionId = await TerminalService.create({
+        projectPath: project.path,
+        cliTool,
+        initialPrompt: prompt,
+      });
+      newTab(activePaneId, {
+        projectId: project.id,
+        projectPath: project.path,
+        cliTool,
+        sessionId,
+      });
+      await TaskBindingService.create({
+        todoId: todo.id,
+        sessionId,
+        projectPath: project.path,
+        title: todo.title,
+        prompt,
+        cliTool,
+      }).catch(() => {
+        // TaskBinding 落库失败不阻断分派（会话已起）
+      });
+      await TodoService.update(todo.id, { status: 'in_progress' });
+      await loadList();
+      if (selectedTodo?.id === todo.id) await refreshSelected(todo.id);
+      navigate('terminal');
+    },
+    [newTab, activePaneId, navigate, loadList, selectedTodo, refreshSelected],
+  );
+
   // ── 子任务 ──────────────────────────────────────────────────────────────
   const addSubtask = useCallback(
     async (todoId: string, title: string): Promise<void> => {
@@ -419,6 +471,7 @@ export const useTodoPage = () => {
     toggleMyDay,
     deleteTodo,
     reorder,
+    dispatchTodo,
     // 子任务
     addSubtask,
     toggleSubtask,

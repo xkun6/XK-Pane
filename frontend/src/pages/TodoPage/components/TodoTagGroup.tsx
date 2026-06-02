@@ -13,6 +13,7 @@ interface Props {
   onToggleStatus: (t: Todo) => void;
   onToggleMyDay: (t: Todo) => void;
   onDelete: (t: Todo) => void;
+  onDispatch?: (t: Todo) => void;
 }
 
 // 分组折叠容器（groupMode !== none 时用）。对齐 cc-pane TodoTagGroup：可折叠，头部 = 分组名 + done/total。
@@ -44,6 +45,7 @@ export const TodoTagGroup = (p: Props) => {
               onToggleStatus={p.onToggleStatus}
               onToggleMyDay={p.onToggleMyDay}
               onDelete={p.onDelete}
+              onDispatch={p.onDispatch}
             />
           ))}
         </Box>

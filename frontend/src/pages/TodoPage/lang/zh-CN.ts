@@ -94,5 +94,14 @@ export const todoPageZhCN: Messages = {
       ok: '删除',
       cancel: '取消',
     },
+    dispatch: {
+      title: '分派任务',
+      tip: '分派给 Agent',
+      project: '目标项目',
+      cliTool: 'CLI 工具',
+      noProject: '无已登记项目',
+      confirm: '分派',
+      cancel: '取消',
+    },
   },
 };

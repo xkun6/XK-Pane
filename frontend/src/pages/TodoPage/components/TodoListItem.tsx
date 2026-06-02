@@ -8,6 +8,7 @@ import FlagRoundedIcon from '@mui/icons-material/FlagRounded';
 import CheckBoxRoundedIcon from '@mui/icons-material/CheckBoxRounded';
 import CalendarTodayRoundedIcon from '@mui/icons-material/CalendarTodayRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import { useT } from '@/i18n';
 import { BUILTIN_TODO_TYPES } from '../useTodoPage';
 import type { Todo } from '@/services';
@@ -21,6 +22,7 @@ interface Props {
   onToggleStatus: (todo: Todo) => void;
   onToggleMyDay: (todo: Todo) => void;
   onDelete: (todo: Todo) => void;
+  onDispatch?: (todo: Todo) => void;
 }
 
 export const TodoListItem = ({
@@ -31,6 +33,7 @@ export const TodoListItem = ({
   onToggleStatus,
   onToggleMyDay,
   onDelete,
+  onDispatch,
 }: Props) => {
   const theme = useTheme();
   const styles = todoPageStyles(theme);
@@ -98,6 +101,20 @@ export const TodoListItem = ({
         )}
 
         <FlagRoundedIcon fontSize="small" sx={{ color: priorityColor }} />
+
+        {onDispatch && (
+          <IconButton
+            size="small"
+            className="todo-hover-action"
+            onClick={(e) => {
+              stop(e);
+              onDispatch(todo);
+            }}
+            aria-label={t('todo.dispatch.tip')}
+          >
+            <PlayArrowRoundedIcon fontSize="small" />
+          </IconButton>
+        )}
 
         <IconButton
           size="small"

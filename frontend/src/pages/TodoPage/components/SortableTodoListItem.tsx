@@ -13,6 +13,7 @@ interface Props {
   onToggleStatus: (t: Todo) => void;
   onToggleMyDay: (t: Todo) => void;
   onDelete: (t: Todo) => void;
+  onDispatch?: (t: Todo) => void;
 }
 
 // 平铺模式下的可拖拽行：左侧拖拽手柄（hover 显）+ TodoListItem。对齐 cc-pane SortableTodoListItem。
@@ -41,6 +42,7 @@ export const SortableTodoListItem = (p: Props) => {
           onToggleStatus={p.onToggleStatus}
           onToggleMyDay={p.onToggleMyDay}
           onDelete={p.onDelete}
+          onDispatch={p.onDispatch}
         />
       </Box>
     </Box>
