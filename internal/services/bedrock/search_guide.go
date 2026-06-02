@@ -17,7 +17,7 @@ const (
 	guideMaxLinesCeiling = 2000
 )
 
-// searchGuide ← bedrock_search_guide。tokens = lower + split whitespace（CJK 连续串=单 token）。
+// searchGuide ← pe_search_guide。tokens = lower + split whitespace（CJK 连续串=单 token）。
 // source 可选 ∈ {mcguide,mconline,wiki,ui_templates}。排序 (score 降, title 升) truncate 20。
 func searchGuide(keyword string, source *string) (string, error) {
 	tokens := strings.Fields(strings.ToLower(keyword))
@@ -81,7 +81,7 @@ func searchGuide(keyword string, source *string) (string, error) {
 	return b.String(), nil
 }
 
-// readGuide ← bedrock_read_guide。path 相对 data/docs/（正斜杠），按 in-memory guide 索引校验防越界。
+// readGuide ← pe_read_guide。path 相对 data/docs/（正斜杠），按 in-memory guide 索引校验防越界。
 // 对齐 guide.rs:97-153。
 func readGuide(path string, maxLines *uint32) (string, error) {
 	if path == "" {

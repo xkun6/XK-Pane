@@ -76,7 +76,7 @@ func TestJSONSpec(t *testing.T) {
 func TestHelpText(t *testing.T) {
 	resetState()
 	s, _ := helpText()
-	for _, want := range []string{"search_api", "search_guide", "bedrock_help"} {
+	for _, want := range []string{"search_api", "search_guide", "pe_help"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("help 缺 %q", want)
 		}

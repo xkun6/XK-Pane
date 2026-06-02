@@ -39,7 +39,7 @@ func scoreComponent(queryLC string, c *ComponentEntry) int {
 	return score
 }
 
-// searchComponent ← bedrock_search_component。componentType 默认 all 由调用方（工具层）解析后传入。
+// searchComponent ← pe_search_component。componentType 默认 all 由调用方（工具层）解析后传入。
 func searchComponent(query, componentType string) (string, error) {
 	if err := validateComponentType(componentType); err != nil {
 		return "", err
@@ -92,7 +92,7 @@ func searchComponent(query, componentType string) (string, error) {
 	return b.String(), nil
 }
 
-// getComponent ← bedrock_get_component。按 id 精确查，渲染卡片（含 ## Definition JSON，用 Extra）。
+// getComponent ← pe_get_component。按 id 精确查，渲染卡片（含 ## Definition JSON，用 Extra）。
 // 对齐 component.rs:92-132。
 func getComponent(componentID string) (string, error) {
 	idx, err := getIndices()

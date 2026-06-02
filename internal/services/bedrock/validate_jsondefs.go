@@ -10,7 +10,7 @@ import (
 	"unicode/utf8"
 )
 
-// validate_jsondefs.go：bedrock_validate_json_definitions。扫 addon 行为包根下 4 个子目录的 .json，
+// validate_jsondefs.go：pe_validate_json_definitions。扫 addon 行为包根下 4 个子目录的 .json，
 // 逐文件 C1-C5 检查。对齐 validate/json_defs.rs。
 
 // scanDir：(子目录, 期望 format_version)。"" = 仅做字符串检查不校验具体值。
@@ -26,7 +26,7 @@ var jsonScanDirs = []scanDir{
 	{"entities", ""},
 }
 
-// validateJSONDefinitions ← bedrock_validate_json_definitions。返回 Markdown 报告（路径错误也是报告）。
+// validateJSONDefinitions ← pe_validate_json_definitions。返回 Markdown 报告（路径错误也是报告）。
 func validateJSONDefinitions(addonDir string) (string, error) {
 	if msg, bad := checkAddonPath(addonDir, "JSON Definitions Validation"); bad {
 		return msg, nil

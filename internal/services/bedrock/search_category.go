@@ -8,7 +8,7 @@ import (
 
 // search_category.go：分类枚举。对齐 search/category.rs。
 
-// listCategories ← bedrock_list_categories。全分类字母序 `cat (N APIs)`。
+// listCategories ← pe_list_categories。全分类字母序 `cat (N APIs)`。
 func listCategories() (string, error) {
 	idx, err := getIndices()
 	if err != nil {
@@ -34,7 +34,7 @@ func listCategories() (string, error) {
 	return b.String(), nil
 }
 
-// listApisByCategory ← bedrock_list_apis_by_category。先原始大小写 key 精确命中，miss 则 lower
+// listApisByCategory ← pe_list_apis_by_category。先原始大小写 key 精确命中，miss 则 lower
 // 全表子串过滤、key 升序逐个 render（与 by_name 全 lower 不同，刻意保留）。对齐 category.rs:42-69。
 func listApisByCategory(category string) (string, error) {
 	idx, err := getIndices()

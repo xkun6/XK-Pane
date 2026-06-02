@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// validate_assets.go：bedrock_validate_addon_assets。扫 addon 根下 textures/ 的图片，逐图 A1-A4 检查。
+// validate_assets.go：pe_validate_addon_assets。扫 addon 根下 textures/ 的图片，逐图 A1-A4 检查。
 // 对齐 validate/assets.rs。
 
 var pngMagic = []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
@@ -39,7 +39,7 @@ func classifyImage(ext string) imageKind {
 	}
 }
 
-// validateAddonAssets ← bedrock_validate_addon_assets。
+// validateAddonAssets ← pe_validate_addon_assets。
 func validateAddonAssets(addonDir string) (string, error) {
 	if msg, bad := checkAddonPath(addonDir, "Addon Asset Validation"); bad {
 		return msg, nil

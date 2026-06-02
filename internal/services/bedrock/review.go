@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// review.go：bedrock_review_code 引擎框架。对齐 review/{mod,line_index,violation}.rs。
+// review.go：pe_review_code 引擎框架。对齐 review/{mod,line_index,violation}.rs。
 // 全程零正则、零外部依赖：纯行扫描 + 缩进状态机 + 引号态剥注释，无需 Python AST。
 // column 是 1-based 字节偏移。12 条规则在 review_rules.go。
 

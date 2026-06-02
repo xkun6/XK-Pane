@@ -12,7 +12,7 @@ import (
 // search_template.go：模板 match/info/file/list_mod_packs。对齐 search/template.rs。
 // TemplateEntry 的 apis/systems/file_count 是 json.RawMessage（serde_json::Value），按需解码。
 
-// matchTemplate ← bedrock_match_template。tags ⊕ keyword 至少给一。
+// matchTemplate ← pe_match_template。tags ⊕ keyword 至少给一。
 // tag：模板某 tag == +2 否则 Contains +1（else-if 互斥，每查询 tag 一次）；
 // keyword：id Contains +3，模板每个 tag Contains +1（可累加）。排序 (score 降, id 升) truncate 20。
 func matchTemplate(tags []string, keyword string) (string, error) {
@@ -90,7 +90,7 @@ func matchTemplate(tags []string, keyword string) (string, error) {
 	return b.String(), nil
 }
 
-// templateInfo ← bedrock_get_template_info。对齐 template.rs:88-196。
+// templateInfo ← pe_get_template_info。对齐 template.rs:88-196。
 func templateInfo(templateID string) (string, error) {
 	idx, err := getIndices()
 	if err != nil {
@@ -173,7 +173,7 @@ func langHintFor(filePath string) string {
 	}
 }
 
-// templateFile ← bedrock_get_template_file。模板源文件当前未内嵌 → 路径校验后 read_resource 失败，
+// templateFile ← pe_get_template_file。模板源文件当前未内嵌 → 路径校验后 read_resource 失败，
 // 返回“未内嵌”说明（指向 get_template_info）。对齐 template.rs:219-263。
 func templateFile(templateID, filePath string) (string, error) {
 	idx, err := getIndices()
@@ -218,7 +218,7 @@ func templateFile(templateID, filePath string) (string, error) {
 	return "", fmt.Errorf("template files are not embedded in this build (template '%s' lives outside the embedded knowledge base). Use get_template_info to see the template's metadata.", templateID)
 }
 
-// listModPacks ← bedrock_list_mod_packs。按 mod_name 分组（空→"(unspecified)"），key 升序，组内 id 升序。
+// listModPacks ← pe_list_mod_packs。按 mod_name 分组（空→"(unspecified)"），key 升序，组内 id 升序。
 // 对齐 template.rs:267-305。注意：tags 用 "," 连接（非 match_ 的 ", "）。
 func listModPacks() (string, error) {
 	idx, err := getIndices()

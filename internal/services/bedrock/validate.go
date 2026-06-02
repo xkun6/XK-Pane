@@ -81,7 +81,7 @@ var validTestStepTypes = []string{"wait", "assert", "action", "screenshot"}
 
 const validTestTypesDebug = `["wait", "assert", "action", "screenshot"]`
 
-// validateTest ← bedrock_validate_test。纯 JSON 字符串校验，返回单行 VALID 或多行 INVALID。
+// validateTest ← pe_validate_test。纯 JSON 字符串校验，返回单行 VALID 或多行 INVALID。
 // 对齐 test_schema.rs:27-81。
 func validateTest(testJSON string) (string, error) {
 	var value any

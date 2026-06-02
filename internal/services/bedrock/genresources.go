@@ -5,7 +5,7 @@
 // 为什么要 zip 而不是直接 //go:embed all:resources：Go 的 embed 用 module.CheckFilePath →
 // fileNameOK 校验每个文件名，非 ASCII 字符**只允许 unicode.IsLetter**。docs 树里 471+ 个文件
 // 名含 CJK 标点（、，（）：《》 等，均非字母），go:embed 一律拒绝。而文件相对路径是查询契约
-// （GuideEntry.Path / API.Link / bedrock_read_guide 的 path 参数都依赖原始路径），不能改名。
+// （GuideEntry.Path / API.Link / pe_read_guide 的 path 参数都依赖原始路径），不能改名。
 // zip 归档对条目名无此限制，且 *zip.Reader 直接实现 fs.FS，运行期零额外解析成本。
 //
 // 用法（更新基线数据后重新生成，需 ./resources 树在位 —— 通常从 cc-pane 拷贝）：

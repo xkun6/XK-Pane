@@ -56,113 +56,113 @@ type Bedrock interface {
 // registerBedrockTools 注册 Bedrock 只读知识库工具（由 registerTools 末尾调用）。
 func (s *Service) registerBedrockTools(srv *mcp.Server) {
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_search_api",
+		Name:        "pe_search_api",
 		Description: "模糊搜索网易版 Minecraft 中国版 ModSDK 的 API（按名称，大小写不敏感子串）。返回最多 20 条排名结果及简短描述。",
 	}, s.toolBedrockSearchAPI)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_get_api",
+		Name:        "pe_get_api",
 		Description: "按精确名称获取一个 ModSDK API 的完整 Markdown 卡片（参数/返回/示例/链接）。可选 side 过滤 client 或 server，省略则两侧都返回。",
 	}, s.toolBedrockGetAPI)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_search_event",
+		Name:        "pe_search_event",
 		Description: "模糊搜索网易版 Minecraft 中国版 ModSDK 的事件（按名称）。返回最多 20 条排名结果。",
 	}, s.toolBedrockSearchEvent)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_get_event",
+		Name:        "pe_get_event",
 		Description: "按精确名称获取一个 ModSDK 事件的完整 Markdown 卡片。可选 side 过滤 client 或 server。",
 	}, s.toolBedrockGetEvent)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_validate_call",
+		Name:        "pe_validate_call",
 		Description: "校验 (name, side) 是否为已知的 ModSDK API 或事件，返回 VALID/INVALID 及修正建议。side 为 client 或 server（必填）。",
 	}, s.toolBedrockValidateCall)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_api_stats",
+		Name:        "pe_api_stats",
 		Description: "知识库总量与 top API 分类统计（API/事件/header 计数、按 side 分布、前 10 大分类）。",
 	}, s.toolBedrockAPIStats)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_list_categories",
+		Name:        "pe_list_categories",
 		Description: "按字母序列出全部已知 ModSDK API 分类及各自 API 数量。",
 	}, s.toolBedrockListCategories)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_list_apis_by_category",
+		Name:        "pe_list_apis_by_category",
 		Description: "列出某分类下的全部 API。分类名可精确或子串，未命中时做大小写不敏感模糊匹配。",
 	}, s.toolBedrockListApisByCategory)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_search_component",
+		Name:        "pe_search_component",
 		Description: "在组件 id / name / description 上做子串搜索。可选 componentType：item / block / entity / netease_item / netease_block / all（默认 all）。",
 	}, s.toolBedrockSearchComponent)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_get_component",
+		Name:        "pe_get_component",
 		Description: "按精确 id 获取组件的完整定义卡片（含 JSON 定义）。",
 	}, s.toolBedrockGetComponent)
 
 	// ── Phase 3：指南 / 模板 / 标准（12，P6f-4）─────────────────────────
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_search_guide",
+		Name:        "pe_search_guide",
 		Description: "多 token 子串搜索内嵌文档（mcguide / mconline / wiki / ui_templates）。可选 source 限定单一来源。返回最多 20 条排名结果。中文关键词建议用单个核心词。",
 	}, s.toolBedrockSearchGuide)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_read_guide",
-		Description: "读取一个内嵌 Markdown 指南。path 相对 data/docs/（用 bedrock_search_guide 返回的路径）。可选 maxLines 限制起始行数（默认 200，最大 2000）。",
+		Name:        "pe_read_guide",
+		Description: "读取一个内嵌 Markdown 指南。path 相对 data/docs/（用 pe_search_guide 返回的路径）。可选 maxLines 限制起始行数（默认 200，最大 2000）。",
 	}, s.toolBedrockReadGuide)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_match_template",
+		Name:        "pe_match_template",
 		Description: "按 tags / keyword 对官方示例模板打分排名。tags 与 keyword 至少给一个。",
 	}, s.toolBedrockMatchTemplate)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_get_template_info",
+		Name:        "pe_get_template_info",
 		Description: "获取单个模板的完整元数据卡片（mod / 路径 / 标签 / 标志 / 系统 / API）。",
 	}, s.toolBedrockGetTemplateInfo)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_get_template_file",
-		Description: "读取模板目录内的某个文件（当前模板源未内嵌，通常返回提示改用 bedrock_get_template_info）。",
+		Name:        "pe_get_template_file",
+		Description: "读取模板目录内的某个文件（当前模板源未内嵌，通常返回提示改用 pe_get_template_info）。",
 	}, s.toolBedrockGetTemplateFile)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_get_standard",
+		Name:        "pe_get_standard",
 		Description: "按名称（文件 stem，可带或不带 .md）获取任意 standards/*.md 规范文档，支持精确或模糊匹配。",
 	}, s.toolBedrockGetStandard)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_get_expert_guide",
+		Name:        "pe_get_expert_guide",
 		Description: "返回 modsdk-expert.md 专家指南全文。",
 	}, s.toolBedrockGetExpertGuide)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_get_review_rules",
+		Name:        "pe_get_review_rules",
 		Description: "返回 netease-code-review.md 代码审查规则全文。",
 	}, s.toolBedrockGetReviewRules)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_get_optimization_rules",
+		Name:        "pe_get_optimization_rules",
 		Description: "返回 netease-optimization-expert.md 优化专家规则全文。",
 	}, s.toolBedrockGetOptimizationRules)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_get_json_spec",
+		Name:        "pe_get_json_spec",
 		Description: "JSON 编写规范。contentType：netease（仅网易）/ modsdk（仅 ModSDK）/ both 或省略（两者拼接）。",
 	}, s.toolBedrockGetJSONSpec)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_help",
+		Name:        "pe_help",
 		Description: "Bedrock 知识库全部工具的速览说明。",
 	}, s.toolBedrockHelp)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_list_mod_packs",
+		Name:        "pe_list_mod_packs",
 		Description: "按 mod_name 分组列出全部内嵌模板，渲染 Markdown 汇总。",
 	}, s.toolBedrockListModPacks)
 
 	// ── Phase 4：静态代码审查（1，P6f-5）───────────────────────────────
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_review_code",
+		Name:        "pe_review_code",
 		Description: "对一段 Python 2.7 代码跑 ModSDK 静态审查规则，返回 Markdown 报告（按 Critical/Warning/Suggestion 分级）。可选 filename 用于报告标题（默认 unknown.py）。",
 	}, s.toolBedrockReviewCode)
 
 	// ── Phase 5：文件系统 / JSON 校验（3，P6f-6）──────────────────────
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_validate_json_definitions",
+		Name:        "pe_validate_json_definitions",
 		Description: "扫描 addon 行为包根下的 JSON 定义（netease_items_beh / netease_blocks / netease_recipes / entities），检查 BOM / UTF-8 / 解析 / format_version / 命名空间。addonDir 须为绝对路径。",
 	}, s.toolBedrockValidateJSONDefinitions)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_validate_addon_assets",
+		Name:        "pe_validate_addon_assets",
 		Description: "扫描 addon 根目录 textures/ 下的纹理资产，检查格式 / 文件名 / 大小 / PNG 尺寸（2 的幂、宽高比）。addonDir 须为绝对路径。",
 	}, s.toolBedrockValidateAddonAssets)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "bedrock_validate_test",
+		Name:        "pe_validate_test",
 		Description: "对一段声明式测试用例 JSON 字符串做 schema 校验（name + steps，每步 type ∈ wait/assert/action/screenshot），返回 VALID/INVALID。",
 	}, s.toolBedrockValidateTest)
 }
@@ -291,7 +291,7 @@ type bedrockSearchGuideParams struct {
 }
 
 type bedrockReadGuideParams struct {
-	Path     string  `json:"path" jsonschema:"内嵌指南路径（如 mcguide/foo.md），由 bedrock_search_guide 返回"`
+	Path     string  `json:"path" jsonschema:"内嵌指南路径（如 mcguide/foo.md），由 pe_search_guide 返回"`
 	MaxLines *uint32 `json:"maxLines,omitempty" jsonschema:"从开头最多读取的行数（默认 200，最大 2000）"`
 }
 

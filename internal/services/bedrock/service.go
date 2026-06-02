@@ -85,7 +85,7 @@ func (s *Service) ListModPacks() (string, error) { return listModPacks() }
 
 // ── Phase 4：静态代码审查（1）→ 委托 review ─────────────────────────────
 
-// ReviewCode ← bedrock_review_code。filename 默认在 service 层解析（对齐 service.rs:150）。
+// ReviewCode ← pe_review_code。filename 默认在 service 层解析（对齐 service.rs:150）。
 func (s *Service) ReviewCode(code string, filename *string) (string, error) {
 	fn := "unknown.py"
 	if filename != nil {

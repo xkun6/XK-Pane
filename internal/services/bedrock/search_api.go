@@ -260,7 +260,7 @@ func dedupSorted(s []string) []string {
 
 // ── 工具入口 ─────────────────────────────────────────────────────────────
 
-// searchAPI ← bedrock_search_api。
+// searchAPI ← pe_search_api。
 func searchAPI(name string) (string, error) {
 	idx, err := getIndices()
 	if err != nil {
@@ -269,7 +269,7 @@ func searchAPI(name string) (string, error) {
 	return renderSearchResults("API", name, scoreAndRank(idx.allApis, name, 20)), nil
 }
 
-// getAPI ← bedrock_get_api。side 给则须 server/client（否则返 error）。
+// getAPI ← pe_get_api。side 给则须 server/client（否则返 error）。
 func getAPI(name string, side *string) (string, error) {
 	if side != nil {
 		if err := validateSide(*side); err != nil {
@@ -287,7 +287,7 @@ func getAPI(name string, side *string) (string, error) {
 	return renderEntriesMarkdown(entries), nil
 }
 
-// validateCall ← bedrock_validate_call。side 非法返 "INVALID:" 字符串（非 error），合并查 api+event。
+// validateCall ← pe_validate_call。side 非法返 "INVALID:" 字符串（非 error），合并查 api+event。
 func validateCall(name, side string) (string, error) {
 	if side != "server" && side != "client" {
 		return fmt.Sprintf("INVALID: side must be 'server' or 'client', got '%s'", side), nil
@@ -331,7 +331,7 @@ func validateCall(name, side string) (string, error) {
 	return fmt.Sprintf("VALID: '%s' on side '%s'", name, side), nil
 }
 
-// apiStats ← bedrock_api_stats。KB 总量 + by side + top 10 分类。对齐 api.rs:324-376。
+// apiStats ← pe_api_stats。KB 总量 + by side + top 10 分类。对齐 api.rs:324-376。
 func apiStats() (string, error) {
 	idx, err := getIndices()
 	if err != nil {
