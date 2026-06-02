@@ -6,6 +6,7 @@ import { registerFilesPageLocales } from '@/pages/FilesPage/lang';
 import { registerGitPageLocales } from '@/pages/GitPage/lang';
 import { registerHistoryPageLocales } from '@/pages/HistoryPage/lang';
 import { registerMcpePageLocales } from '@/pages/McpePage';
+import { registerTodoPageLocales } from '@/pages/TodoPage/lang';
 import { registerWorkspaceTreeLocales } from '@/components/WorkspaceTree';
 import { registerPaneTreeLocales } from '@/components/PaneTree';
 import { registerWebWorkspaceTreeLocales } from '@/components/WebWorkspaceTree';
@@ -15,6 +16,7 @@ import { PreferencesProvider } from '@/preferences';
 import { CurrentDirProvider } from '@/currentdir';
 import { RightPanelProvider } from '@/rightpanel';
 import { ProjectProvider } from '@/project';
+import { TodoProvider } from '@/todo';
 import { WorkspaceProvider } from '@/workspace';
 import { ProviderProvider } from '@/provider';
 import { RouterProvider } from '@/router';
@@ -37,6 +39,7 @@ registerFilesPageLocales();
 registerGitPageLocales();
 registerHistoryPageLocales();
 registerMcpePageLocales();
+registerTodoPageLocales();
 registerWorkspaceTreeLocales();
 registerPaneTreeLocales();
 registerWebWorkspaceTreeLocales();
@@ -63,13 +66,15 @@ export const App = () => {
             <ProjectProvider>
               <WorkspaceProvider>
                 <ProviderProvider>
-                  <CurrentDirProvider>
-                    <RightPanelProvider>
-                      <RouterProvider routes={routes}>
-                        <AppLayout />
-                      </RouterProvider>
-                    </RightPanelProvider>
-                  </CurrentDirProvider>
+                  <TodoProvider>
+                    <CurrentDirProvider>
+                      <RightPanelProvider>
+                        <RouterProvider routes={routes}>
+                          <AppLayout />
+                        </RouterProvider>
+                      </RightPanelProvider>
+                    </CurrentDirProvider>
+                  </TodoProvider>
                 </ProviderProvider>
               </WorkspaceProvider>
             </ProjectProvider>

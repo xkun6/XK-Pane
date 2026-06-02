@@ -12,6 +12,24 @@ export {
 } from './launchhistory/LaunchHistoryService';
 export { ProjectService, type Project } from './project/ProjectService';
 export {
+  TodoService,
+  type Todo,
+  type TodoSubtask,
+  type CreateTodoInput,
+  type UpdateTodoInput,
+  type TodoQuery,
+  type TodoQueryResult,
+  type TodoStats,
+} from './todo/TodoService';
+export {
+  TaskBindingService,
+  type TaskBinding,
+  type CreateTaskBindingInput,
+  type UpdateTaskBindingInput,
+  type TaskBindingQuery,
+  type TaskBindingQueryResult,
+} from './taskbinding/TaskBindingService';
+export {
   WorkspaceService,
   type Workspace,
   type WorkspaceProject,

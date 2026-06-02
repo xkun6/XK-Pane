@@ -28,6 +28,7 @@ export const enUS: Locale = {
       git: 'Git',
       history: 'Local History',
       mcpe: 'MC PE',
+      todo: 'Todo',
       settings: 'Settings',
     },
     rightPanel: {

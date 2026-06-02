@@ -35,6 +35,7 @@ export const zhCN: Locale = {
       git: 'Git',
       history: '本地历史',
       mcpe: 'MC PE',
+      todo: '待办',
       settings: '设置',
     },
     rightPanel: {

@@ -3,6 +3,7 @@ import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
 import VideogameAssetRoundedIcon from '@mui/icons-material/VideogameAssetRounded';
 import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
+import ChecklistRoundedIcon from '@mui/icons-material/ChecklistRounded';
 import { lazy } from 'react';
 import { HomePage } from '@/pages/HomePage/HomePage';
 import { McpePage } from '@/pages/McpePage';
@@ -34,6 +35,13 @@ const TerminalPage = lazy(async () => {
 const FilesPage = lazy(async () => {
   const mod = await import('@/pages/FilesPage/FilesPage');
   return { default: mod.FilesPage };
+});
+
+// TodoPage 走 lazy：三栏待办管理（含 @dnd-kit 拖拽）较重，拆出主 bundle；keepAlive 保留
+// 左栏作用域选择 / 过滤态 / 选中项（离开待办页再回不重置）。
+const TodoPage = lazy(async () => {
+  const mod = await import('@/pages/TodoPage/TodoPage');
+  return { default: mod.TodoPage };
 });
 
 // 路由表是唯一事实源：
@@ -84,6 +92,15 @@ export const routes: RouteDefinition[] = [
     element: <McpePage />,
     slot: 'primary',
     keepAlive: true, // 保活：保留 packages / runs / 日志 + 事件订阅（离开页面不丢运行态）
+  },
+  {
+    id: 'todo',
+    labelKey: 'route.todo',
+    label: 'Todo',
+    icon: ChecklistRoundedIcon,
+    element: <TodoPage />,
+    slot: 'primary',
+    keepAlive: true, // 保活：保留左栏作用域选择 / 过滤态 / 选中项
   },
   {
     id: 'settings',
