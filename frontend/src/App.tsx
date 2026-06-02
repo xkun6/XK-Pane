@@ -16,7 +16,6 @@ import { PreferencesProvider } from '@/preferences';
 import { CurrentDirProvider } from '@/currentdir';
 import { RightPanelProvider } from '@/rightpanel';
 import { ProjectProvider } from '@/project';
-import { TodoProvider } from '@/todo';
 import { WorkspaceProvider } from '@/workspace';
 import { ProviderProvider } from '@/provider';
 import { RouterProvider } from '@/router';
@@ -66,15 +65,13 @@ export const App = () => {
             <ProjectProvider>
               <WorkspaceProvider>
                 <ProviderProvider>
-                  <TodoProvider>
-                    <CurrentDirProvider>
-                      <RightPanelProvider>
-                        <RouterProvider routes={routes}>
-                          <AppLayout />
-                        </RouterProvider>
-                      </RightPanelProvider>
-                    </CurrentDirProvider>
-                  </TodoProvider>
+                  <CurrentDirProvider>
+                    <RightPanelProvider>
+                      <RouterProvider routes={routes}>
+                        <AppLayout />
+                      </RouterProvider>
+                    </RightPanelProvider>
+                  </CurrentDirProvider>
                 </ProviderProvider>
               </WorkspaceProvider>
             </ProjectProvider>

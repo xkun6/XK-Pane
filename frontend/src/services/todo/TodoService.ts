@@ -21,17 +21,25 @@ export interface TodoSubtask {
   sortOrder: number;
 }
 
+export type TodoStatus = 'todo' | 'in_progress' | 'done';
+export type TodoPriority = 'high' | 'medium' | 'low';
+export type TodoScope = 'global' | 'workspace' | 'project' | 'external' | 'temp_script';
+
 export interface Todo {
   id: string;
   title: string;
   description: string;
   status: string; // todo | in_progress | done
   priority: string; // high | medium | low
-  scope: string;
+  scope: string; // global | workspace | project | external | temp_script
+  scopeRef: string | null;
   tags: string[];
   dueDate: string | null;
   sortOrder: number;
   myDay: boolean;
+  myDayDate: string | null;
+  reminderAt: string | null;
+  recurrence: string | null;
   todoType: string;
   subtasks: TodoSubtask[];
 }
@@ -42,7 +50,13 @@ export interface CreateTodoInput {
   description?: string;
   status?: string;
   priority?: string;
+  scope?: string;
+  scopeRef?: string;
   tags?: string[];
+  dueDate?: string;
+  reminderAt?: string;
+  recurrence?: string;
+  todoType?: string;
 }
 
 // 编辑：全部可选，仅更新提供的字段（patch）。
@@ -51,7 +65,15 @@ export interface UpdateTodoInput {
   description?: string;
   status?: string;
   priority?: string;
+  scope?: string;
+  scopeRef?: string;
   tags?: string[];
+  dueDate?: string;
+  myDay?: boolean;
+  myDayDate?: string;
+  reminderAt?: string;
+  recurrence?: string;
+  todoType?: string;
 }
 
 // 查询过滤条件（全部可选，省略 = 不约束）。对齐后端 todo.TodoQuery。
@@ -109,10 +131,14 @@ function toTodo(t: RawTodo): Todo {
     status: t.status ?? 'todo',
     priority: t.priority ?? 'medium',
     scope: t.scope ?? 'global',
+    scopeRef: t.scopeRef ?? null,
     tags: t.tags ?? [],
     dueDate: t.dueDate ?? null,
     sortOrder: t.sortOrder ?? 0,
     myDay: t.myDay ?? false,
+    myDayDate: t.myDayDate ?? null,
+    reminderAt: t.reminderAt ?? null,
+    recurrence: t.recurrence ?? null,
     todoType: t.todoType ?? '',
     subtasks: (t.subtasks ?? []).map(toSubtask),
   };
@@ -154,7 +180,6 @@ export const TodoService = {
   },
 
   async create(input: CreateTodoInput): Promise<Todo> {
-    // 用生成的 binding 类构造（接受 Partial，自动补其余字段默认；后端按指针 nil 走默认）。
     return toTodo(
       await Binding.Create(
         new RawCreateInput({
@@ -162,7 +187,13 @@ export const TodoService = {
           description: input.description,
           status: input.status,
           priority: input.priority,
+          scope: input.scope,
+          scopeRef: input.scopeRef,
           tags: input.tags,
+          dueDate: input.dueDate,
+          reminderAt: input.reminderAt,
+          recurrence: input.recurrence,
+          todoType: input.todoType,
         }),
       ),
     );
@@ -176,13 +207,26 @@ export const TodoService = {
         description: input.description,
         status: input.status,
         priority: input.priority,
+        scope: input.scope,
+        scopeRef: input.scopeRef,
         tags: input.tags,
+        dueDate: input.dueDate,
+        myDay: input.myDay,
+        myDayDate: input.myDayDate,
+        reminderAt: input.reminderAt,
+        recurrence: input.recurrence,
+        todoType: input.todoType,
       }),
     );
   },
 
   async remove(id: string): Promise<void> {
     await Binding.Delete(id);
+  },
+
+  // 按给定 id 顺序重写 sort_order（拖拽重排用）。
+  async reorder(ids: string[]): Promise<void> {
+    await Binding.Reorder(ids);
   },
 
   async addSubtask(todoId: string, title: string): Promise<TodoSubtask> {
