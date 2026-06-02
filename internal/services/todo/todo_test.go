@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"xkpane/internal/storage"
 )
@@ -522,5 +523,37 @@ func TestScopeRefRequired(t *testing.T) {
 	g3, _ := svc.Create(ctx, CreateTodoInput{Title: "g3"})
 	if err := svc.Update(ctx, g3.ID, UpdateTodoInput{Status: sp("done")}); err != nil {
 		t.Errorf("global status-only update should pass: %v", err)
+	}
+}
+
+func TestCheckReminders(t *testing.T) {
+	ctx := context.Background()
+	svc := newTestService(t)
+
+	past := time.Now().UTC().Add(-1 * time.Hour).Format(time.RFC3339)
+	future := time.Now().UTC().Add(1 * time.Hour).Format(time.RFC3339)
+
+	// 到期（过去）未完成 → 命中。
+	due, _ := svc.Create(ctx, CreateTodoInput{Title: "due", ReminderAt: sp(past)})
+	// 未到期（将来）→ 不命中。
+	svc.Create(ctx, CreateTodoInput{Title: "later", ReminderAt: sp(future)})
+	// 无提醒 → 不命中。
+	svc.Create(ctx, CreateTodoInput{Title: "noremind"})
+	// 到期但已完成 → 不命中。
+	done, _ := svc.Create(ctx, CreateTodoInput{Title: "donedue", ReminderAt: sp(past)})
+	if err := svc.Update(ctx, done.ID, UpdateTodoInput{Status: sp("done")}); err != nil {
+		t.Fatalf("mark done: %v", err)
+	}
+
+	got, err := svc.CheckReminders(ctx)
+	if err != nil {
+		t.Fatalf("CheckReminders: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != due.ID {
+		ids := make([]string, len(got))
+		for i, g := range got {
+			ids[i] = g.Title
+		}
+		t.Fatalf("CheckReminders = %v, want only [due]", ids)
 	}
 }

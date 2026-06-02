@@ -617,6 +617,25 @@ func (s *Service) Stats(ctx context.Context, scope *string, scopeRef *string) (T
 	return out, nil
 }
 
+// CheckReminders 返回到期提醒的待办：reminder_at 非空且 <= now（UTC RFC3339）且未完成，按 reminder_at 升序。
+// 移植 cc-pane todo_repo.get_due_reminders —— **纯查询、不回写**「已提醒」状态；去重与重提醒窗口由前端
+// 轮询 hook 用内存 Set 承担（对齐 cc-pane useTodoReminders 的 notifiedRef）。前端归一后 reminder_at 为
+// RFC3339，与 now 字符串可比（见 G1）。
+func (s *Service) CheckReminders(ctx context.Context) ([]TodoDTO, error) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	var rows []storage.Todo
+	if err := s.db().WithContext(ctx).Preload("Subtasks", subtaskOrder).
+		Where("reminder_at IS NOT NULL AND reminder_at <= ? AND status != 'done'", now).
+		Order("reminder_at").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]TodoDTO, 0, len(rows))
+	for _, t := range rows {
+		out = append(out, toDTO(t))
+	}
+	return out, nil
+}
+
 // Reorder 按给定 id 顺序把各待办的 sort_order 重写为其下标（i 即新次序），事务内逐条更新。
 // 用 UpdateColumn **不触碰 updated_at**（重排是排序而非内容变更，对齐 cc-pane reorder）。
 // ids 中不存在的 id 静默跳过（更新 0 行）。
