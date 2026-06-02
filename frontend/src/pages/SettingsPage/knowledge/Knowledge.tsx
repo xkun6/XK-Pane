@@ -1,4 +1,4 @@
-import { Box, Checkbox, FormControlLabel, LinearProgress, TextField, Typography, useTheme } from '@mui/material';
+import { Box, Checkbox, FormControlLabel, LinearProgress, MenuItem, TextField, Typography, useTheme } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
 import LibraryBooksRoundedIcon from '@mui/icons-material/LibraryBooksRounded';
 import CloudSyncRoundedIcon from '@mui/icons-material/CloudSyncRounded';
@@ -198,6 +198,25 @@ const SyncCard = ({ vm, styles, t, onReset }: SyncCardProps) => {
             label={t(`settings.knowledge.sync.source.${s}`)}
           />
         ))}
+      </Box>
+
+      <Box sx={styles.concurrencyRow}>
+        <Typography sx={styles.infoLabel}>{t('settings.knowledge.sync.concurrencyLabel')}</Typography>
+        <TextField
+          select
+          size="small"
+          value={vm.concurrency}
+          disabled={vm.syncing}
+          onChange={(e) => vm.setConcurrency(Number(e.target.value))}
+          sx={{ width: 96 }}
+        >
+          {[1, 2, 4, 8, 16].map((n) => (
+            <MenuItem key={n} value={n}>
+              {n}
+            </MenuItem>
+          ))}
+        </TextField>
+        <Typography sx={styles.cardHint}>{t('settings.knowledge.sync.concurrencyHint')}</Typography>
       </Box>
 
       <Box sx={styles.actions}>

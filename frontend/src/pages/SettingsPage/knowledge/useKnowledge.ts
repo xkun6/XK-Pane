@@ -64,11 +64,13 @@ export interface UseKnowledgeResult {
   logLines: LogLine[];
   lastReport: SyncReport | null;
   selectedSources: DocSyncSource[];
+  concurrency: number;
   proxyForm: ProxyForm;
   sourcesForm: SourcesForm;
   action: ActionStatus;
   refresh: () => Promise<void>;
   toggleSource: (s: DocSyncSource) => void;
+  setConcurrency: (n: number) => void;
   runSync: () => Promise<void>;
   cancelSync: () => Promise<void>;
   resetData: () => Promise<void>;
@@ -85,6 +87,7 @@ export const useKnowledge = (): UseKnowledgeResult => {
   const [logLines, setLogLines] = useState<LogLine[]>([]);
   const [lastReport, setLastReport] = useState<SyncReport | null>(null);
   const [selectedSources, setSelectedSources] = useState<DocSyncSource[]>(DEFAULT_SOURCES);
+  const [concurrency, setConcurrencyState] = useState(4);
   const [proxyForm, setProxyForm] = useState<ProxyForm>({ url: '', auth: '' });
   const [sourcesForm, setSourcesForm] = useState<SourcesForm>(emptySourcesForm);
   const [action, setAction] = useState<ActionStatus>({ kind: 'idle' });
@@ -151,6 +154,11 @@ export const useKnowledge = (): UseKnowledgeResult => {
     );
   }, []);
 
+  // 并发 clamp 到 [1,16]（对齐后端，非法值回退 4）。
+  const setConcurrency = useCallback((n: number): void => {
+    setConcurrencyState(Number.isFinite(n) ? Math.min(16, Math.max(1, Math.round(n))) : 4);
+  }, []);
+
   const runSync = useCallback(async (): Promise<void> => {
     if (selectedSources.length === 0) return;
     setSyncing(true);
@@ -159,7 +167,7 @@ export const useKnowledge = (): UseKnowledgeResult => {
     setLastReport(null);
     setAction({ kind: 'idle' });
     try {
-      const report = await BedrockDocSyncService.sync({ sources: selectedSources });
+      const report = await BedrockDocSyncService.sync({ sources: selectedSources, concurrency });
       if (aliveRef.current) setLastReport(report);
     } catch (err) {
       if (aliveRef.current) setAction({ kind: 'failed', message: getErrorMessage(err) });
@@ -169,7 +177,7 @@ export const useKnowledge = (): UseKnowledgeResult => {
         void refresh();
       }
     }
-  }, [selectedSources, refresh]);
+  }, [selectedSources, concurrency, refresh]);
 
   const cancelSync = useCallback(async (): Promise<void> => {
     try {
@@ -235,11 +243,13 @@ export const useKnowledge = (): UseKnowledgeResult => {
     logLines,
     lastReport,
     selectedSources,
+    concurrency,
     proxyForm,
     sourcesForm,
     action,
     refresh,
     toggleSource,
+    setConcurrency,
     runSync,
     cancelSync,
     resetData,

@@ -34,6 +34,8 @@ export const knowledgeZhCN: Messages = {
           mconline: 'mconline（在线手册）',
           mcdocs: 'mcdocs（API 文档站）',
         },
+        concurrencyLabel: '并发数',
+        concurrencyHint: '并发抓取数（1–16）。mc.163.com 易超时，可调小减少失败。',
         run: '立即同步',
         cancel: '取消同步',
         reset: '重置为内嵌基线',

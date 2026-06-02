@@ -118,6 +118,13 @@ export const knowledgeStyles = (theme: Theme): Record<string, SxProps<Theme>> =>
       gap: 2,
       flexWrap: 'wrap',
     },
+    // 并发选择行
+    concurrencyRow: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 1.5,
+      flexWrap: 'wrap',
+    },
 
     // 动作行
     actions: {

@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/JohannesKaufmann/html-to-markdown/v2/converter"
@@ -179,27 +180,62 @@ func fetchAndConvert(ctx context.Context, client *http.Client, url string, mode 
 	return "", fmt.Errorf("unknown mode")
 }
 
-// fetchText 抓取一个 URL 的文本正文（合并 send/status/body 三阶段，错误前缀对齐 Rust
-// fetch_and_convert）。body 解码对齐 reqwest .text()：按 Content-Type charset，默认 UTF-8（R1）。
+// httpRetryMax 是单次抓取的额外重试次数（共最多 1+httpRetryMax 次）。仅对瞬时错误重试
+// （client.Do 失败 / 5xx / 读 body 失败 —— 含 mc.163.com 常见的 context deadline exceeded）；
+// 4xx 与请求构建错误不重试。cc-pane http_sync 无重试，此为 XK 增强（mc.163.com 慢 / 限流易超时）。
+const httpRetryMax = 2
+
+// httpRetryBackoff 第 attempt 次重试前等待（attempt 从 1 起）：400ms、800ms（线性）。
+func httpRetryBackoff(attempt int) time.Duration {
+	return time.Duration(attempt) * 400 * time.Millisecond
+}
+
+// fetchText 抓取一个 URL 的文本正文，瞬时失败自动重试（见 httpRetryMax）。重试只在网络层，
+// 抓取成功后的内容处理（如 VuePress 切片「no <h1>」）不会被重试。
 func fetchText(ctx context.Context, client *http.Client, url string) (string, error) {
+	var lastErr error
+	for attempt := 0; attempt <= httpRetryMax; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(httpRetryBackoff(attempt)):
+			}
+		}
+		body, retryable, err := fetchTextOnce(ctx, client, url)
+		if err == nil {
+			return body, nil
+		}
+		lastErr = err
+		if !retryable {
+			break
+		}
+	}
+	return "", lastErr
+}
+
+// fetchTextOnce 单次抓取（合并 send/status/body 三阶段，错误前缀对齐 Rust fetch_and_convert）。
+// retryable 标记该错误是否值得重试：网络/超时/读 body/5xx 可重试；4xx 与请求构建错误不可。
+// body 解码对齐 reqwest .text()：按 Content-Type charset，默认 UTF-8（R1）。
+func fetchTextOnce(ctx context.Context, client *http.Client, url string) (string, bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return "", fmt.Errorf("send: %w", err)
+		return "", false, fmt.Errorf("send: %w", err)
 	}
 	req.Header.Set("User-Agent", probeUserAgent)
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("send: %w", err)
+		return "", true, fmt.Errorf("send: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("status: %s", resp.Status)
+		return "", resp.StatusCode >= 500, fmt.Errorf("status: %s", resp.Status)
 	}
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("body: %w", err)
+		return "", true, fmt.Errorf("body: %w", err)
 	}
-	return decodeBody(resp.Header.Get("Content-Type"), b), nil
+	return decodeBody(resp.Header.Get("Content-Type"), b), false, nil
 }
 
 // decodeBody 按 Content-Type charset 解码（对齐 reqwest .text() 语义）：声明 gbk/gb2312/gb18030

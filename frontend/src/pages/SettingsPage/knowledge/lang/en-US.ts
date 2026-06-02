@@ -34,6 +34,8 @@ export const knowledgeEnUS: Messages = {
           mconline: 'mconline (online manual)',
           mcdocs: 'mcdocs (API docs site)',
         },
+        concurrencyLabel: 'Concurrency',
+        concurrencyHint: 'Concurrent fetches (1–16). Lower it to reduce mc.163.com timeouts.',
         run: 'Sync now',
         cancel: 'Cancel sync',
         reset: 'Reset to baseline',
