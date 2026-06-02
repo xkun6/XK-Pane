@@ -7,7 +7,6 @@ import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import { useT } from '@/i18n';
 import { FileSystemTree } from '@/components/FileSystemTree';
-import { formatShortcut, PANEL_SHORTCUT } from '@/shared/keyboardShortcuts';
 import { filesPageStyles } from './FilesPage.styles';
 import { useFilesPage, filesPathBase } from './useFilesPage';
 import { FileEditorPane } from './FileEditorPane';
@@ -38,7 +37,7 @@ export const FilesPage = () => {
           <Typography sx={styles.rootName} title={vm.rootDir ?? ''}>
             {vm.rootDir ? filesPathBase(vm.rootDir) : t('files.noFolder')}
           </Typography>
-          <Tooltip title={`${t('route.git')}  ·  ${formatShortcut(PANEL_SHORTCUT.git)}`} arrow>
+          <Tooltip title={t('route.git')} arrow>
             <span>
               <IconButton
                 size="small"
@@ -52,7 +51,7 @@ export const FilesPage = () => {
               </IconButton>
             </span>
           </Tooltip>
-          <Tooltip title={`${t('route.history')}  ·  ${formatShortcut(PANEL_SHORTCUT.history)}`} arrow>
+          <Tooltip title={t('route.history')} arrow>
             <span>
               <IconButton
                 size="small"
