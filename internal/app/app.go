@@ -259,6 +259,10 @@ func Run(assets embed.FS, trayIcon []byte) error {
 		MCPE:       mcpeSvc,    // P6e-6：get_mc_pe_logs 读日志缓冲（+ P6e-7 capture/click 取 PID）
 		Bridge:     mcdkBridge, // P6e-6：execute_mc_code / reload_mc 经桥 fire-and-forget 发帧
 		Bedrock:    bedrockSvc, // P6f：bedrock_* 只读知识库查询（API/事件/组件/分类…）
+		// 结合 ccpane：todo + task_binding 复用前端同款实例 → query/create/update_todo +
+		// create/update/query_task_binding MCP 工具（dispatch-todos skill 的「Todo 驱动」闭环据此跑通）。
+		Todos:        todoSvc,
+		TaskBindings: tbSvc,
 	})
 	orchSvc.SetEmitter(mirrorEmit) // 编排工具 Emit orchestrator:launch 经双路达桌面 + Web
 	// Web 网关远程端点的下游能力（fail-closed 白名单 §9）：launch（公共化 LaunchTask）+ 只读列表。

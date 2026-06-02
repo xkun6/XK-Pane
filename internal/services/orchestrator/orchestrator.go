@@ -31,7 +31,9 @@ import (
 
 	"xkpane/internal/services/mcdkbridge"
 	"xkpane/internal/services/notification"
+	"xkpane/internal/services/taskbinding"
 	"xkpane/internal/services/terminal"
+	"xkpane/internal/services/todo"
 	"xkpane/internal/storage"
 	"xkpane/internal/utils/filex"
 	"xkpane/internal/utils/logx"
@@ -76,6 +78,22 @@ type Bridge interface {
 	Status() mcdkbridge.ClientStatus
 }
 
+// Todos 是待办 CRUD/查询能力（*todo.Service 满足）。nil = todo MCP 工具返回「错误: …」。
+// query_todos/create_todo/update_todo 据此把 dispatch-todos skill 的「Todo 驱动」闭环接上。
+type Todos interface {
+	Query(ctx context.Context, q todo.TodoQuery) (todo.TodoQueryResult, error)
+	Create(ctx context.Context, in todo.CreateTodoInput) (todo.TodoDTO, error)
+	Update(ctx context.Context, id string, in todo.UpdateTodoInput) error
+	Get(ctx context.Context, id string) (*todo.TodoDTO, error)
+}
+
+// TaskBindings 是编排任务绑定 CRUD/查询能力（*taskbinding.Service 满足）。nil = 相关工具返回「错误: …」。
+type TaskBindings interface {
+	Create(ctx context.Context, in taskbinding.CreateInput) (storage.TaskBinding, error)
+	Update(ctx context.Context, id string, in taskbinding.UpdateInput) (storage.TaskBinding, error)
+	Query(ctx context.Context, q taskbinding.Query) (taskbinding.QueryResult, error)
+}
+
 // Deps 是 orchestrator 编排工具的下游依赖（app 装配阶段注入既有 service）。
 type Deps struct {
 	Terminal   Terminal
@@ -85,6 +103,9 @@ type Deps struct {
 	MCPE       MCPE     // P6e-6：get_mc_pe_logs（+ P6e-7 capture/click 取 PID）
 	Bridge     Bridge   // P6e-6：execute_mc_code / reload_mc fire-and-forget 发帧
 	Bedrock    Bedrock  // P6f：bedrock_* 只读知识库查询（nil = 工具返回「错误: …」）
+
+	Todos        Todos        // 结合 ccpane：query_todos/create_todo/update_todo（dispatch-todos skill 依赖）
+	TaskBindings TaskBindings // 结合 ccpane：create/update/query_task_binding（分派落库追踪）
 }
 
 // orchestratorVersion 报给 MCP 客户端的 server 版本（与应用版本解耦，独立演进）。
