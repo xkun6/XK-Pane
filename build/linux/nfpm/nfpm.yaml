@@ -3,26 +3,26 @@
 #
 # The lines below are called `modelines`. See `:help modeline`
 
-name: "foundation.exe"
+name: "xkpane"
 arch: ${GOARCH}
 platform: "linux"
-version: "0.1.0"
+version: "0.0.1"
 section: "default"
 priority: "extra"
 maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
-description: "A foundation application"
-vendor: "My Company"
+description: "Claude Code 多实例分屏管理桌面应用"
+vendor: "XK-Pane"
 homepage: "https://wails.io"
 license: "MIT"
 release: "1"
 
 contents:
-  - src: "./bin/foundation.exe"
-    dst: "/usr/local/bin/foundation.exe"
+  - src: "./bin/xkpane"
+    dst: "/usr/local/bin/xkpane"
   - src: "./build/appicon.png"
-    dst: "/usr/share/icons/hicolor/128x128/apps/foundation.exe.png"
-  - src: "./build/linux/foundation.exe.desktop"
-    dst: "/usr/share/applications/foundation.exe.desktop"
+    dst: "/usr/share/icons/hicolor/128x128/apps/xkpane.png"
+  - src: "./build/linux/xkpane.desktop"
+    dst: "/usr/share/applications/xkpane.desktop"
 
 # Default dependencies for the GTK4 + WebKitGTK 6.0 stack (Ubuntu 24.04+ / Debian 13+)
 depends:

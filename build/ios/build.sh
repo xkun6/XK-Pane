@@ -2,10 +2,10 @@
 set -e
 
 # Build configuration
-APP_NAME="foundation.exe"
-BUNDLE_ID="com.example.foundation"
-VERSION="0.1.0"
-BUILD_NUMBER="0.1.0"
+APP_NAME="xkpane"
+BUNDLE_ID="com.xkpane.app"
+VERSION="0.0.1"
+BUILD_NUMBER="0.0.1"
 BUILD_DIR="build/ios"
 TARGET="simulator"
 
