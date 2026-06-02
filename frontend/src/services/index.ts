@@ -1,5 +1,11 @@
 export { GreetService } from './greet/GreetService';
 export {
+  FileService,
+  type FileEntry,
+  type FileContent,
+  type RecentDirectory,
+} from './file/FileService';
+export {
   LaunchHistoryService,
   type RecordSpec,
   type LaunchRecord,
