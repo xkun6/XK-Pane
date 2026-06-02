@@ -42,6 +42,10 @@ export default defineConfig({
       "@dnd-kit/core",
       "@dnd-kit/sortable",
       "@dnd-kit/utilities",
+      "@monaco-editor/react",
+      "monaco-editor",
+      "react-markdown",
+      "remark-gfm",
     ],
   },
   build: {
