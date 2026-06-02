@@ -20,6 +20,9 @@ func init() {
 		ModelDescriptor{Model: &LaunchHistory{}, TableName: "launch_history", LabelKey: "launchHistory", Clearable: true},
 		ModelDescriptor{Model: &TerminalSession{}, TableName: "terminal_sessions", LabelKey: "terminalSessions", Clearable: true},
 		ModelDescriptor{Model: &TaskBinding{}, TableName: "task_bindings", LabelKey: "taskBindings", Clearable: true},
+		// Todo 子系统（结合 ccpane 重新接回）：待办 + 子任务两表，跨 scope（global/workspace/project/external/temp_script）。
+		ModelDescriptor{Model: &Todo{}, TableName: "todos", LabelKey: "todos", Clearable: true},
+		ModelDescriptor{Model: &TodoSubtask{}, TableName: "todo_subtasks", LabelKey: "todoSubtasks", Clearable: true},
 		// Provider 含敏感凭据 → Clearable:false（禁设置页一键清空，同 projects/app_settings 档）。
 		ModelDescriptor{Model: &Provider{}, TableName: "providers", LabelKey: "providers", Clearable: false},
 	)
@@ -125,10 +128,50 @@ type TaskBinding struct {
 	UpdatedAt         time.Time `json:"updatedAt"`
 }
 
+// Todo 是一个待办（todos 表）。跨 scope（global/workspace/project/external/temp_script），
+// 通过 scope+scope_ref 弱关联到 workspace/project（无外键）。移植自 cc-pane TodoItem。
+type Todo struct {
+	ID          string  `gorm:"primaryKey;size:36" json:"id"`
+	Title       string  `gorm:"type:text;not null;index" json:"title"`
+	Description string  `gorm:"type:text;not null;default:''" json:"description"`
+	Status      string  `gorm:"type:text;not null;default:'todo';index" json:"status"`     // todo | in_progress | done
+	Priority    string  `gorm:"type:text;not null;default:'medium';index" json:"priority"` // high | medium | low
+	Scope       string  `gorm:"type:text;not null;default:'global';index" json:"scope"`
+	ScopeRef    *string `gorm:"type:text" json:"scopeRef,omitempty"` // workspace 名 / project 路径
+	Tags        string  `gorm:"type:text;not null;default:'[]'" json:"tags"` // JSON 数组
+	DueDate     *string `gorm:"type:text" json:"dueDate,omitempty"`
+	SortOrder   int     `gorm:"not null;default:0" json:"sortOrder"`
+
+	// V3：日程
+	MyDay      bool    `gorm:"not null;default:false" json:"myDay"`
+	MyDayDate  *string `gorm:"type:text" json:"myDayDate,omitempty"`
+	ReminderAt *string `gorm:"type:text" json:"reminderAt,omitempty"`
+	Recurrence *string `gorm:"type:text" json:"recurrence,omitempty"`
+	// V4：分类
+	TodoType string `gorm:"type:text;not null;default:''" json:"todoType"`
+
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+
+	Subtasks []TodoSubtask `gorm:"foreignKey:TodoID;constraint:OnDelete:CASCADE" json:"subtasks,omitempty"`
+}
+
+// TodoSubtask 是 Todo 的子任务（todo_subtasks 表，随父级联删）。
+type TodoSubtask struct {
+	ID        string    `gorm:"primaryKey;size:36" json:"id"`
+	TodoID    string    `gorm:"type:text;not null;index" json:"todoId"`
+	Title     string    `gorm:"type:text;not null" json:"title"`
+	Completed bool      `gorm:"not null;default:false" json:"completed"`
+	SortOrder int       `gorm:"not null;default:0" json:"sortOrder"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 // 显式 TableName：避免依赖 GORM 复数化推断（LaunchHistory 会被错误地复数成
 // "launch_histories"）。表名与 ModelDescriptor / cc-pane 原表名严格一致。
 func (Project) TableName() string         { return "projects" }
 func (LaunchHistory) TableName() string   { return "launch_history" }
 func (TerminalSession) TableName() string { return "terminal_sessions" }
 func (TaskBinding) TableName() string     { return "task_bindings" }
+func (Todo) TableName() string            { return "todos" }
+func (TodoSubtask) TableName() string     { return "todo_subtasks" }
 func (Provider) TableName() string        { return "providers" }

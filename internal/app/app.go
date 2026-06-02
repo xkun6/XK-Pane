@@ -36,6 +36,7 @@ import (
 	"xkpane/internal/services/storagesvc"
 	"xkpane/internal/services/subprocess"
 	"xkpane/internal/services/terminal"
+	"xkpane/internal/services/todo"
 	"xkpane/internal/services/transcriptsvc"
 	"xkpane/internal/services/workspace"
 	"xkpane/internal/storage"
@@ -130,6 +131,9 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	// Bedrock 知识库（P6f）：只读查询服务，注入 orchestrator 供 bedrock_* MCP 工具调用。
 	// 查询本身无状态、无 storage holder，**不进 Wails Services 列表**（无前端绑定，仅 MCP 暴露）。
 	bedrockSvc := bedrock.New()
+	// Todo 待办（结合 ccpane 接回）：前端 TodoPage 调 CRUD/Query/Stats；同一实例注入 orchestrator
+	// 供 query_todos/create_todo/update_todo MCP 工具（dispatch-todos skill 经此自驱待办）。
+	todoSvc := todo.New(holder)
 	// Bedrock OTA 文档同步（P6f-9c）：把 gitea/http 引擎 + 索引构建器 + manifest 串成一次同步，
 	// 原子换目录到 <UserDataDir>/bedrock-data/ 后经 BedrockHooks 热切 bedrock 查询层。进 Wails
 	// Services 列表（前端「设置 → 知识库」面板调用），经 SetEmitter 推 BedrockDocSyncProgress 进度。
@@ -169,6 +173,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(projSvc),
 			application.NewService(file.New(holder)), // 文件浏览器：列目录/读写文件/RevealInOS/最近目录
 			application.NewService(launchhistory.New(holder)),
+			application.NewService(todoSvc), // 待办 CRUD（结合 ccpane；orchestrator 复用同实例）
 			application.NewService(provider.New(holder)),
 			application.NewService(session.New(holder)),
 			application.NewService(gitSvc),
