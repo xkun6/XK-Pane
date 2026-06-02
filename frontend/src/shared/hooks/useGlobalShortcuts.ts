@@ -13,10 +13,7 @@ import { useRightPanel } from '@/rightpanel';
 // Mod = Windows/Linux 的 Ctrl、macOS 的 ⌘。终端（xterm）聚焦时让行（终端独占按键）；
 // Monaco 仅占用 Mod+S，与此处不冲突。展示用组合键见 shared/keyboardShortcuts.ts。
 
-function inTerminal(el: Element | null): boolean {
-  return !!el?.closest('.xterm');
-}
-
+// 可编辑 / 终端焦点：在这些元素上让行，不抢它们的按键（含 xterm、Monaco、输入框）。
 function inEditable(el: Element | null): boolean {
   if (!el) return false;
   if (el.closest('.xterm') || el.closest('.monaco-editor')) return true;
@@ -24,11 +21,15 @@ function inEditable(el: Element | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || (el as HTMLElement).isContentEditable;
 }
 
-export function useGlobalShortcuts(): void {
+// enabled=false（如 Web 窄屏锁终端的 hideChrome 态）时整体停用：不挂监听，
+// 避免切换不存在的抽屉 / 吞 Esc / 导航又被强制弹回终端的幽灵行为。
+export function useGlobalShortcuts(enabled = true): void {
   const { primary, navigate } = useRouter();
   const { toggle, active, close } = useRightPanel();
 
   useEffect(() => {
+    if (!enabled) return;
+
     // 可数字导航的页：主导航中的非面板条目（与 Sidebar 渲染顺序一致；Web 隐藏 desktopOnly）。
     const navItems = primary.filter(
       (r) => r.panel === undefined && !(r.desktopOnly && lifecycleRole === 'viewer'),
@@ -49,7 +50,7 @@ export function useGlobalShortcuts(): void {
       const mod = isMac ? e.metaKey : e.ctrlKey;
       const wrongMod = isMac ? e.ctrlKey : e.metaKey;
       if (!mod || wrongMod || e.altKey) return;
-      if (inTerminal(target)) return; // 终端独占其按键组合
+      if (inEditable(target)) return; // 终端 / Monaco / 输入框聚焦时让行，不抢页切换/抽屉键
 
       if (e.shiftKey) {
         const k = e.key.toLowerCase();
@@ -80,5 +81,5 @@ export function useGlobalShortcuts(): void {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [primary, navigate, toggle, active, close]);
+  }, [enabled, primary, navigate, toggle, active, close]);
 }

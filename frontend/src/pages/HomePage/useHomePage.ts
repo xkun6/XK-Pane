@@ -3,6 +3,7 @@ import { LaunchHistoryService, type CliTool, type LaunchRecord } from '@/service
 import { useProjects } from '@/project';
 import { useCliTools } from '@/shared/hooks/useCliTools';
 import { useRouter } from '@/router';
+import { useRightPanel, type RightPanelId } from '@/rightpanel';
 import { useTerminal } from '@/terminal';
 
 // HomePage ViewModel：仪表盘数据装配 —— 时段问候 + 项目数 + 最近启动 + CLI 环境检测 + 导航。
@@ -27,6 +28,8 @@ export interface UseHomePageResult {
   tools: CliTool[];
   toolsLoading: boolean;
   navigate: (id: string) => void;
+  /** 打开右侧抽屉（Git / 本地历史）。git/history 已是面板而非页面，不能 navigate。 */
+  openPanel: (id: RightPanelId) => void;
   /** 重新启动一条最近记录（按其 cliTool 新建终端 Tab）并跳到终端页。 */
   relaunch: (r: LaunchRecord) => void;
 }
@@ -35,6 +38,7 @@ export const useHomePage = (): UseHomePageResult => {
   const { projects } = useProjects();
   const { tools, loading: toolsLoading } = useCliTools();
   const { navigate } = useRouter();
+  const { open: openPanel } = useRightPanel();
   const { launchProject } = useTerminal();
   const [recentLaunches, setRecentLaunches] = useState<LaunchRecord[]>([]);
   const [launchesLoading, setLaunchesLoading] = useState(true);
@@ -79,6 +83,7 @@ export const useHomePage = (): UseHomePageResult => {
     tools,
     toolsLoading,
     navigate,
+    openPanel,
     relaunch,
   };
 };

@@ -35,6 +35,9 @@ export const RouterProvider = ({ routes, initialId, children }: RouterProviderPr
       if (!next) {
         throw new Error(`Route "${id}" is not registered`);
       }
+      // 面板型条目（panel）不是页面、没有 element —— 不可 navigate（否则主区会渲染空白）。
+      // 它只能经 RightPanel 的 toggle/open 打开；这里静默忽略，给误调一个安全兜底。
+      if (next.panel !== undefined) return;
       setActiveId(id);
     },
     [routes],

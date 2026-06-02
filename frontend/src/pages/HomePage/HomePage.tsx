@@ -6,6 +6,7 @@ import SmartToyRoundedIcon from '@mui/icons-material/SmartToyRounded';
 import type { ReactNode } from 'react';
 import { useT } from '@/i18n';
 import type { LaunchRecord } from '@/services';
+import type { RightPanelId } from '@/rightpanel';
 import { useHomePage } from './useHomePage';
 import { homePageStyles } from './HomePage.styles';
 
@@ -17,11 +18,15 @@ export const HomePage = () => {
   const t = useT();
   const vm = useHomePage();
 
-  const actions: Array<{ id: string; label: string; icon: ReactNode }> = [
+  // panel 字段：该卡片打开右侧抽屉（git 已是面板而非页面），其余走页面导航。
+  const actions: Array<{ id: string; label: string; icon: ReactNode; panel?: RightPanelId }> = [
     { id: 'terminal', label: t('home.actions.terminal'), icon: <TerminalRoundedIcon /> },
-    { id: 'git', label: t('home.actions.git'), icon: <AccountTreeRoundedIcon /> },
+    { id: 'git', label: t('home.actions.git'), icon: <AccountTreeRoundedIcon />, panel: 'git' },
     { id: 'settings', label: t('home.actions.settings'), icon: <SettingsRoundedIcon /> },
   ];
+
+  const activate = (a: { id: string; panel?: RightPanelId }): void =>
+    a.panel ? vm.openPanel(a.panel) : vm.navigate(a.id);
 
   // 最近启动行的 CLI 标签：'none' → 终端；否则按 id 在 tools 里找显示名，找不到回落到 id。
   const cliLabel = (cliTool: string): string => {
@@ -88,11 +93,11 @@ export const HomePage = () => {
                 sx={styles.actionCard}
                 role="button"
                 tabIndex={0}
-                onClick={() => vm.navigate(a.id)}
+                onClick={() => activate(a)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    vm.navigate(a.id);
+                    activate(a);
                   }
                 }}
               >

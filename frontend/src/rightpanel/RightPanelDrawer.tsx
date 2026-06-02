@@ -30,8 +30,11 @@ export const RightPanelDrawer = () => {
 
   if (!active) return null;
 
-  const boundPath = currentDir ?? rootDir;
   const isGit = active === 'git';
+  // Git 走 currentDir（gitx 用 DetectDotGit 向上找仓库根，子目录也正确）；
+  // 本地历史按「项目根」精确存储、不向上查找，必须绑 rootDir（文件页打开的项目根）——
+  // 否则进子目录会查到空历史、在子目录错建 .xkpanes、且 live 刷新（事件按项目根过滤）失效。
+  const boundPath = isGit ? currentDir ?? rootDir : rootDir ?? currentDir;
   const Icon = isGit ? AccountTreeRoundedIcon : HistoryRoundedIcon;
   const title = isGit ? t('route.git') : t('route.history');
 
