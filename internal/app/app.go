@@ -18,6 +18,7 @@ import (
 	"xkpane/internal/services/bedrockdocsync"
 	"xkpane/internal/services/cliadapters"
 	"xkpane/internal/services/clitools"
+	"xkpane/internal/services/file"
 	"xkpane/internal/services/gitsvc"
 	"xkpane/internal/services/greet"
 	"xkpane/internal/services/launchhistory"
@@ -166,6 +167,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(appsettings.New(holder)),
 			application.NewService(storagesvc.New(holder, cfgMgr)),
 			application.NewService(projSvc),
+			application.NewService(file.New(holder)), // 文件浏览器：列目录/读写文件/RevealInOS/最近目录
 			application.NewService(launchhistory.New(holder)),
 			application.NewService(provider.New(holder)),
 			application.NewService(session.New(holder)),
