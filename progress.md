@@ -1454,3 +1454,33 @@ cc-pane Bedrock 知识库（baseline 26 只读工具 + OTA 同步子系统 + 全
 - **OTA 同步**：设置→知识库面板触发三源（mcguide/mconline/mcdocs）同步成功；首轮 mcdocs 4 个内容页超时（api 计数 1944），加重试/降并发后重新同步补回 →【api-index 完整 1956，与 cc-pane 参考值一致】，验证「重试 + 可调并发」修复生效、partialErrors 逐文件明细可定位。
 - **`pe_*` 查询工具**：`pe_api_stats`（1655 API + 298 事件 + 3 header = 1956，确认读的是同步后数据）/ `pe_search_guide 维度`（跨 mcguide+mconline 20 命中）/ `pe_get_event`（事件卡片）/ `pe_validate_call`（VALID）/ `pe_review_code`（13 规则命中埋坑）/ `pe_help` 全部正常；`pe_search_api`/`pe_get_api` 对「组件工厂方法 / 事件名」正确返回未命中并建议改用对应工具（路由判断正确）。
 - **沉淀**：① OTA 链路闭环 = 同步(带重试)→完整数据→原子换目录+启动激活→`pe_*` 查到的就是同步后最新文档；② mc.163.com 慢/限流时把并发调到 2 + 重试可消除零星超时；③ XK 与 cc-pane 的 `bedrock-data` 体积差异源于 Go `html-to-markdown/v2` vs Rust `html2md` 转换器字节差（内容等价），非 bug。注：P6f-1~6 的 baseline 手测点（原 `bedrock_*` 示例调用）现已统一为 `pe_*`。P6f 收官。
+
+---
+
+## ✅ Bundled Project Skills（ccpanes 风格借鉴移植，2026-06-02）
+
+结合 CC-Panes 自带的 13 个 bundled skill 分析借鉴价值，把其中 **panes MCP 工具齐备的 9 个**改写为 XK-Pane 版（`xkpane-*`），做成**产品功能**：XK-Pane 启动会话时把这 9 个 skill **同时落到被管理项目**的 `.claude/skills/`（claude/reclaude）与 `.codex/skills/`（codex），供该项目内的 Claude/Codex 子实例直接调用、编排其它实例。区别于 XK-Pane 仓库自身的 `.claude/skills/`（foundation-*/wails-* 是**开发时**给 Claude 用的），bundled skill 是 `//go:embed` 进产品、运行时落到**终端用户项目**的产物，两套受众不混。
+
+### 借鉴判定（13 → 9）
+- **直接落地 6**：`xkpane-browse-sessions`（list/status/read 三件套）/ `xkpane-launch-task`（启动原语 + 长 prompt 写文件短引用反黑屏）/ `xkpane-fork-session`（分叉继承上下文）/ `xkpane-parallel-run`（fan-out 监督轮询）/ `xkpane-mc-pe-debug`（MC PE 调试闭环 —— XK-Pane 自带全套 execute_mc_code/reload_mc/get_mc_pe_logs/capture_window/click_window + pe_* 知识库，原 ccpanes 编目误判 na，实为最贴身高价值）/ `xkpane-spec-review`（纯方法论 rubric，零 MCP）。
+- **Codex 交接 3**：`xkpane-plantocodex` / `xkpane-plantocodex-spec` / `xkpane-plantocodex-exec`（Plan→Codex；单 PTY 复用 + `/new` 清 history 洁净、Verdict 程序化解析 Total≥90+GO+0 Critical/Major、`[SPEC-REVIEW ONLY]` 路由、3 轮兜底）。
+- **裁剪不做**：`dispatch-todos`（XK-Pane 无 Todo 系统/`query_todos`）；`workspace` 的 CRUD（panes MCP 只有 `list_workspaces`/`list_projects` 只读，无 create/add/scan）；`spec`（依赖外部 spec-workflow MCP）；`workspace-migrate`（纯 UI 操作引导）。生成时对 `list_panes`→`list_sessions`、`get_task_status`→`get_session_status` 等缺失工具优雅降级并在 skill 内注明。
+
+### 关键技术裁定（codex 源码核对，非臆测）
+- **codex 落点 = `.codex/skills/`**：codex custom prompts 已弃用且项目级根本不被扫描 → 改用 codex skills。读源码 `core-skills/src/loader.rs:300`（Project 配置层 config_folder=`.codex`，`config_folder.join("skills")` → `<proj>/.codex/skills`，Repo scope）+ 测试 `skills_list.rs`/`protocol/v2/tests.rs` 的 `.codex/skills/repo-skill` 确认其为一等公民项目级路径（codex 自身 repo 也用之）。网上文档只列 `.agents/skills` 并不全。
+- **frontmatter 两侧同构**：`loader.rs:621 parse_skill_file` 显示 codex 仅校验 `name≤64`/`description≤1024B`，name/description 均非必填，与 Claude 同构 → 一份 SKILL.md 内容两侧共用（工具用逻辑名 + 开篇一处「经 panes MCP 调用」说明）。
+
+### 实现（`internal/services/projecthooks/`）
+- `skills.go`：`//go:embed all:templates/skills` 内嵌 9 份 SKILL.md（文件名全 ASCII，无需 bedrock 那套 zip 绕 CJK 文件名限制）+ `syncClaudeSkills`/`syncCodexSkills` + 版本幂等（`.xkpane-skills-version` marker 比对，`projectSkillsVersion=1`，避免每次启动重写 9×2 文件；bump 版本即整体重写）。写盘走 `filex.WriteAtomic`（配置写铁律）。
+- `projecthooks.go` `Sync`：hooks 成功后接 skills（claude/reclaude→.claude/skills，codex→.codex/skills），复用现成触发点 `terminal.CreateSession`，失败仅 warn 不阻断启动。
+- `templates/skills/xkpane-*/SKILL.md`：9 份内容（workflow 并行生成 + 对抗校验工具白名单/长度/降级，全部中文 + 房屋风格铁律节）。
+
+### 验证
+- `go build ./internal/services/projecthooks/` 绿；`go test`（3 新测 + 6 现有 hooks 测，无回归）绿：两侧各落 9 个 SKILL.md、frontmatter name=目录名、marker 版本正确、幂等跳过重写。
+- 内容机器校验：grep 无任何禁用工具的**真实调用**、无 `mcp__ccpanes__` 残留（仅 3 处「XK-Pane 无 X，改用 Y」负面降级提及，属正确处理）。
+
+### ⚠️ 待 live 端到端手测（用户）
+重新 `task build`（把 9 份 skill embed 进 xkpane.exe）后，在 XK-Pane 各启动一个 claude 会话与一个 codex 会话，验证：
+1. 项目根落出 `.claude/skills/xkpane-*/`（claude/reclaude）与 `.codex/skills/xkpane-*/`（codex）共 9 个 SKILL.md + `.xkpane-skills-version` 标记。
+2. 会话内被 CLI 识别为可用 skill（codex `/skills` 列表可见 `xkpane-*`；Claude 侧 `/xkpane-launch-task` 等可触发）。
+3. 二次启动同项目幂等（不重写、不堆叠）。
