@@ -40,6 +40,8 @@ export const workspaceTreeEnUS: Messages = {
       rename: 'Rename',
       setAlias: 'Set alias',
       copyPath: 'Copy path',
+      openInExplorer: 'Reveal in file manager',
+      openInFileBrowser: 'Open in file browser',
       removeProject: 'Remove project',
       removeProjectConfirm: {
         title: 'Remove project',

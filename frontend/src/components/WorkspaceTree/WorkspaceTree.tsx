@@ -117,6 +117,8 @@ export const WorkspaceTree = () => {
     delete: t('workspaceTree.delete'),
     copyPath: t('workspaceTree.menu.copyPath'),
     removeProject: t('workspaceTree.menu.removeProject'),
+    openInExplorer: t('workspaceTree.menu.openInExplorer'),
+    openInFileBrowser: t('workspaceTree.menu.openInFileBrowser'),
   };
 
   // —— 菜单动作（读取当前 menu 目标后关闭菜单）——
@@ -197,6 +199,16 @@ export const WorkspaceTree = () => {
 
   const handleCopyPath = (): void => {
     if (menu?.kind === 'project') vm.copyPath(menu.project.path);
+    closeMenu();
+  };
+
+  const handleOpenInExplorer = (): void => {
+    if (menu?.kind === 'project') void vm.openInExplorer(menu.project.path, errTitle());
+    closeMenu();
+  };
+
+  const handleOpenInFileBrowser = (): void => {
+    if (menu?.kind === 'project') vm.openInFileBrowser(menu.project.path);
     closeMenu();
   };
 
@@ -298,6 +310,8 @@ export const WorkspaceTree = () => {
         onDelete={handleDelete}
         onCopyPath={handleCopyPath}
         onRemoveProject={handleRemoveProject}
+        onOpenInExplorer={handleOpenInExplorer}
+        onOpenInFileBrowser={handleOpenInFileBrowser}
       />
 
       <TextInputDialog

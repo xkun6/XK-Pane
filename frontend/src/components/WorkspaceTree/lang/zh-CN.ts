@@ -41,6 +41,8 @@ export const workspaceTreeZhCN: Messages = {
       rename: '重命名',
       setAlias: '设置别名',
       copyPath: '复制路径',
+      openInExplorer: '在系统文件管理器中打开',
+      openInFileBrowser: '在文件浏览器中打开',
       removeProject: '移除项目',
       removeProjectConfirm: {
         title: '移除项目',

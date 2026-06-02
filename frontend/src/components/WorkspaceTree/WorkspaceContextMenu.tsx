@@ -7,6 +7,8 @@ import LabelRoundedIcon from '@mui/icons-material/LabelRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import RemoveCircleOutlineRoundedIcon from '@mui/icons-material/RemoveCircleOutlineRounded';
+import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
+import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
 import type { CliTool, Workspace, WorkspaceProject } from '@/services';
 
 export interface MenuAnchor {
@@ -30,6 +32,8 @@ export interface WorkspaceMenuStrings {
   delete: string;
   copyPath: string;
   removeProject: string;
+  openInExplorer: string;
+  openInFileBrowser: string;
 }
 
 export interface WorkspaceContextMenuProps {
@@ -46,6 +50,8 @@ export interface WorkspaceContextMenuProps {
   onDelete: () => void;
   onCopyPath: () => void;
   onRemoveProject: () => void;
+  onOpenInExplorer: () => void;
+  onOpenInFileBrowser: () => void;
 }
 
 // WorkspaceTree 的右键菜单：启动区（打开终端 + 各 CLI 工具，移植自 ProjectPanel）
@@ -64,6 +70,8 @@ export const WorkspaceContextMenu = ({
   onDelete,
   onCopyPath,
   onRemoveProject,
+  onOpenInExplorer,
+  onOpenInFileBrowser,
 }: WorkspaceContextMenuProps) => {
   return (
     <Menu
@@ -127,6 +135,19 @@ export const WorkspaceContextMenu = ({
       ]}
 
       {menu?.kind === 'project' && [
+        <MenuItem key="reveal" onClick={onOpenInExplorer}>
+          <ListItemIcon>
+            <OpenInNewRoundedIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>{strings.openInExplorer}</ListItemText>
+        </MenuItem>,
+        <MenuItem key="browse" onClick={onOpenInFileBrowser}>
+          <ListItemIcon>
+            <FolderOpenRoundedIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>{strings.openInFileBrowser}</ListItemText>
+        </MenuItem>,
+        <Divider key="proj-div" />,
         <MenuItem key="copy" onClick={onCopyPath}>
           <ListItemIcon>
             <ContentCopyRoundedIcon fontSize="small" />

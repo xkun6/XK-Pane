@@ -2,9 +2,11 @@
 // 不返回 JSX、不持翻译串——提示文案由 View 传入（遵 MVVM 铁律）。
 // 折叠状态为单选互斥（同一时刻最多展开一个工作空间），存组件本地 state（禁 localStorage）。
 import { useState } from 'react';
-import { NativeDialogs, type Workspace } from '@/services';
+import { FileService, NativeDialogs, type Workspace } from '@/services';
 import { useWorkspaces } from '@/workspace';
 import { useTerminal } from '@/terminal';
+import { useRouter } from '@/router';
+import { useCurrentDir } from '@/currentdir';
 
 // 启动目标：工作空间节点用 ws.path / ws.id；项目节点用 project.path / project.id。
 // projectId 落 LaunchHistory（软关联，不外键全局 projects 表）；path 为空（工作空间未设根目录）则不启动。
@@ -44,6 +46,8 @@ export interface WorkspaceTreeModel {
   submitProjectAlias: (projectId: string, alias: string, errorTitle: string) => Promise<void>;
   removeProject: (projectId: string, s: ConfirmStrings) => Promise<void>;
   copyPath: (path: string) => void;
+  openInExplorer: (path: string, errorTitle: string) => Promise<void>;
+  openInFileBrowser: (path: string) => void;
   reorderWorkspaces: (ids: string[], errorTitle: string) => Promise<void>;
   reorderProjects: (workspaceId: string, projectIds: string[], errorTitle: string) => Promise<void>;
 }
@@ -56,6 +60,8 @@ function messageOf(e: unknown): string {
 export function useWorkspaceTree(): WorkspaceTreeModel {
   const ctx = useWorkspaces();
   const { launchProject } = useTerminal();
+  const { navigate } = useRouter();
+  const { openInBrowser } = useCurrentDir();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const isExpanded = (id: string): boolean => expandedId === id;
@@ -163,6 +169,21 @@ export function useWorkspaceTree(): WorkspaceTreeModel {
     void navigator.clipboard?.writeText(path).catch(() => {});
   };
 
+  // 在系统文件管理器中定位该目录（Windows explorer / macOS Finder / Linux xdg-open）。失败弹错。
+  const openInExplorer = async (path: string, errorTitle: string): Promise<void> => {
+    try {
+      await FileService.revealInOS(path);
+    } catch (e) {
+      await NativeDialogs.error(errorTitle, messageOf(e));
+    }
+  };
+
+  // 在 XK-Pane 文件页打开该目录：设为文件浏览器树根（同时绑定 Git/历史抽屉），跳到文件页。
+  const openInFileBrowser = (path: string): void => {
+    openInBrowser(path);
+    navigate('files');
+  };
+
   // 拖拽排序：前端传该组/该工作空间的完整有序 id 列表，后端逐个写 sort_order=位置。
   const reorderWorkspaces = async (ids: string[], errorTitle: string): Promise<void> => {
     try {
@@ -200,6 +221,8 @@ export function useWorkspaceTree(): WorkspaceTreeModel {
     submitProjectAlias,
     removeProject,
     copyPath,
+    openInExplorer,
+    openInFileBrowser,
     reorderWorkspaces,
     reorderProjects,
   };
