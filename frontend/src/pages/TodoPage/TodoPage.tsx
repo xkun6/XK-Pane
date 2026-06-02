@@ -111,32 +111,35 @@ export const TodoPage = () => {
         )}
       </Box>
 
-      {showEditor ? (
-        <TodoEditor
-          form={vm.editForm}
-          isCreating={vm.isCreating}
-          editingId={vm.selectedTodo?.id ?? null}
-          subtasks={vm.selectedTodo?.subtasks ?? []}
-          allTypes={vm.allTypes}
-          onPatch={vm.patchForm}
-          onSave={vm.saveForm}
-          onClose={vm.closeEditor}
-          onDelete={() => vm.selectedTodo && handleDelete(vm.selectedTodo)}
-          onAddCustomType={vm.addCustomType}
-          onRemoveCustomType={vm.removeCustomType}
-          onAddSubtask={(title) => vm.selectedTodo && vm.addSubtask(vm.selectedTodo.id, title)}
-          onToggleSubtask={(sid, completed) => vm.selectedTodo && vm.toggleSubtask(vm.selectedTodo.id, sid, completed)}
-          onRemoveSubtask={(sid) => vm.selectedTodo && vm.removeSubtask(vm.selectedTodo.id, sid)}
-        />
-      ) : (
-        <TodoOverview
-          stats={vm.stats}
-          recent={vm.todos.slice(0, 5)}
-          onSelectTodo={vm.selectTodo}
-          onCreateNew={vm.startCreate}
-          onLoadStats={vm.loadStats}
-        />
-      )}
+      {/* 右栏：showEditor 时 480px 展开编辑器，否则收起为 0 宽（Overview 隐藏，对齐 cc-pane aside）。*/}
+      <Box sx={showEditor ? styles.rightPaneWrap : styles.rightPaneWrapCollapsed}>
+        {showEditor ? (
+          <TodoEditor
+            form={vm.editForm}
+            isCreating={vm.isCreating}
+            editingId={vm.selectedTodo?.id ?? null}
+            subtasks={vm.selectedTodo?.subtasks ?? []}
+            allTypes={vm.allTypes}
+            onPatch={vm.patchForm}
+            onSave={vm.saveForm}
+            onClose={vm.closeEditor}
+            onDelete={() => vm.selectedTodo && handleDelete(vm.selectedTodo)}
+            onAddCustomType={vm.addCustomType}
+            onRemoveCustomType={vm.removeCustomType}
+            onAddSubtask={(title) => vm.selectedTodo && vm.addSubtask(vm.selectedTodo.id, title)}
+            onToggleSubtask={(sid, completed) => vm.selectedTodo && vm.toggleSubtask(vm.selectedTodo.id, sid, completed)}
+            onRemoveSubtask={(sid) => vm.selectedTodo && vm.removeSubtask(vm.selectedTodo.id, sid)}
+          />
+        ) : (
+          <TodoOverview
+            stats={vm.stats}
+            recent={vm.todos.slice(0, 5)}
+            onSelectTodo={vm.selectTodo}
+            onCreateNew={vm.startCreate}
+            onLoadStats={vm.loadStats}
+          />
+        )}
+      </Box>
     </Box>
   );
 };

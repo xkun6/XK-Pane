@@ -96,6 +96,7 @@ export const todoPageStyles = (theme: Theme): Styles => {
       minWidth: 0,
       display: 'flex',
       flexDirection: 'column',
+      borderRight: `1px solid ${f.divider}`,
     },
     mainHeader: {
       display: 'flex',
@@ -125,7 +126,8 @@ export const todoPageStyles = (theme: Theme): Styles => {
       display: 'flex',
       alignItems: 'center',
       gap: 0.75,
-      flexWrap: 'wrap',
+      flexWrap: 'nowrap',
+      flexShrink: 0,
     },
     pillDivider: {
       width: '1px',
@@ -224,11 +226,22 @@ export const todoPageStyles = (theme: Theme): Styles => {
     metaText: { display: 'inline-flex', alignItems: 'center', gap: 0.25, fontSize: 11.5, color: f.text.secondary },
     metaOverdue: { display: 'inline-flex', alignItems: 'center', gap: 0.25, fontSize: 11.5, color: theme.palette.error.main, fontWeight: 600 },
 
-    // ── 右栏：编辑器 / 概览 ──
+    // ── 右栏：编辑器 / 概览（外层 wrap 控 480↔0 折叠，对齐 cc-pane aside transition）──
+    rightPaneWrap: {
+      flexShrink: 0,
+      width: 480,
+      overflow: 'hidden',
+      transition: 'width 200ms ease',
+    },
+    rightPaneWrapCollapsed: {
+      flexShrink: 0,
+      width: 0,
+      overflow: 'hidden',
+      transition: 'width 200ms ease',
+    },
     rightPane: {
       width: 480,
-      flexShrink: 0,
-      borderLeft: `1px solid ${f.divider}`,
+      height: '100%',
       display: 'flex',
       flexDirection: 'column',
       backgroundColor: f.bg.surface,

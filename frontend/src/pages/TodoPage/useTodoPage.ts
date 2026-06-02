@@ -157,6 +157,14 @@ export const useTodoPage = () => {
     void loadList();
   }, [loadList]);
 
+  // 列表加载后自动选中第一条（对齐 cc-pane）：有任务时编辑器自动出现；空态右栏收起为 0 宽。
+  useEffect(() => {
+    if (!loading && todos.length > 0 && !selectedTodo && !isCreating) {
+      const first = todos[0];
+      if (first) setSelectedTodo(first);
+    }
+  }, [loading, todos, selectedTodo, isCreating]);
+
   const loadStats = useCallback(async (): Promise<void> => {
     try {
       const s = await TodoService.stats(filterScope ?? undefined);
