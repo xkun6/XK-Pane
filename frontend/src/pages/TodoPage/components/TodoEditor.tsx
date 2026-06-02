@@ -58,6 +58,8 @@ export const TodoEditor = (p: Props) => {
 
   const { form } = p;
   const needsScopeRef = form.scope === 'workspace' || form.scope === 'project';
+  // scope=workspace/project 时 scopeRef 必填（对齐后端校验），缺则禁用保存并提示。
+  const scopeRefMissing = needsScopeRef && !form.scopeRef.trim();
 
   const seg = (
     value: string,
@@ -131,7 +133,7 @@ export const TodoEditor = (p: Props) => {
           size="small"
           variant="contained"
           startIcon={<SaveRoundedIcon fontSize="small" />}
-          disabled={!form.title.trim()}
+          disabled={!form.title.trim() || scopeRefMissing}
           onClick={p.onSave}
           sx={{ borderRadius: 6, textTransform: 'none' }}
         >
@@ -212,6 +214,8 @@ export const TodoEditor = (p: Props) => {
               value={form.scopeRef}
               onChange={(e) => p.onPatch({ scopeRef: e.target.value })}
               fullWidth
+              error={scopeRefMissing}
+              helperText={scopeRefMissing ? t('todo.editor.scopeRefRequired') : undefined}
             >
               <MenuItem value="">
                 {t('todo.editor.scopeRefNone')}

@@ -134,6 +134,14 @@ func (s *Service) Create(ctx context.Context, in CreateTodoInput) (TodoDTO, erro
 	if title == "" {
 		return TodoDTO{}, errors.New("title is required")
 	}
+	// scope=workspace/project 必须带非空 scopeRef（对齐 cc-pane create_todo 的 TODO_SCOPE_REF_REQUIRED；
+	// 空串视同缺失）。否则会落一条引用不到任何工作空间/项目的待办。
+	scope := orDefault(in.Scope, "global")
+	if scope == "workspace" || scope == "project" {
+		if in.ScopeRef == nil || strings.TrimSpace(*in.ScopeRef) == "" {
+			return TodoDTO{}, errors.New("workspace/project scope requires scopeRef")
+		}
+	}
 	var maxOrder int
 	s.db().WithContext(ctx).Model(&storage.Todo{}).Select("COALESCE(MAX(sort_order), -1)").Scan(&maxOrder)
 
@@ -142,7 +150,7 @@ func (s *Service) Create(ctx context.Context, in CreateTodoInput) (TodoDTO, erro
 		Title:       title,
 		Status:      orDefault(in.Status, "todo"),
 		Priority:    orDefault(in.Priority, "medium"),
-		Scope:       orDefault(in.Scope, "global"),
+		Scope:       scope,
 		ScopeRef:    in.ScopeRef,
 		Tags:        "[]",
 		DueDate:     in.DueDate,
@@ -248,6 +256,25 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateTodoInput) err
 				return errNotFound
 			}
 			return err
+		}
+		// scope_ref 必填校验：仅当本次 patch 触碰 scope 或 scopeRef 时才校验【patch 后】的有效值，
+		// project/workspace 必须带非空 scopeRef。XK 比 cc-pane 多守 update 路径（前端编辑器能改 scope），
+		// 闭合「改成 project 却留空 ref」漏洞；不触碰 scope 字段的纯状态切换不受影响，避免误伤遗留脏数据。
+		if in.Scope != nil || in.ScopeRef != nil {
+			effScope := old.Scope
+			if in.Scope != nil {
+				effScope = *in.Scope
+			}
+			effScopeRef := ""
+			if old.ScopeRef != nil {
+				effScopeRef = *old.ScopeRef
+			}
+			if in.ScopeRef != nil {
+				effScopeRef = *in.ScopeRef
+			}
+			if (effScope == "workspace" || effScope == "project") && strings.TrimSpace(effScopeRef) == "" {
+				return errors.New("workspace/project scope requires scopeRef")
+			}
 		}
 		if len(updates) > 0 {
 			if err := tx.Model(&storage.Todo{}).Where("id = ?", id).Updates(updates).Error; err != nil {

@@ -157,9 +157,13 @@ func TestSubtasksAndCascadeDelete(t *testing.T) {
 func seedForQuery(t *testing.T, svc *Service, ctx context.Context) {
 	t.Helper()
 	mk := func(title, status, priority, scope string, tags []string) {
-		if _, err := svc.Create(ctx, CreateTodoInput{
+		in := CreateTodoInput{
 			Title: title, Status: sp(status), Priority: sp(priority), Scope: sp(scope), Tags: &tags,
-		}); err != nil {
+		}
+		if scope == "project" || scope == "workspace" {
+			in.ScopeRef = sp("/seed") // scope_ref 必填，播种统一给一个引用
+		}
+		if _, err := svc.Create(ctx, in); err != nil {
 			t.Fatalf("seed %q: %v", title, err)
 		}
 	}
@@ -474,5 +478,49 @@ func TestNextReminderAt(t *testing.T) {
 	// 日期型 due（非 RFC3339）→ nil。
 	if nextReminderAt(sp("2026-06-10"), sp(reminder), sp(nextDue)) != nil {
 		t.Error("date-only due should yield nil reminder")
+	}
+}
+
+func TestScopeRefRequired(t *testing.T) {
+	ctx := context.Background()
+	svc := newTestService(t)
+
+	// Create: global 无需 ref。
+	if _, err := svc.Create(ctx, CreateTodoInput{Title: "g", Scope: sp("global")}); err != nil {
+		t.Fatalf("global create: %v", err)
+	}
+	// Create: project 无 ref → 报错；空白 ref → 报错；有 ref → 成功。
+	if _, err := svc.Create(ctx, CreateTodoInput{Title: "p", Scope: sp("project")}); err == nil {
+		t.Error("project without scopeRef should error")
+	}
+	if _, err := svc.Create(ctx, CreateTodoInput{Title: "p", Scope: sp("workspace"), ScopeRef: sp("   ")}); err == nil {
+		t.Error("blank scopeRef should error")
+	}
+	a, err := svc.Create(ctx, CreateTodoInput{Title: "p", Scope: sp("project"), ScopeRef: sp("/proj")})
+	if err != nil {
+		t.Fatalf("project with ref: %v", err)
+	}
+
+	// Update: 纯状态切换（不碰 scope）即使……此处 a 有 ref，应通过。
+	if err := svc.Update(ctx, a.ID, UpdateTodoInput{Status: sp("in_progress")}); err != nil {
+		t.Errorf("status-only update should pass: %v", err)
+	}
+	// Update: 改 scopeRef 为空 → 报错。
+	if err := svc.Update(ctx, a.ID, UpdateTodoInput{ScopeRef: sp("")}); err == nil {
+		t.Error("clearing scopeRef on project todo should error")
+	}
+	// Update: global todo 改 scope=project 但不给 ref → 报错。
+	g, _ := svc.Create(ctx, CreateTodoInput{Title: "g2"})
+	if err := svc.Update(ctx, g.ID, UpdateTodoInput{Scope: sp("project")}); err == nil {
+		t.Error("switching to project without ref should error")
+	}
+	// Update: 同时给 scope + ref → 成功。
+	if err := svc.Update(ctx, g.ID, UpdateTodoInput{Scope: sp("project"), ScopeRef: sp("/x")}); err != nil {
+		t.Errorf("scope+ref update should pass: %v", err)
+	}
+	// Update: 纯状态切换 global todo（不碰 scope）→ 通过。
+	g3, _ := svc.Create(ctx, CreateTodoInput{Title: "g3"})
+	if err := svc.Update(ctx, g3.ID, UpdateTodoInput{Status: sp("done")}); err != nil {
+		t.Errorf("global status-only update should pass: %v", err)
 	}
 }

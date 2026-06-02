@@ -62,6 +62,7 @@ export const todoPageZhCN: Messages = {
       scopeRef: '范围引用',
       scopeRefPlaceholder: '工作空间名 / 项目路径',
       scopeRefNone: '未指定',
+      scopeRefRequired: '工作空间 / 项目作用域必须选择范围引用',
       type: '类型',
       noType: '无',
       addType: '添加类型',
