@@ -260,6 +260,34 @@ export const knowledgeStyles = (theme: Theme): Record<string, SxProps<Theme>> =>
       color: fp.text.muted,
       mb: 0.25,
     },
+    // 逐文件失败明细（可滚动）
+    failureBox: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 0.5,
+      p: 1.5,
+      borderRadius: 1.25,
+      border: `1px solid ${fp.divider}`,
+      backgroundColor: fp.bg.elevated,
+      maxHeight: 220,
+      overflowY: 'auto',
+    },
+    failureRow: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 0.1,
+    },
+    failurePath: {
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+      fontSize: 12,
+      color: fp.text.secondary,
+      wordBreak: 'break-all',
+    },
+    failureError: {
+      fontSize: 11,
+      color: fp.status.danger,
+      wordBreak: 'break-all',
+    },
     reportChip: {
       fontSize: 11,
       fontWeight: 600,

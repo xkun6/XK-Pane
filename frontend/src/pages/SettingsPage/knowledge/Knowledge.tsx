@@ -322,6 +322,7 @@ const ReportSummary = ({ vm, styles, t }: ReportSummaryProps) => {
   const synced = r.sourcesSynced ?? [];
   const skipped = r.sourcesSkipped ?? [];
   const partial = r.partialErrors ?? [];
+  const failures = r.failures ?? [];
   return (
     <Box sx={styles.reportBlock}>
       <Box sx={styles.reportRow}>
@@ -351,6 +352,22 @@ const ReportSummary = ({ vm, styles, t }: ReportSummaryProps) => {
             <Typography key={idx} sx={[styles.logLine, styles.logWarn] as SxProps<Theme>}>
               {msg}
             </Typography>
+          ))}
+        </Box>
+      )}
+      {/* 逐文件失败明细：source 标签 + 路径 + 原始错误，精确定位是哪个文件失败。 */}
+      {failures.length > 0 && (
+        <Box sx={styles.failureBox}>
+          <Typography sx={styles.partialTitle}>
+            {t('settings.knowledge.sync.report.failuresDetail', { count: failures.length })}
+          </Typography>
+          {failures.map((f, idx) => (
+            <Box key={idx} sx={styles.failureRow}>
+              <Typography sx={styles.failurePath}>
+                {f.source} · {f.path}
+              </Typography>
+              <Typography sx={styles.failureError}>{f.error}</Typography>
+            </Box>
           ))}
         </Box>
       )}

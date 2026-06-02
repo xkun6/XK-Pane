@@ -42,13 +42,23 @@ type SkippedSource struct {
 	Reason string `json:"reason"`
 }
 
+// FetchFailureDetail 是一条逐文件抓取失败明细（带 source 标签，供面板精确定位是哪个文件失败）。
+// 比 PartialErrors 的「N files failed」汇总更细：source = 引擎标签（wiki[...] / mcdocs），path =
+// 失败的仓库路径 / 页面 URL，error = 原始错误。
+type FetchFailureDetail struct {
+	Source string `json:"source"`
+	Path   string `json:"path"`
+	Error  string `json:"error"`
+}
+
 // SyncReport 是 Sync 的同步结果（对齐 SyncReport；返前端 read-model，camelCase）。
 type SyncReport struct {
-	ManifestPath   string          `json:"manifestPath"`
-	DurationMs     uint64          `json:"durationMs"`
-	SourcesSynced  []string        `json:"sourcesSynced"`  // 非 nil
-	SourcesSkipped []SkippedSource `json:"sourcesSkipped"` // 非 nil
-	PartialErrors  []string        `json:"partialErrors"`  // 非 nil
+	ManifestPath   string               `json:"manifestPath"`
+	DurationMs     uint64               `json:"durationMs"`
+	SourcesSynced  []string             `json:"sourcesSynced"`  // 非 nil
+	SourcesSkipped []SkippedSource      `json:"sourcesSkipped"` // 非 nil
+	PartialErrors  []string             `json:"partialErrors"`  // 非 nil；阶段级汇总（含 build 错误）
+	Failures       []FetchFailureDetail `json:"failures"`       // 非 nil；逐文件抓取失败明细
 }
 
 // SyncStatus 是 Status 返回的 UI 状态横幅读模型（对齐 SyncStatus）。
@@ -222,6 +232,7 @@ func (s *Service) runSync(ctx context.Context, opts SyncOptions, progress Progre
 	synced := []string{}
 	skipped := []SkippedSource{}
 	partial := []string{}
+	failures := []FetchFailureDetail{}
 
 	// ===== Wiki 源，按 (remote, branch) 分桶 =====
 	// 同 remote 的 mcguide/mconline 合并为一次 gitea_sync（单次列树 + 并发拉 blob）。
@@ -303,6 +314,10 @@ func (s *Service) runSync(ctx context.Context, opts SyncOptions, progress Progre
 		sha = report.TreeSHA
 		if len(report.Failed) > 0 {
 			partial = append(partial, fmt.Sprintf("wiki[%s] gitea partial: %d files failed", groupLabel, len(report.Failed)))
+			srcLabel := fmt.Sprintf("wiki[%s]", groupLabel)
+			for _, f := range report.Failed {
+				failures = append(failures, FetchFailureDetail{Source: srcLabel, Path: f.Path, Error: f.Error})
+			}
 		}
 
 		// 逐 subdir 写 manifest：落了文件 → Gitea，否则 Embedded。
@@ -360,6 +375,9 @@ func (s *Service) runSync(ctx context.Context, opts SyncOptions, progress Progre
 			synced = append(synced, "mcdocs")
 			if len(report.Failed) > 0 {
 				partial = append(partial, fmt.Sprintf("mcdocs http_sync had %d failures", len(report.Failed)))
+				for _, f := range report.Failed {
+					failures = append(failures, FetchFailureDetail{Source: "mcdocs", Path: f.Path, Error: f.Error})
+				}
 			}
 		}
 	}
@@ -450,6 +468,7 @@ func (s *Service) runSync(ctx context.Context, opts SyncOptions, progress Progre
 		SourcesSynced:  synced,
 		SourcesSkipped: skipped,
 		PartialErrors:  partial,
+		Failures:       failures,
 	}, nil
 }
 

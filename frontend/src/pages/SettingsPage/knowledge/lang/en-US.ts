@@ -48,6 +48,7 @@ export const knowledgeEnUS: Messages = {
           skipped: 'Skipped: {{list}}',
           partial: '{{count}} partial failure(s)',
           partialDetail: 'Partial failure details',
+          failuresDetail: 'Failed files ({{count}})',
           none: 'No source was synced',
         },
       },

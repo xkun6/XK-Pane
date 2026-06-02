@@ -48,6 +48,7 @@ export const knowledgeZhCN: Messages = {
           skipped: '已跳过：{{list}}',
           partial: '部分失败 {{count}} 项',
           partialDetail: '部分失败详情',
+          failuresDetail: '失败文件（{{count}}）',
           none: '没有来源被同步',
         },
       },
