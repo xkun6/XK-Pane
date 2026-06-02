@@ -16,7 +16,6 @@ export interface SessionTimelineProps {
   sessionId: string;
   visible: boolean; // false=终端态：不渲染覆盖层、不轮询（保持挂载、状态不丢）
   onSend: (text: string) => void; // 把整句写进 PTY（父组件拼 '\r' 提交给 Agent）
-  onSupportedChange?: (supported: boolean | null) => void; // 上报「是否有结构化转录」给父级，决定是否显示切换控件
 }
 
 // 工具输入摘要（折叠态一行预览）：挑最有信息量的字段。
@@ -85,18 +84,13 @@ function CollapsibleBlock(props: {
 
 // SessionTimeline：把活跃会话的 Claude 转录渲染成可重排的对话卡片（覆盖在 xterm 之上）。
 // supported!==true（加载中 / 非 claude）时不渲染 → 露出底层 xterm 镜像（零干扰）。
-export const SessionTimeline = ({ sessionId, visible, onSend, onSupportedChange }: SessionTimelineProps) => {
+export const SessionTimeline = ({ sessionId, visible, onSend }: SessionTimelineProps) => {
   const theme = useTheme();
   const styles = sessionTimelineStyles(theme);
   const t = useT();
   const { events, title, supported } = useSessionTimeline({ sessionId, active: visible });
   const scrollRef = useRef<HTMLDivElement>(null);
   const [text, setText] = useState('');
-
-  // 把 supported 上报父级（TerminalView）：即便本组件在终端态返回 null，父级仍需据此决定是否显示切换控件。
-  useEffect(() => {
-    onSupportedChange?.(supported);
-  }, [supported, onSupportedChange]);
 
   // 新事件到达 / 重新可见 → 贴底（监控场景默认看最新）。
   useEffect(() => {

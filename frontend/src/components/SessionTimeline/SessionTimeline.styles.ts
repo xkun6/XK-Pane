@@ -23,7 +23,7 @@ export const sessionTimelineStyles = (theme: Theme): Record<string, SxProps<Them
       alignItems: 'center',
       gap: 1,
       pl: 1.5,
-      pr: 6, // 右侧留位给 TerminalView 的浮动「切换视图」按钮（zIndex 高于本覆盖层）
+      pr: 1.5, // 视图切换控件已上移到 TabBar，覆盖层右上角无需再留位
       borderBottom: `1px solid ${fp.divider}`,
       color: fp.text.secondary,
     },
