@@ -16,6 +16,9 @@
 export type KnownCliTool = 'none' | 'claude' | 'reclaude' | 'codex';
 export type CliTool = KnownCliTool | (string & {});
 
+/** Tab 视图模式：terminal = xterm 终端镜像；card = SessionTimeline 结构化对话卡片（仅 claude/reclaude）。 */
+export type TabViewMode = 'terminal' | 'card';
+
 // ---- 内层：单个 Tab 内的终端分屏树 ----
 
 export interface TerminalPaneLeaf {
@@ -62,6 +65,8 @@ export interface Tab {
   activeTerminalPaneId?: string;
   /** 置顶：置顶的 Tab 不可被关闭（关闭按钮隐藏、closeTab 守门），与 cc-pane 一致。 */
   pinned?: boolean;
+  /** 视图模式（缺省 = 'terminal'）：在 TabBar 切换；'card' 时该 Tab 渲染 SessionTimeline 覆盖层。 */
+  viewMode?: TabViewMode;
   // TODO(phase3/4): provider* / launchProfileId / workspaceSnapshotId /
   //   ssh / wsl / machineName / minimized / ... 见文件头
 }

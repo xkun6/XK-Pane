@@ -3,6 +3,15 @@ import type { SxProps, Theme } from '@mui/material';
 export const terminalViewStyles = (theme: Theme): Record<string, SxProps<Theme>> => {
   const fp = theme.palette.foundation;
   return {
+    // 桌面（owner）外壳：相对定位锚点，host 跑 xterm，SessionTimeline 作绝对覆盖层叠其上（卡片态）。
+    ownerRoot: {
+      position: 'relative',
+      width: '100%',
+      height: '100%',
+      minHeight: 0,
+      overflow: 'hidden',
+      backgroundColor: fp.bg.content,
+    },
     host: {
       position: 'relative',
       width: '100%',
@@ -25,20 +34,6 @@ export const terminalViewStyles = (theme: Theme): Record<string, SxProps<Theme>>
       width: '100%',
       height: '100%',
       minHeight: 0,
-    },
-    // 视图切换按钮（终端 ↔ 对话卡片）：常驻右上角，zIndex 高于 SessionTimeline 覆盖层(6)，
-    // 两种模式下同位置同按钮（图标随当前态切换），双向可达且不受底部地址栏/键盘折叠影响。
-    viewToggle: {
-      position: 'absolute',
-      top: 6,
-      right: 8,
-      zIndex: 8,
-      borderRadius: 1.5, // 6px：方圆设计的按钮圆角
-      backgroundColor: fp.bg.elevated,
-      border: `1px solid ${fp.divider}`,
-      color: fp.text.secondary,
-      boxShadow: 2,
-      '&:hover': { backgroundColor: fp.bg.hover },
     },
     viewerHost: {
       position: 'relative',

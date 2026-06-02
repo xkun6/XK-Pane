@@ -14,7 +14,11 @@ export interface TabBarSx {
   pinIcon: S;
   title: S;
   closeBtn: S;
-  addBtn: S;
+  viewToggle: S;
+  viewBtn: S;
+  viewBtnActive: S;
+  viewBtnIdle: S;
+  viewBtnLabel: S;
 }
 
 export const tabBarStyles = (theme: Theme): TabBarSx => {
@@ -94,17 +98,39 @@ export const tabBarStyles = (theme: Theme): TabBarSx => {
       transition: 'background-color 120ms ease, opacity 120ms ease',
       '&:hover': { backgroundColor: fp.bg.active },
     },
-    addBtn: {
+    // 视图切换段控件（终端 ↔ 卡片）：右侧固定，取代原「新建」+ 按钮。仅 claude/reclaude 活动 Tab 显示。
+    viewToggle: {
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'center',
-      width: 34,
       flexShrink: 0,
-      color: fp.text.muted,
-      cursor: 'pointer',
+      gap: 0.5,
+      px: 0.75,
       borderLeft: `1px solid ${fp.divider}`,
+    },
+    viewBtn: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 0.5,
+      height: 24,
+      px: 1,
+      borderRadius: 1.5, // 6px：方圆设计的按钮圆角
+      cursor: 'pointer',
+      fontSize: 12,
+      fontWeight: 500,
+      userSelect: 'none',
       transition: 'background-color 120ms ease, color 120ms ease',
+    },
+    viewBtnActive: {
+      backgroundColor: fp.bg.active,
+      color: fp.accent,
+    },
+    viewBtnIdle: {
+      color: fp.text.muted,
       '&:hover': { backgroundColor: fp.bg.hover, color: fp.text.primary },
+    },
+    viewBtnLabel: {
+      lineHeight: 1,
+      whiteSpace: 'nowrap',
     },
   };
 };

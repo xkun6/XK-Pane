@@ -5,9 +5,11 @@
 // （排版之前的结构化真相）解析出 user/assistant/thinking/tool 事件，可在手机上自由重排。
 // 详见记忆 xkpane-mobile-strategy / 后端 internal/services/transcript。
 //
-// 仅 Web（viewer）使用：桌面镜像的是 PTY 网格，直接返回 unsupported（前端会回退 xterm）。
+// 桌面（owner）走 Wails binding transcriptsvc.GetTimeline；Web（viewer）走 /api/sessions/timeline。
+// 两路同源同语义（后端 transcriptsvc 与 webapi handler 复用同一套 sessionId→转录解析逻辑）。
 // after = 已消费行数游标，append-only 的 jsonl 保证增量轮询不漏不重。
 import { httpClient, isDesktop } from '@/services/transport';
+import { Service as TranscriptBinding } from '@bindings/xkpane/internal/services/transcriptsvc';
 
 export type TimelineKind = 'user' | 'assistant' | 'thinking' | 'tool_use' | 'tool_result';
 
@@ -37,10 +39,16 @@ interface TimelineDTO {
 }
 
 export const TranscriptService = {
-  // 拉取 [after, 末尾) 的结构化时间线事件。桌面端无此视图 → 直接 unsupported。
+  // 拉取 [after, 末尾) 的结构化时间线事件。桌面走 binding、Web 走 HTTP 端点。
   async getTimeline(sessionId: string, after = 0): Promise<Timeline> {
     if (isDesktop) {
-      return { supported: false, events: [], total: 0 };
+      const res = await TranscriptBinding.GetTimeline(sessionId, after);
+      return {
+        supported: res.supported === true,
+        events: (res.events ?? []) as TimelineEvent[],
+        total: Number(res.total ?? 0),
+        ...(res.title ? { title: res.title } : {}),
+      };
     }
     const res = await httpClient.get<TimelineDTO>(
       `/api/sessions/timeline?sessionId=${encodeURIComponent(sessionId)}&after=${after}`,

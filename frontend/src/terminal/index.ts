@@ -12,6 +12,7 @@ export type {
   SplitPane,
   SplitDirection,
   Tab,
+  TabViewMode,
   TerminalPaneLeaf,
   TerminalPaneNode,
   TerminalPaneSplit,

@@ -1,5 +1,6 @@
-import { Box, ListItemIcon, ListItemText, Menu, MenuItem, useTheme } from '@mui/material';
-import AddRounded from '@mui/icons-material/AddRounded';
+import { Box, ListItemIcon, ListItemText, Menu, MenuItem, Tooltip, useTheme } from '@mui/material';
+import ChatRounded from '@mui/icons-material/ChatRounded';
+import TerminalRounded from '@mui/icons-material/TerminalRounded';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import DriveFileRenameOutlineRounded from '@mui/icons-material/DriveFileRenameOutlineRounded';
 import PushPinRounded from '@mui/icons-material/PushPinRounded';
@@ -9,7 +10,7 @@ import { useState } from 'react';
 import type { CSSProperties, MouseEvent } from 'react';
 import { TextInputDialog } from '@/components/TextInputDialog';
 import { useT } from '@/i18n';
-import type { Tab } from '@/terminal';
+import type { Tab, TabViewMode } from '@/terminal';
 import { tabBarStyles, type TabBarSx } from './TabBar.styles';
 import { useTabBar } from './useTabBar';
 
@@ -20,9 +21,14 @@ export interface TabBarProps {
   activeTabId: string;
   onSelect: (tabId: string) => void;
   onClose: (tabId: string) => void;
-  onAdd: () => void;
   onTogglePin: (tabId: string) => void;
   onRename: (tabId: string, title: string) => void;
+  /** 活动 Tab 的视图模式（终端 / 卡片）。 */
+  viewMode: TabViewMode;
+  /** 活动 Tab 是否支持卡片视图（claude/reclaude 才有结构化转录）；false 时不渲染切换控件。 */
+  canCard: boolean;
+  /** 切换活动 Tab 的视图模式。 */
+  onViewModeChange: (mode: TabViewMode) => void;
 }
 
 // 单个可拖拽标签：外层为 @dnd-kit sortable 节点（承载 transform），内层为视觉 tab（选择/关闭/置顶图标/右键菜单）。
@@ -108,9 +114,11 @@ export const TabBar = ({
   activeTabId,
   onSelect,
   onClose,
-  onAdd,
   onTogglePin,
   onRename,
+  viewMode,
+  canCard,
+  onViewModeChange,
 }: TabBarProps) => {
   const theme = useTheme();
   const styles = tabBarStyles(theme);
@@ -153,9 +161,38 @@ export const TabBar = ({
           ))}
         </SortableContext>
       </Box>
-      <Box sx={styles.addBtn} role="button" aria-label={t('terminal.tab.new')} onClick={onAdd}>
-        <AddRounded sx={{ fontSize: 18 }} />
-      </Box>
+      {canCard && (
+        <Box sx={styles.viewToggle} role="group" aria-label={t('terminal.view.group')}>
+          <Tooltip title={t('terminal.view.terminal')}>
+            <Box
+              sx={[styles.viewBtn, viewMode === 'terminal' ? styles.viewBtnActive : styles.viewBtnIdle]}
+              role="button"
+              aria-label={t('terminal.view.terminal')}
+              aria-pressed={viewMode === 'terminal'}
+              onClick={() => onViewModeChange('terminal')}
+            >
+              <TerminalRounded sx={{ fontSize: 15 }} />
+              <Box component="span" sx={styles.viewBtnLabel}>
+                {t('terminal.view.terminal')}
+              </Box>
+            </Box>
+          </Tooltip>
+          <Tooltip title={t('terminal.view.card')}>
+            <Box
+              sx={[styles.viewBtn, viewMode === 'card' ? styles.viewBtnActive : styles.viewBtnIdle]}
+              role="button"
+              aria-label={t('terminal.view.card')}
+              aria-pressed={viewMode === 'card'}
+              onClick={() => onViewModeChange('card')}
+            >
+              <ChatRounded sx={{ fontSize: 15 }} />
+              <Box component="span" sx={styles.viewBtnLabel}>
+                {t('terminal.view.card')}
+              </Box>
+            </Box>
+          </Tooltip>
+        </Box>
+      )}
 
       <Menu
         open={menu !== null}

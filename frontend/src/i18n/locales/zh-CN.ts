@@ -47,6 +47,11 @@ export const zhCN: Locale = {
         pin: '置顶',
         unpin: '取消置顶',
       },
+      view: {
+        group: '视图切换',
+        card: '卡片',
+        terminal: '终端',
+      },
     },
     common: {
       save: '保存',

@@ -33,7 +33,7 @@ import {
   tabsNeedingSession,
   treeSessionIds,
 } from './sessionReconcile';
-import type { PaneEdge, PaneNode, SplitDirection } from './types';
+import type { PaneEdge, PaneNode, SplitDirection, TabViewMode } from './types';
 
 /** 启动一个项目终端所需的最小信息（projectPath = PTY cwd，铁律 D7）。 */
 export interface LaunchProjectInput {
@@ -66,6 +66,8 @@ export interface TerminalContextValue {
   togglePin: (paneId: string, tabId: string) => void;
   /** 重命名某 Tab（空标题忽略）。 */
   renameTab: (paneId: string, tabId: string, title: string) => void;
+  /** 切换某 Tab 的视图模式（终端 ↔ 卡片，按 tabId 全树定位）。 */
+  setTabViewMode: (tabId: string, mode: TabViewMode) => void;
   /** 设置活动面板。 */
   setActivePanel: (paneId: string) => void;
   /** 分屏：向右（左右）或向下（上下）拆出一个新面板。 */
@@ -203,6 +205,10 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
     (tabId: string, sessionId: string) => dispatch({ type: 'setTabSession', tabId, sessionId }),
     [],
   );
+  const setTabViewMode = useCallback(
+    (tabId: string, mode: TabViewMode) => dispatch({ type: 'setTabViewMode', tabId, mode }),
+    [],
+  );
 
   // ── 生命周期 reconcile：树变化时对账后端 PTY 会话（创建缺失 / 清理孤儿）──
   const aliveRef = useRef(true);
@@ -308,6 +314,7 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
       moveTab,
       moveTabToEdge,
       setTabSession,
+      setTabViewMode,
     }),
     [
       state.rootPane,
@@ -326,6 +333,7 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
       moveTab,
       moveTabToEdge,
       setTabSession,
+      setTabViewMode,
     ],
   );
 

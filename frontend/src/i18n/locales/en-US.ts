@@ -40,6 +40,11 @@ export const enUS: Locale = {
         pin: 'Pin',
         unpin: 'Unpin',
       },
+      view: {
+        group: 'Switch view',
+        card: 'Cards',
+        terminal: 'Terminal',
+      },
     },
     common: {
       save: 'Save',

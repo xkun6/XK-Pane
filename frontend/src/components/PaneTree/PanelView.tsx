@@ -9,11 +9,14 @@ import { panelViewStyles } from './PaneTree.styles';
 
 // 叶子面板：TabBar（其活动 Tab）+ 内容区（每 Tab 一个 TerminalView，活动可见、其余隐藏保挂载）。
 // 无 Tab（初始 / 关掉最后会话）→ 渲染空态占位，不凭空开空 shell。
+// 仅 claude/reclaude 会话有结构化转录 → 才提供卡片视图（与后端 transcriptsvc.GetTimeline 的 supported 同口径）。
+const canShowCard = (cliTool?: string): boolean => cliTool === 'claude' || cliTool === 'reclaude';
+
 export const PanelView = ({ panel }: { panel: Panel }) => {
   const theme = useTheme();
   const styles = panelViewStyles(theme);
   const t = useT();
-  const { setActiveTab, closeTab, newTab, togglePin, renameTab } = useTerminal();
+  const { setActiveTab, closeTab, togglePin, renameTab, setTabViewMode } = useTerminal();
 
   if (panel.tabs.length === 0) {
     return (
@@ -27,16 +30,7 @@ export const PanelView = ({ panel }: { panel: Panel }) => {
     );
   }
 
-  const handleAdd = () => {
-    // MVP：以活动 Tab 的 project 派生新 Tab（无项目则空，待项目树/启动单元提供真实 projectPath）。
-    const active = panel.tabs.find((t) => t.id === panel.activeTabId);
-    newTab(panel.id, {
-      projectId: active?.projectId ?? '',
-      projectPath: active?.projectPath ?? '',
-      cliTool: active?.cliTool,
-      workspacePath: active?.workspacePath,
-    });
-  };
+  const activeTab = panel.tabs.find((tab) => tab.id === panel.activeTabId);
 
   return (
     <Box sx={styles.panel}>
@@ -46,9 +40,13 @@ export const PanelView = ({ panel }: { panel: Panel }) => {
         activeTabId={panel.activeTabId}
         onSelect={(tabId) => setActiveTab(panel.id, tabId)}
         onClose={(tabId) => closeTab(panel.id, tabId)}
-        onAdd={handleAdd}
         onTogglePin={(tabId) => togglePin(panel.id, tabId)}
         onRename={(tabId, title) => renameTab(panel.id, tabId, title)}
+        viewMode={activeTab?.viewMode ?? 'terminal'}
+        canCard={canShowCard(activeTab?.cliTool)}
+        onViewModeChange={(mode) => {
+          if (activeTab) setTabViewMode(activeTab.id, mode);
+        }}
       />
       <Box sx={styles.content}>
         {panel.tabs.map((tab) => {
@@ -58,7 +56,12 @@ export const PanelView = ({ panel }: { panel: Panel }) => {
               key={tab.id}
               sx={[styles.tabPane, visible ? styles.tabPaneActive : styles.tabPaneHidden]}
             >
-              <TerminalView sessionId={tab.sessionId} active={visible} cliTool={tab.cliTool} />
+              <TerminalView
+                sessionId={tab.sessionId}
+                active={visible}
+                cliTool={tab.cliTool}
+                viewMode={tab.viewMode ?? 'terminal'}
+              />
             </Box>
           );
         })}

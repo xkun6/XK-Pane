@@ -26,7 +26,7 @@ import {
   findTerminalPaneParent,
   generateId,
 } from './paneTree';
-import type { CliTool, PaneEdge, PaneNode, Panel, SplitDirection, Tab } from './types';
+import type { CliTool, PaneEdge, PaneNode, Panel, SplitDirection, Tab, TabViewMode } from './types';
 
 export interface TerminalTreeState {
   rootPane: PaneNode;
@@ -53,6 +53,7 @@ export type TerminalAction =
   | { type: 'selectTab'; paneId: string; tabId: string }
   | { type: 'togglePinTab'; paneId: string; tabId: string }
   | { type: 'renameTab'; paneId: string; tabId: string; title: string }
+  | { type: 'setTabViewMode'; tabId: string; mode: TabViewMode }
   | { type: 'setActivePane'; paneId: string }
   | { type: 'resizePanes'; paneId: string; sizes: number[] }
   // —— P5 拖拽三件套 ——
@@ -277,6 +278,16 @@ export function terminalTreeReducer(
       const tab = pane.tabs.find((t) => t.id === action.tabId);
       if (!tab) return state;
       tab.title = title;
+      return { ...state, rootPane: root };
+    }
+
+    case 'setTabViewMode': {
+      // 按 tabId 全树定位（不依赖 paneId）—— Tab 可经 moveTab 跨面板迁移。
+      const root = structuredClone(state.rootPane);
+      const loc = findTabLocation(root, action.tabId);
+      if (!loc) return state;
+      if (loc.tab.viewMode === action.mode) return state;
+      loc.tab.viewMode = action.mode;
       return { ...state, rootPane: root };
     }
 
