@@ -364,3 +364,115 @@ func TestTitleTrim(t *testing.T) {
 		t.Errorf("AddSubtask trim = (%q, %v), want (task, nil)", sub.Title, err)
 	}
 }
+
+// listByTitle 返回所有同标题待办（轮转克隆会复制 title），用于断言下一实例已生成。
+func listByTitle(t *testing.T, svc *Service, title string) []TodoDTO {
+	t.Helper()
+	all, err := svc.List(context.Background())
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	var out []TodoDTO
+	for _, td := range all {
+		if td.Title == title {
+			out = append(out, td)
+		}
+	}
+	return out
+}
+
+func TestRecurrenceRotation(t *testing.T) {
+	ctx := context.Background()
+	svc := newTestService(t)
+
+	// daily：完成带 recurrence 的待办 → 生成一条 status=todo、due 前推一天的新实例。
+	a, err := svc.Create(ctx, CreateTodoInput{
+		Title: "daily-task", Priority: sp("high"), Scope: sp("project"), ScopeRef: sp("/p"),
+		Tags: &[]string{"x"}, DueDate: sp("2026-06-10"), Recurrence: sp("daily"), TodoType: sp("chore"),
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := svc.Update(ctx, a.ID, UpdateTodoInput{Status: sp("done")}); err != nil {
+		t.Fatalf("Update done: %v", err)
+	}
+	got := listByTitle(t, svc, "daily-task")
+	if len(got) != 2 {
+		t.Fatalf("daily rotation: got %d todos, want 2", len(got))
+	}
+	// 找出新实例（非 a.ID）。
+	var next *TodoDTO
+	for i := range got {
+		if got[i].ID != a.ID {
+			next = &got[i]
+		}
+	}
+	if next == nil {
+		t.Fatal("no next instance created")
+	}
+	if next.Status != "todo" {
+		t.Errorf("next status = %q, want todo", next.Status)
+	}
+	if next.DueDate == nil || *next.DueDate != "2026-06-11" {
+		t.Errorf("next due = %v, want 2026-06-11", next.DueDate)
+	}
+	// 字段克隆。
+	if next.Priority != "high" || next.Scope != "project" || next.ScopeRef == nil || *next.ScopeRef != "/p" ||
+		len(next.Tags) != 1 || next.Tags[0] != "x" || next.TodoType != "chore" ||
+		next.Recurrence == nil || *next.Recurrence != "daily" {
+		t.Errorf("clone fields wrong: %+v", next)
+	}
+
+	// 已 done 再 Update done（非跃迁）不再克隆。
+	if err := svc.Update(ctx, a.ID, UpdateTodoInput{Status: sp("done")}); err != nil {
+		t.Fatalf("Update done again: %v", err)
+	}
+	if n := len(listByTitle(t, svc, "daily-task")); n != 2 {
+		t.Errorf("re-done should not clone: got %d, want 2", n)
+	}
+
+	// 非重复任务完成不克隆。
+	b, _ := svc.Create(ctx, CreateTodoInput{Title: "plain", DueDate: sp("2026-06-10")})
+	if err := svc.Update(ctx, b.ID, UpdateTodoInput{Status: sp("done")}); err != nil {
+		t.Fatalf("Update plain: %v", err)
+	}
+	if n := len(listByTitle(t, svc, "plain")); n != 1 {
+		t.Errorf("non-recurring should not clone: got %d, want 1", n)
+	}
+}
+
+func TestNextDueDate(t *testing.T) {
+	cases := []struct {
+		due, rec, want string
+	}{
+		{"2026-06-10", "daily", "2026-06-11"},
+		{"2026-06-10", "weekly", "2026-06-17"},
+		{"2026-06-10", "monthly", "2026-07-10"},
+		{"2026-01-31", "monthly", "2026-02-28"},  // 月末钳制（2026 非闰年）
+		{"2026-06-10T09:00:00Z", "daily", "2026-06-11"}, // 容忍时间部分
+	}
+	for _, c := range cases {
+		got := nextDueDate(sp(c.due), c.rec)
+		if got == nil || *got != c.want {
+			t.Errorf("nextDueDate(%q,%q) = %v, want %q", c.due, c.rec, got, c.want)
+		}
+	}
+	if nextDueDate(nil, "daily") != nil {
+		t.Error("nil due should yield nil")
+	}
+}
+
+func TestNextReminderAt(t *testing.T) {
+	// reminder 比 due 早 1 小时 → 下一实例同样早 1 小时。
+	due := "2026-06-10T10:00:00Z"
+	reminder := "2026-06-10T09:00:00Z"
+	nextDue := "2026-06-11"
+	got := nextReminderAt(sp(due), sp(reminder), sp(nextDue))
+	if got == nil || *got != "2026-06-10T23:00:00Z" {
+		t.Errorf("nextReminderAt = %v, want 2026-06-10T23:00:00Z (next_due 00:00 - 1h)", got)
+	}
+	// 日期型 due（非 RFC3339）→ nil。
+	if nextReminderAt(sp("2026-06-10"), sp(reminder), sp(nextDue)) != nil {
+		t.Error("date-only due should yield nil reminder")
+	}
+}

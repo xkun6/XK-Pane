@@ -3,7 +3,8 @@
 // 移植 cc-pane todo_repo：核心 CRUD（Create / Get / List / Update(patch) / Delete + 子任务
 // AddSubtask / UpdateSubtask / DeleteSubtask）+ 高级 Query（动态过滤 + 排序 + 分页）+ Stats
 // （按 status/scope/priority 分组计数 + 过期数）+ Reorder（拖拽重排 sort_order）+
-// BatchUpdateStatus（多选批量改状态）。**延后**（后续单元）：到期提醒 reminders、recurrence 轮转。
+// BatchUpdateStatus（多选批量改状态）+ recurrence 轮转（done 跃迁时按周期克隆下一实例）。
+// **延后**（后续单元）：到期提醒 reminders 的实际触发。
 // tags 以 JSON 数组字符串存储（模型 Todo.Tags），DTO 出入用 []string。
 package todo
 
@@ -240,18 +241,117 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateTodoInput) err
 		updates["todo_type"] = *in.TodoType
 	}
 	return s.db().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var count int64
-		if err := tx.Model(&storage.Todo{}).Where("id = ?", id).Count(&count).Error; err != nil {
+		// 取旧记录：既做存在性校验，也供 done 跃迁判断 + recurrence 轮转克隆字段（对齐 cc-pane update_todo）。
+		var old storage.Todo
+		if err := tx.First(&old, "id = ?", id).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errNotFound
+			}
 			return err
 		}
-		if count == 0 {
-			return errNotFound
+		if len(updates) > 0 {
+			if err := tx.Model(&storage.Todo{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+				return err
+			}
 		}
-		if len(updates) == 0 {
-			return nil
+		// 重复任务：状态变为 done（旧态非 done）且有非空 recurrence 时，在同事务内创建下一实例。
+		becomingDone := in.Status != nil && *in.Status == "done" && old.Status != "done"
+		if becomingDone && old.Recurrence != nil && *old.Recurrence != "" {
+			return s.createNextRecurrence(tx, old, *old.Recurrence)
 		}
-		return tx.Model(&storage.Todo{}).Where("id = ?", id).Updates(updates).Error
+		return nil
 	})
+}
+
+// createNextRecurrence 按 recurrence 规则克隆 old 为下一个待办实例（status=todo，due/reminder 前推）。
+// 移植 cc-pane todo_service.create_next_recurrence：复制 title/description/priority/scope/scopeRef/
+// tags/todoType/recurrence，due_date 按周期前推，reminder_at 保持与 due 相同偏移。在调用方事务内执行。
+func (s *Service) createNextRecurrence(tx *gorm.DB, old storage.Todo, recurrence string) error {
+	nextDue := nextDueDate(old.DueDate, recurrence)
+	nextReminder := nextReminderAt(old.DueDate, old.ReminderAt, nextDue)
+
+	var maxOrder int
+	tx.Model(&storage.Todo{}).Select("COALESCE(MAX(sort_order), -1)").Scan(&maxOrder)
+
+	rec := recurrence
+	next := storage.Todo{
+		ID:          uuid.NewString(),
+		Title:       old.Title,
+		Description: old.Description,
+		Status:      "todo",
+		Priority:    old.Priority,
+		Scope:       old.Scope,
+		ScopeRef:    old.ScopeRef,
+		Tags:        old.Tags, // 已是 JSON 数组串，直接复制
+		DueDate:     nextDue,
+		SortOrder:   maxOrder + 1,
+		ReminderAt:  nextReminder,
+		Recurrence:  &rec,
+		TodoType:    old.TodoType,
+	}
+	return tx.Create(&next).Error
+}
+
+// nextDueDate 把 due 的日期部分按 recurrence 滚到下一周期（daily +1d / weekly +1w / monthly +1月，
+// 月末按目标月最后一天钳制——对齐 cc-pane checked_add_months 而非 Go AddDate 的溢出归一）。
+// due 为空或不可解析为 YYYY-MM-DD 则返回 nil。
+func nextDueDate(due *string, recurrence string) *string {
+	if due == nil || *due == "" {
+		return nil
+	}
+	ds := *due
+	if len(ds) >= 10 {
+		ds = ds[:10] // 容忍带时间部分的 ISO 8601
+	}
+	d, err := time.Parse("2006-01-02", ds)
+	if err != nil {
+		return nil
+	}
+	var next time.Time
+	switch recurrence {
+	case "weekly":
+		next = d.AddDate(0, 0, 7)
+	case "monthly":
+		next = addMonthsClamped(d, 1)
+	default: // daily 及未知规则
+		next = d.AddDate(0, 0, 1)
+	}
+	out := next.Format("2006-01-02")
+	return &out
+}
+
+// addMonthsClamped 给 d 加 n 个月，目标月没有该日（如 1/31 → 2 月）时钳制到目标月最后一天，
+// 避免 Go time.AddDate 的溢出归一（1/31 + 1月 = 3/3 会跳过 2 月）。
+func addMonthsClamped(d time.Time, n int) time.Time {
+	y, m, day := d.Date()
+	firstTarget := time.Date(y, m, 1, 0, 0, 0, 0, d.Location()).AddDate(0, n, 0)
+	ty, tm, _ := firstTarget.Date()
+	lastDay := time.Date(ty, tm+1, 0, 0, 0, 0, 0, d.Location()).Day() // 目标月下月的第 0 天 = 目标月最后一天
+	if day > lastDay {
+		day = lastDay
+	}
+	return time.Date(ty, tm, day, 0, 0, 0, 0, d.Location())
+}
+
+// nextReminderAt 让下一实例的 reminder_at 保持与 due_date 相同的偏移量（next_due@00:00:00 UTC + offset）。
+// due/reminder 任一为空或不可解析为 RFC3339、或 nextDue 为空时返回 nil（对齐 cc-pane）。
+func nextReminderAt(due, reminder, nextDue *string) *string {
+	if due == nil || reminder == nil || nextDue == nil {
+		return nil
+	}
+	dueDt, err1 := time.Parse(time.RFC3339, *due)
+	remDt, err2 := time.Parse(time.RFC3339, *reminder)
+	if err1 != nil || err2 != nil {
+		return nil
+	}
+	nd, err := time.Parse("2006-01-02", *nextDue)
+	if err != nil {
+		return nil
+	}
+	offset := remDt.Sub(dueDt)
+	base := time.Date(nd.Year(), nd.Month(), nd.Day(), 0, 0, 0, 0, time.UTC)
+	out := base.Add(offset).Format(time.RFC3339)
+	return &out
 }
 
 // Delete 删除待办及其子任务（显式删两表，不依赖 FK cascade）。无匹配行报错。
