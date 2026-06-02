@@ -250,13 +250,16 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	// 待办提醒后台轮询（结合 ccpane G2）：每 60s 扫 reminder_at<=now 的未完成待办 → 经 notifSvc 发原生
 	// 通知（读 app_settings 开关 + 聚焦判定 + 10min 重提醒去重）。后端 ticker 不受窗口最小化时
 	// 浏览器定时器节流影响。locale 取 app_settings 决定通知标题语言（'auto'/未知→中文）。
+	// ctx 随 Run 返回时 cancel，让轮询 goroutine 洁净退出（对齐 orchSvc/webGateway 的 defer 清理）。
+	reminderCtx, cancelReminders := context.WithCancel(context.Background())
+	defer cancelReminders()
 	reminder.New(todoSvc, notifSvc, func() string {
 		var row storage.AppSettings
 		if err := holder.Current().GORM.First(&row, "id = ?", 1).Error; err != nil {
 			return "zh-CN"
 		}
 		return row.LocaleChoice
-	}).Start(context.Background())
+	}).Start(reminderCtx)
 
 	// 系统托盘（foundation 框架能力，本项目启用）：托盘图标 + 隐藏面板窗口 + 右键菜单。
 	setupSystray(app, trayIcon)
