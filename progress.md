@@ -1531,3 +1531,29 @@ cc-pane Bedrock 知识库（baseline 26 只读工具 + OTA 同步子系统 + 全
 记为有意偏差/后续（非 bug）：sort_order 起点 -1 vs 0（相对序无影响）；空 patch update 语义（XK no-op
 更合理）；create scope_ref 必填校验（需前端协同，悬空 todo 无害，缓）；概览缺标题/卡片图标、scopeRef
 改下拉、in_progress 转圈动画（纯视觉增强）；recurrence 轮转/reminder/Spec 钩子（roadmap 已延后）。
+
+### 2026-06-02（续）补全三档功能缺口（F1/F2/F3，逐单元独立提交，未 push）
+实测两处 UX 修正（0194b0b）后，用户拍板「按顺序连做」剩余功能缺口：
+
+- **F1 bundled dispatch-todos skill**（88662fb）：移植 cc-pane `default-skills/dispatch-todos.md`
+  流程，改写为 XK-Pane 房屋风格（铁律表 + 逻辑工具名 + panes MCP 说明），接上 XK 独有 TaskBinding
+  跟踪闭环。落 `projecthooks/templates/skills/xkpane-dispatch-todos/SKILL.md`；`projectSkillsVersion`
+  1→2（已部署项目下次启动会话整体重写 .claude/.codex/skills）；`wantSkillCount` 9→10。
+  **闭合**上文「已知 TODO」第 1 条。
+- **F2 recurrence 轮转**（0f2f191）：移植 cc-pane `todo_service.create_next_recurrence`。Update 时
+  status 跃迁为 done（旧态非 done）且非空 recurrence → 同事务克隆 status=todo 新实例，复制
+  title/description/priority/scope/scopeRef/tags/todoType/recurrence，due_date 按
+  daily(+1d)/weekly(+1w)/monthly(+1月,月末钳制——比 Go AddDate 溢出归一更忠实 chrono
+  checked_add_months) 前推，reminder_at 保持与 due 相同偏移。4 个轮转测试。前端 toggleStatus
+  循环到 done 即触发，无需改动。**闭合**「recurrence 轮转未移植」。
+- **F3 scope_ref 必填校验**（2795ed3）：后端 Create 忠实移植 cc-pane TODO_SCOPE_REF_REQUIRED；
+  后端 Update 仅当 patch 触碰 scope/scopeRef 时校验 patch 后有效值（XK 比 cc-pane 多守 update
+  路径，闭合「改成 project 却空 ref」漏洞，纯状态切换不误伤遗留脏数据）；前端编辑器 scopeRef 空时
+  禁用保存 + error 提示（新增 scopeRefRequired 文案）。TestScopeRefRequired + seedForQuery 补 ref。
+  **闭合** E1 审查里「create scope_ref 必填校验（缓）」。
+
+**验证**：go build ./internal/... . 绿；go test ./internal/... 全绿；前端 typecheck + build 绿。
+
+### 仍未做（明确非本次，roadmap）
+- update_todo 的 Spec 后置钩子（XK 无 SpecService）；reminder 到期实际触发。
+- 纯视觉增强：概览卡片图标/标题、in_progress 转圈动画、dueDate ISO 格式统一。
