@@ -82,6 +82,10 @@ export const databaseEnUS: Messages = {
           label: 'MC PE packages',
           description: 'MC PE dev package configs (project / launcher / world / debug hotkeys). Curated, not eligible for bulk clear.',
         },
+        recentDirectories: {
+          label: 'Recent directories',
+          description: 'Directories recently opened in the file browser — safe to rebuild.',
+        },
       },
     },
   },

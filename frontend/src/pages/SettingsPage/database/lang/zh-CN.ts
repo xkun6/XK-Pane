@@ -87,6 +87,10 @@ export const databaseZhCN: Messages = {
           label: 'MC PE 包',
           description: 'MC PE 开发包配置（项目 / 启动器 / 世界 / 调试热键）。含精心配置，不允许一键清空。',
         },
+        recentDirectories: {
+          label: '最近目录',
+          description: '文件浏览器最近打开过的目录列表，可重建。',
+        },
       },
     },
   },
