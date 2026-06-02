@@ -9,7 +9,7 @@ import {
   type HistoryStats,
   type Project,
 } from '@/services';
-import { useProjects } from '@/project';
+import { useRegisteredProjects } from '@/project';
 import { randomId } from '@/shared/uuid';
 
 // HistoryPage ViewModel：消费全局 ProjectProvider 选项目 + 按 path 浏览本地历史（两阶段 + 4-tab）+
@@ -141,7 +141,7 @@ function aggregateFiles(rows: Awaited<ReturnType<typeof LocalHistoryService.rece
 }
 
 export const useHistoryPage = (): UseHistoryPageResult => {
-  const { projects } = useProjects();
+  const projects = useRegisteredProjects();
   const [selectedPath, setSelectedPath] = useState('');
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<HistoryFileEntry[]>([]);

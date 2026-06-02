@@ -10,7 +10,7 @@ import {
   type DiffResult,
   type Project,
 } from '@/services';
-import { useProjects } from '@/project';
+import { useRegisteredProjects } from '@/project';
 
 // GitPage ViewModel：消费全局 ProjectProvider 选项目 + 按 path 查询 Git 状态 / 工具条 /
 // VSCode 式源代码管理（变更文件分组 + per-file diff + stage/unstage/discard/commit）。
@@ -117,7 +117,7 @@ function messageOf(e: unknown): string {
 }
 
 export const useGitPage = (): UseGitPageResult => {
-  const { projects } = useProjects();
+  const projects = useRegisteredProjects();
   const [selectedPath, setSelectedPath] = useState('');
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
