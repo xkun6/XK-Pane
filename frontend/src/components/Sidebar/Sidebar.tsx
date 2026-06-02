@@ -5,6 +5,7 @@ import { useT } from '@/i18n';
 import { useRouter } from '@/router';
 import type { RouteDefinition } from '@/router';
 import { usePreferences } from '@/preferences';
+import { lifecycleRole } from '@/services/transport';
 import { sidebarStyles } from './Sidebar.styles';
 
 type IconComponent = ComponentType<{ fontSize?: 'small' | 'medium' | 'large' | 'inherit' }>;
@@ -26,6 +27,10 @@ export const Sidebar = () => {
   // 路由 label 解析：优先 t(labelKey)，否则回落到 label 字面量
   const labelOf = (r: RouteDefinition): string =>
     r.labelKey ? t(r.labelKey) : r.label;
+
+  // 桌面专属页（desktopOnly）在 Web（viewer）端不显示入口 —— 无文件系统访问。
+  const visibleHere = (r: RouteDefinition): boolean =>
+    !(r.desktopOnly && lifecycleRole === 'viewer');
 
   const wrapTooltip = (label: string, child: ReactElement): ReactElement => {
     if (!preferences.showTooltip) return child;
@@ -80,13 +85,13 @@ export const Sidebar = () => {
       )}
 
       <Box sx={styles.section}>
-        {primary.map(renderItem)}
+        {primary.filter(visibleHere).map(renderItem)}
       </Box>
 
       <Box sx={styles.spacer} />
 
       <Box sx={styles.section}>
-        {footer.map(renderItem)}
+        {footer.filter(visibleHere).map(renderItem)}
       </Box>
     </Box>
   );

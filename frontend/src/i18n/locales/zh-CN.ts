@@ -31,6 +31,7 @@ export const zhCN: Locale = {
     route: {
       home: '首页',
       terminal: '终端',
+      files: '文件',
       git: 'Git',
       history: '本地历史',
       mcpe: 'MC PE',

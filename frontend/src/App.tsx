@@ -2,6 +2,7 @@ import { AppLayout } from '@/components/AppLayout';
 import { I18nProvider, registerFoundationLocales } from '@/i18n';
 import { registerHomePageLocales } from '@/pages/HomePage/lang';
 import { registerSettingsPageLocales } from '@/pages/SettingsPage/lang';
+import { registerFilesPageLocales } from '@/pages/FilesPage/lang';
 import { registerGitPageLocales } from '@/pages/GitPage';
 import { registerHistoryPageLocales } from '@/pages/HistoryPage';
 import { registerMcpePageLocales } from '@/pages/McpePage';
@@ -11,6 +12,7 @@ import { registerWebWorkspaceTreeLocales } from '@/components/WebWorkspaceTree';
 import { registerTerminalKeyBarLocales } from '@/components/TerminalKeyBar';
 import { registerSessionTimelineLocales } from '@/components/SessionTimeline';
 import { PreferencesProvider } from '@/preferences';
+import { CurrentDirProvider } from '@/currentdir';
 import { ProjectProvider } from '@/project';
 import { WorkspaceProvider } from '@/workspace';
 import { ProviderProvider } from '@/provider';
@@ -30,6 +32,7 @@ registerFoundationThemes();
 registerFoundationLocales();
 registerHomePageLocales();
 registerSettingsPageLocales();
+registerFilesPageLocales();
 registerGitPageLocales();
 registerHistoryPageLocales();
 registerMcpePageLocales();
@@ -47,7 +50,8 @@ registerSessionTimelineLocales();
 //  ⑤ ProjectProvider —— 项目登记表（全局，侧边栏项目树消费；mount 异步拉取）
 //  ⑥ WorkspaceProvider —— Workspace 两层树（全局，侧边栏 WorkspaceTree 消费；mount 异步拉取）
 //  ⑦ ProviderProvider —— 接入 Provider 登记表（全局，设置子页 + 启动选 Provider 消费）
-//  ⑧ RouterProvider —— 路由切换时上面都已就绪
+//  ⑧ CurrentDirProvider —— 「当前目录/文件」上下文（文件页 + Git/历史抽屉绑定它）
+//  ⑨ RouterProvider —— 路由切换时上面都已就绪
 export const App = () => {
   return (
     <I18nProvider>
@@ -57,9 +61,11 @@ export const App = () => {
             <ProjectProvider>
               <WorkspaceProvider>
                 <ProviderProvider>
-                  <RouterProvider routes={routes}>
-                    <AppLayout />
-                  </RouterProvider>
+                  <CurrentDirProvider>
+                    <RouterProvider routes={routes}>
+                      <AppLayout />
+                    </RouterProvider>
+                  </CurrentDirProvider>
                 </ProviderProvider>
               </WorkspaceProvider>
             </ProjectProvider>

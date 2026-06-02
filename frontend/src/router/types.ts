@@ -24,6 +24,8 @@ export interface RouteDefinition {
   // Suspense fallback：当 element 是 React.lazy 时显示的占位（如骨架屏）。
   // 推荐每个页面提供与版式对齐的 <PageNameSkeleton />，避免加载时布局跳动。
   fallback?: ReactNode;
+  // 仅桌面可用（依赖本机文件系统等桌面专属能力）。Web（viewer）端 Sidebar 隐藏其入口。
+  desktopOnly?: boolean;
 }
 
 export interface RouterContextValue {

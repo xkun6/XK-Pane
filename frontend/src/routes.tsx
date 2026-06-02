@@ -4,6 +4,7 @@ import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import VideogameAssetRoundedIcon from '@mui/icons-material/VideogameAssetRounded';
+import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
 import { lazy } from 'react';
 import { HomePage } from '@/pages/HomePage/HomePage';
 import { GitPage } from '@/pages/GitPage';
@@ -12,6 +13,7 @@ import { HistoryPage, HistoryPageSkeleton } from '@/pages/HistoryPage';
 import { HomePageSkeleton } from '@/pages/HomePage/HomePage.skeleton';
 import { SettingsPageSkeleton } from '@/pages/SettingsPage/SettingsPage.skeleton';
 import { TerminalPageSkeleton } from '@/pages/TerminalPage/TerminalPage.skeleton';
+import { FilesPageSkeleton } from '@/pages/FilesPage/FilesPage.skeleton';
 import type { RouteDefinition } from '@/router';
 
 // SettingsPage 走 React.lazy：调色板编辑器较重，首屏不进入 main bundle。
@@ -29,6 +31,13 @@ const SettingsPage = lazy(async () => {
 const TerminalPage = lazy(async () => {
   const mod = await import('@/pages/TerminalPage/TerminalPage');
   return { default: mod.TerminalPage };
+});
+
+// FilesPage 走 lazy：Monaco editor 较重（~MB 级），拆出主 bundle；keepAlive 保活，
+// 保留目录树展开态 / 打开的文件 / 编辑器实例（离开文件页再回不重建）。
+const FilesPage = lazy(async () => {
+  const mod = await import('@/pages/FilesPage/FilesPage');
+  return { default: mod.FilesPage };
 });
 
 // 路由表是唯一事实源：
@@ -59,6 +68,17 @@ export const routes: RouteDefinition[] = [
     fallback: <TerminalPageSkeleton />,
     slot: 'primary',
     keepAlive: true, // 保活：保留 xterm 实例与滚动回溯（终端页离开后再回不重建会话视图）
+  },
+  {
+    id: 'files',
+    labelKey: 'route.files',
+    label: 'Files',
+    icon: FolderOpenRoundedIcon,
+    element: <FilesPage />,
+    fallback: <FilesPageSkeleton />,
+    slot: 'primary',
+    keepAlive: true, // 保活：保留目录树展开态 / 打开的文件 / Monaco 实例
+    desktopOnly: true, // 文件系统访问仅桌面端；Web(viewer) 端 Sidebar 隐藏入口
   },
   {
     id: 'git',

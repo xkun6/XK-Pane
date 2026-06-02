@@ -1,0 +1,104 @@
+import { Box, Button, IconButton, Tooltip, Typography, useTheme } from '@mui/material';
+import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
+import FolderRoundedIcon from '@mui/icons-material/FolderRounded';
+import FolderOffRoundedIcon from '@mui/icons-material/FolderOffRounded';
+import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
+import { useT } from '@/i18n';
+import { FileSystemTree } from '@/components/FileSystemTree';
+import { filesPageStyles } from './FilesPage.styles';
+import { useFilesPage, filesPathBase } from './useFilesPage';
+import { FileEditorPane } from './FileEditorPane';
+
+// 「文件」页：左文件树 + 右 Monaco 编辑器（markdown 可切预览）。桌面专属；Web 端降级提示。
+// 选目录/文件会写入共享「当前目录/文件」上下文，供右侧 Git / 历史抽屉绑定。
+export const FilesPage = () => {
+  const theme = useTheme();
+  const styles = filesPageStyles(theme);
+  const t = useT();
+  const vm = useFilesPage();
+
+  if (!vm.isDesktop) {
+    return (
+      <Box sx={styles.root}>
+        <Box sx={styles.webOnly}>
+          <FolderOffRoundedIcon fontSize="large" />
+          <Typography>{t('files.desktopOnly')}</Typography>
+        </Box>
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={styles.root}>
+      <Box sx={styles.left}>
+        <Box sx={styles.leftHeader}>
+          <Typography sx={styles.rootName} title={vm.rootDir ?? ''}>
+            {vm.rootDir ? filesPathBase(vm.rootDir) : t('files.noFolder')}
+          </Typography>
+          <Tooltip title={t('files.reveal')} arrow>
+            <span>
+              <IconButton
+                size="small"
+                sx={styles.headerBtn}
+                disabled={!vm.rootDir && !vm.selectedFile}
+                onClick={vm.reveal}
+                aria-label={t('files.reveal')}
+              >
+                <OpenInNewRoundedIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title={t('files.openFolder')} arrow>
+            <IconButton
+              size="small"
+              sx={styles.headerBtn}
+              onClick={() => void vm.openFolder()}
+              aria-label={t('files.openFolder')}
+            >
+              <FolderOpenRoundedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+
+        {vm.rootDir ? (
+          <FileSystemTree
+            rootPath={vm.rootDir}
+            selectedPath={vm.selectedFile}
+            onSelectFile={(e) => void vm.selectFile(e)}
+            onActivateDir={vm.activateDir}
+          />
+        ) : (
+          <Box sx={styles.empty}>
+            <Typography sx={styles.emptyTitle}>{t('files.empty.title')}</Typography>
+            <Typography sx={styles.emptyHint}>{t('files.empty.hint')}</Typography>
+            <Button
+              sx={styles.openBtn}
+              startIcon={<FolderOpenRoundedIcon />}
+              onClick={() => void vm.openFolder()}
+            >
+              {t('files.empty.openFolder')}
+            </Button>
+            {vm.recent.length > 0 && (
+              <Box sx={styles.recentBox}>
+                <Typography sx={styles.recentTitle}>{t('files.recent.title')}</Typography>
+                {vm.recent.map((r) => (
+                  <Box
+                    key={r.id}
+                    sx={styles.recentRow}
+                    onClick={() => vm.openRecent(r.path)}
+                    title={r.path}
+                  >
+                    <FolderRoundedIcon fontSize="small" />
+                    <Typography sx={styles.recentName}>{filesPathBase(r.path)}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </Box>
+        )}
+      </Box>
+
+      <FileEditorPane vm={vm} />
+    </Box>
+  );
+};
