@@ -32,6 +32,9 @@ interface Props {
   editingId: string | null;
   subtasks: TodoSubtask[];
   allTypes: string[];
+  // scopeRef 下拉数据源（结构化挑选，替代手填）：项目用 path、工作空间用 name。
+  projects: { path: string; name: string; alias: string | null }[];
+  workspaces: { name: string; alias: string | null }[];
   onPatch: (patch: Partial<TodoEditForm>) => void;
   onSave: () => void;
   onClose: () => void;
@@ -204,12 +207,27 @@ export const TodoEditor = (p: Props) => {
           propRow(
             t('todo.editor.scopeRef'),
             <TextField
+              select
               size="small"
-              placeholder={t('todo.editor.scopeRefPlaceholder')}
               value={form.scopeRef}
               onChange={(e) => p.onPatch({ scopeRef: e.target.value })}
               fullWidth
-            />,
+            >
+              <MenuItem value="">
+                {t('todo.editor.scopeRefNone')}
+              </MenuItem>
+              {form.scope === 'project'
+                ? p.projects.map((pr) => (
+                    <MenuItem key={pr.path} value={pr.path}>
+                      {pr.alias || pr.name}
+                    </MenuItem>
+                  ))
+                : p.workspaces.map((ws) => (
+                    <MenuItem key={ws.name} value={ws.name}>
+                      {ws.alias || ws.name}
+                    </MenuItem>
+                  ))}
+            </TextField>,
           )}
 
         {propRow(

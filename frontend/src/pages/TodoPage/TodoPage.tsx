@@ -14,6 +14,7 @@ import {
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { useT } from '@/i18n';
 import { useRegisteredProjects } from '@/project';
+import { useWorkspaces } from '@/workspace';
 import type { Project, Todo } from '@/services';
 import { todoPageStyles } from './TodoPage.styles';
 import { useTodoPage } from './useTodoPage';
@@ -33,6 +34,7 @@ export const TodoPage = () => {
   const t = useT();
   const vm = useTodoPage();
   const projects = useRegisteredProjects();
+  const { workspaces } = useWorkspaces();
   const [dispatchTarget, setDispatchTarget] = useState<Todo | null>(null);
 
   const currentViewLabel =
@@ -186,6 +188,8 @@ export const TodoPage = () => {
             editingId={vm.selectedTodo?.id ?? null}
             subtasks={vm.selectedTodo?.subtasks ?? []}
             allTypes={vm.allTypes}
+            projects={projects}
+            workspaces={workspaces}
             onPatch={vm.patchForm}
             onSave={vm.saveForm}
             onClose={vm.closeEditor}

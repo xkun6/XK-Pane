@@ -61,6 +61,7 @@ export const todoPageEnUS: Messages = {
       scope: 'Scope',
       scopeRef: 'Scope Ref',
       scopeRefPlaceholder: 'workspace name / project path',
+      scopeRefNone: 'Unspecified',
       type: 'Type',
       noType: 'None',
       addType: 'Add type',

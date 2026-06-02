@@ -174,13 +174,9 @@ export const useTodoPage = () => {
     void loadList();
   }, [loadList]);
 
-  // 列表加载后自动选中第一条（对齐 cc-pane）：有任务时编辑器自动出现；空态右栏收起为 0 宽。
-  useEffect(() => {
-    if (!loading && todos.length > 0 && !selectedTodo && !isCreating) {
-      const first = todos[0];
-      if (first) setSelectedTodo(first);
-    }
-  }, [loading, todos, selectedTodo, isCreating]);
+  // 注：刻意不复刻 cc-pane 的「列表加载后自动选中第一条」——那会让编辑器「关闭」按钮失效
+  // （关闭即被重新选中重开，用户实测反馈）。改为：默认不选中 → 右栏收起，点条目才展开编辑器，
+  // 点关闭真正收起右栏。
 
   const loadStats = useCallback(async (): Promise<void> => {
     try {
