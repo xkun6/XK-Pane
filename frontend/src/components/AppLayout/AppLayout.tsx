@@ -3,6 +3,7 @@ import { Box, useMediaQuery, useTheme } from '@mui/material';
 import { TitleBar } from '@/components/TitleBar';
 import { Sidebar } from '@/components/Sidebar';
 import { RouterOutlet, useRouter } from '@/router';
+import { RightPanelDrawer } from '@/rightpanel';
 import { lifecycleRole } from '@/services/transport';
 import { appLayoutStyles } from './AppLayout.styles';
 
@@ -37,6 +38,8 @@ export const AppLayout = ({ title }: AppLayoutProps) => {
         <Box component="main" sx={styles.main}>
           <RouterOutlet />
         </Box>
+        {/* 右侧抽屉（Git / 本地历史）：未开启时渲染 null，不占布局；与主区并列在 flex row 内推开内容 */}
+        {!hideChrome && <RightPanelDrawer />}
       </Box>
     </>
   );

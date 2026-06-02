@@ -30,6 +30,9 @@ export const enUS: Locale = {
       mcpe: 'MC PE',
       settings: 'Settings',
     },
+    rightPanel: {
+      close: 'Close panel',
+    },
     terminal: {
       tab: {
         new: 'New terminal',

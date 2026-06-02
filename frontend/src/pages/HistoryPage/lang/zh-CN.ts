@@ -8,6 +8,7 @@ export const historyPageZhCN: Messages = {
     project: '项目',
     refresh: '刷新',
     noProjects: '尚无已登记项目。请先在侧边栏添加一个项目。',
+    panel: { noDir: '在文件页打开一个目录，即可在此查看其本地历史。' },
     error: { title: '本地历史操作失败' },
 
     // 阶段 1：最近变更文件列表

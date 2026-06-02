@@ -13,7 +13,7 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import { useState, type KeyboardEvent } from 'react';
+import { useEffect, useState, type KeyboardEvent } from 'react';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import DescriptionRoundedIcon from '@mui/icons-material/DescriptionRounded';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
@@ -34,7 +34,12 @@ import { formatSize, formatTime } from './historyFormat';
 const KNOWN_SOURCES = new Set(['git_commit', 'claude_session', 'user', 'build', 'restore', 'branch_switch', 'auto', 'manual']);
 const MB = 1024 * 1024;
 
-export const HistoryPage = () => {
+// 两种用法见 GitPage：整页模式（项目选择器）/ 绑定模式（boundPath，右侧抽屉跟随当前目录）。
+export interface HistoryPageProps {
+  boundPath?: string | null;
+}
+
+export const HistoryPage = ({ boundPath }: HistoryPageProps) => {
   const theme = useTheme();
   const styles = historyPageStyles(theme);
   const t = useT();
@@ -44,9 +49,16 @@ export const HistoryPage = () => {
   const [snapshotPath, setSnapshotPath] = useState('');
 
   const errorTitle = t('history.error.title');
+  const bound = boundPath !== undefined;
 
   // watcher 自动捕获 → live 刷新当前项目的列表 / 时间线。
   useLocalHistoryChangeEvent(vm.selectedPath, vm.reloadSilent);
+
+  // 绑定模式：boundPath 变化即重选目标（空路径 → 清空）。只盯 boundPath，语言切换不重载（保留视图态）。
+  useEffect(() => {
+    if (bound) void vm.select(boundPath ?? '', errorTitle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bound, boundPath]);
 
   const sourceColor = (source: string): string => {
     const f = theme.palette.foundation;
@@ -316,30 +328,34 @@ export const HistoryPage = () => {
 
   return (
     <Box sx={styles.root}>
-      <Box sx={styles.header}>
-        <Typography sx={styles.eyebrow}>{t('history.eyebrow')}</Typography>
-        <Typography sx={styles.title}>{t('history.title')}</Typography>
-      </Box>
+      {!bound && (
+        <Box sx={styles.header}>
+          <Typography sx={styles.eyebrow}>{t('history.eyebrow')}</Typography>
+          <Typography sx={styles.title}>{t('history.title')}</Typography>
+        </Box>
+      )}
 
-      {vm.projects.length === 0 ? (
-        <Box sx={styles.empty}>{t('history.noProjects')}</Box>
+      {(bound ? !boundPath : vm.projects.length === 0) ? (
+        <Box sx={styles.empty}>{bound ? t('history.panel.noDir') : t('history.noProjects')}</Box>
       ) : (
         <>
-          <Box sx={styles.pickerRow}>
-            <TextField
-              select
-              size="small"
-              fullWidth
-              label={t('history.project')}
-              value={vm.selectedPath}
-              onChange={(e) => void vm.select(e.target.value, errorTitle)}
-            >
-              {vm.projects.map((p) => (
-                <MenuItem key={p.id} value={p.path}>
-                  {p.alias ?? p.name}
-                </MenuItem>
-              ))}
-            </TextField>
+          <Box sx={bound ? { ...styles.pickerRow, justifyContent: 'flex-end' } : styles.pickerRow}>
+            {!bound && (
+              <TextField
+                select
+                size="small"
+                fullWidth
+                label={t('history.project')}
+                value={vm.selectedPath}
+                onChange={(e) => void vm.select(e.target.value, errorTitle)}
+              >
+                {vm.projects.map((p) => (
+                  <MenuItem key={p.id} value={p.path}>
+                    {p.alias ?? p.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
             <Tooltip title={t('history.refresh')}>
               <span>
                 <IconButton

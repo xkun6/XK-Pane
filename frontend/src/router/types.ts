@@ -14,7 +14,11 @@ export interface RouteDefinition {
   // 兜底 label（无 i18n key 时用 / 翻译失败时显示的字面量）
   label: string;
   icon?: ComponentType<{ fontSize?: 'small' | 'medium' | 'large' | 'inherit' }>;
-  element: ReactNode;                 // 该路由对应的页面组件实例
+  // 页面组件实例。面板型条目（panel 已设）没有整页，留空即可——它不经 RouterOutlet 渲染。
+  element?: ReactNode;
+  // 面板型条目：Sidebar 把该图标渲染成「右侧抽屉开关」而非导航按钮，点击 toggle 对应 RightPanel。
+  // 设了 panel 的条目不应再被 navigate（无 element），仅作为 Sidebar 上的切换入口。
+  panel?: 'git' | 'history';
   slot?: RouteSlot;                   // 默认 'primary'
   // 是否缓存页面状态：
   // - false（默认）：离开时卸载组件，下次进入重新挂载（state / form / fetch 全部重置）

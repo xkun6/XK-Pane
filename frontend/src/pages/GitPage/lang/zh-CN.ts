@@ -9,6 +9,7 @@ export const gitPageZhCN: Messages = {
     refresh: '刷新',
     loading: '加载中…',
     noProjects: '尚无已登记项目。请先在侧边栏添加一个项目。',
+    panel: { noDir: '在文件页打开一个目录，即可在此查看其 Git 状态。' },
     notARepo: '该目录不是 Git 仓库。',
     detached: '(游离 HEAD)',
     dirty: '有改动',

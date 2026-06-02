@@ -7,9 +7,7 @@ import VideogameAssetRoundedIcon from '@mui/icons-material/VideogameAssetRounded
 import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
 import { lazy } from 'react';
 import { HomePage } from '@/pages/HomePage/HomePage';
-import { GitPage } from '@/pages/GitPage';
 import { McpePage } from '@/pages/McpePage';
-import { HistoryPage, HistoryPageSkeleton } from '@/pages/HistoryPage';
 import { HomePageSkeleton } from '@/pages/HomePage/HomePage.skeleton';
 import { SettingsPageSkeleton } from '@/pages/SettingsPage/SettingsPage.skeleton';
 import { TerminalPageSkeleton } from '@/pages/TerminalPage/TerminalPage.skeleton';
@@ -85,18 +83,18 @@ export const routes: RouteDefinition[] = [
     labelKey: 'route.git',
     label: 'Git',
     icon: AccountTreeRoundedIcon,
-    element: <GitPage />,
+    panel: 'git', // 不再是整页：Sidebar 渲染成右侧抽屉开关，内容绑定当前目录
     slot: 'primary',
+    desktopOnly: true, // 依赖本机 Git；Web(viewer) 端隐藏入口
   },
   {
     id: 'history',
     labelKey: 'route.history',
     label: 'History',
     icon: HistoryRoundedIcon,
-    element: <HistoryPage />,
-    fallback: <HistoryPageSkeleton />,
+    panel: 'history', // 同上，右侧抽屉开关（绑定当前目录的本地历史）
     slot: 'primary',
-    keepAlive: true, // 保活：保留所选项目 / 文件 / 时间线滚动（自动捕获时 live 刷新）
+    desktopOnly: true, // 依赖本机本地历史；Web(viewer) 端隐藏入口
   },
   {
     id: 'mcpe',

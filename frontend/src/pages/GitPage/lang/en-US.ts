@@ -9,6 +9,7 @@ export const gitPageEnUS: Messages = {
     refresh: 'Refresh',
     loading: 'Loading…',
     noProjects: 'No projects registered yet. Add a project from the sidebar first.',
+    panel: { noDir: 'Open a directory in the Files page to see its Git status here.' },
     notARepo: 'This directory is not a Git repository.',
     detached: '(detached HEAD)',
     dirty: 'Dirty',

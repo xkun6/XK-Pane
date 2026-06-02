@@ -8,6 +8,7 @@ export const historyPageEnUS: Messages = {
     project: 'Project',
     refresh: 'Refresh',
     noProjects: 'No projects registered yet. Add a project from the sidebar first.',
+    panel: { noDir: 'Open a directory in the Files page to see its local history here.' },
     error: { title: 'Local history operation failed' },
 
     // Stage 1: recent changed files

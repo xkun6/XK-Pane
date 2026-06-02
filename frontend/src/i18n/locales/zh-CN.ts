@@ -37,6 +37,9 @@ export const zhCN: Locale = {
       mcpe: 'MC PE',
       settings: '设置',
     },
+    rightPanel: {
+      close: '收起面板',
+    },
     terminal: {
       tab: {
         new: '新建终端',

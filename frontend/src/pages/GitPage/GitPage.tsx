@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import {
   Box,
   Button,
@@ -29,14 +30,28 @@ import { useGitPage } from './useGitPage';
 
 // GitPage：选一个已登记项目 → Git 状态 + 工具条（fetch/pull/push/stash）+ VSCode 式源代码管理
 // （变更文件分组 staged/changes + per-file diff + stage/unstage/discard/commit）+ 分支/提交/worktree。
+//
+// 两种用法：
+//  - 整页模式（不传 boundPath）：顶部项目选择器自选已登记项目（历史保留，目前主要由右侧抽屉复用）。
+//  - 绑定模式（传 boundPath）：右侧抽屉用——隐藏页头与选择器，内容跟随传入目录（= 当前聚焦目录）。
+export interface GitPageProps {
+  boundPath?: string | null;
+}
 
-export const GitPage = () => {
+export const GitPage = ({ boundPath }: GitPageProps) => {
   const theme = useTheme();
   const styles = gitPageStyles(theme);
   const t = useT();
   const vm = useGitPage();
 
   const errorTitle = t('git.error.title');
+  const bound = boundPath !== undefined;
+
+  // 绑定模式：boundPath 变化即重选目标（空路径 → 清空）。只盯 boundPath，语言切换不重载（保留视图态）。
+  useEffect(() => {
+    if (bound) void vm.select(boundPath ?? '', errorTitle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bound, boundPath]);
   const toolbarDisabled = vm.busy || vm.loading;
 
   const onFetch = (): void =>
@@ -188,30 +203,34 @@ export const GitPage = () => {
 
   return (
     <Box sx={styles.root}>
-      <Box sx={styles.header}>
-        <Typography sx={styles.eyebrow}>{t('git.eyebrow')}</Typography>
-        <Typography sx={styles.title}>{t('git.title')}</Typography>
-      </Box>
+      {!bound && (
+        <Box sx={styles.header}>
+          <Typography sx={styles.eyebrow}>{t('git.eyebrow')}</Typography>
+          <Typography sx={styles.title}>{t('git.title')}</Typography>
+        </Box>
+      )}
 
-      {vm.projects.length === 0 ? (
-        <Box sx={styles.empty}>{t('git.noProjects')}</Box>
+      {(bound ? !boundPath : vm.projects.length === 0) ? (
+        <Box sx={styles.empty}>{bound ? t('git.panel.noDir') : t('git.noProjects')}</Box>
       ) : (
         <>
-          <Box sx={styles.pickerRow}>
-            <TextField
-              select
-              size="small"
-              fullWidth
-              label={t('git.project')}
-              value={vm.selectedPath}
-              onChange={(e) => void vm.select(e.target.value, errorTitle)}
-            >
-              {vm.projects.map((p) => (
-                <MenuItem key={p.id} value={p.path}>
-                  {p.alias ?? p.name}
-                </MenuItem>
-              ))}
-            </TextField>
+          <Box sx={bound ? { ...styles.pickerRow, justifyContent: 'flex-end' } : styles.pickerRow}>
+            {!bound && (
+              <TextField
+                select
+                size="small"
+                fullWidth
+                label={t('git.project')}
+                value={vm.selectedPath}
+                onChange={(e) => void vm.select(e.target.value, errorTitle)}
+              >
+                {vm.projects.map((p) => (
+                  <MenuItem key={p.id} value={p.path}>
+                    {p.alias ?? p.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
             <Tooltip title={t('git.refresh')}>
               <span>
                 <IconButton

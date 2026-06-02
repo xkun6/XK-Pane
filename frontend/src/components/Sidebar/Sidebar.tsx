@@ -6,6 +6,7 @@ import { useRouter } from '@/router';
 import type { RouteDefinition } from '@/router';
 import { usePreferences } from '@/preferences';
 import { lifecycleRole } from '@/services/transport';
+import { useRightPanel } from '@/rightpanel';
 import { sidebarStyles } from './Sidebar.styles';
 
 type IconComponent = ComponentType<{ fontSize?: 'small' | 'medium' | 'large' | 'inherit' }>;
@@ -21,6 +22,7 @@ export const Sidebar = () => {
   const theme = useTheme();
   const styles = sidebarStyles(theme);
   const { primary, footer, active, navigate } = useRouter();
+  const { active: activePanel, toggle: togglePanel } = useRightPanel();
   const { preferences } = usePreferences();
   const t = useT();
 
@@ -42,7 +44,10 @@ export const Sidebar = () => {
   };
 
   const renderItem = (r: RouteDefinition) => {
-    const isActive = r.id === active.id;
+    // 面板型条目（panel）：渲染成右侧抽屉「开关」—— 激活态跟随 activePanel，点击 toggle；
+    // 普通条目：导航按钮，激活态跟随当前路由。
+    const isPanel = r.panel !== undefined;
+    const isActive = isPanel ? activePanel === r.panel : r.id === active.id;
     const label = labelOf(r);
     const Icon: IconComponent = r.icon ?? HomeRoundedIcon;
     return (
@@ -51,10 +56,11 @@ export const Sidebar = () => {
         {wrapTooltip(
           label,
           <IconButton
-            onClick={() => navigate(r.id)}
+            onClick={() => (isPanel ? togglePanel(r.panel!) : navigate(r.id))}
             sx={isActive ? styles.itemActive : styles.item}
             aria-label={label}
-            aria-current={isActive ? 'page' : undefined}
+            aria-current={!isPanel && isActive ? 'page' : undefined}
+            aria-pressed={isPanel ? isActive : undefined}
           >
             <Icon fontSize="medium" />
           </IconButton>,
