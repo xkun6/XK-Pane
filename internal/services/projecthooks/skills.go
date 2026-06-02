@@ -25,7 +25,7 @@ const skillTemplatesRoot = "templates/skills"
 // projectSkillsVersion 是 bundled skill 内容版本。bump 它会让已部署项目在下次启动会话时整体重写
 // （内容有更新时务必 +1）。版本写到目标根的 .xkpane-skills-version 做幂等比对，避免每次启动都重写
 // 9×2 个文件。
-const projectSkillsVersion = "1"
+const projectSkillsVersion = "2"
 
 const skillsVersionMarker = ".xkpane-skills-version"
 

@@ -7,8 +7,8 @@ import (
 	"testing"
 )
 
-// wantSkillCount 是内嵌 bundled skill 的数量（templates/skills 下 9 个 xkpane-*）。
-const wantSkillCount = 9
+// wantSkillCount 是内嵌 bundled skill 的数量（templates/skills 下 10 个 xkpane-*）。
+const wantSkillCount = 10
 
 func TestSyncClaudeSkillsLandsAllSkills(t *testing.T) {
 	dir := t.TempDir()
