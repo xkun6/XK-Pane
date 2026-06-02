@@ -348,6 +348,30 @@ export const useTodoPage = () => {
     [customTypes, persistCustomTypes],
   );
 
+  // 客户端分组（groupMode !== none 时按 tag/status/priority/scope 分组），对齐 cc-pane groups useMemo。
+  const groups = useMemo((): Map<string, Todo[]> | null => {
+    if (groupMode === 'none') return null;
+    const result = new Map<string, Todo[]>();
+    for (const todo of todos) {
+      const keys =
+        groupMode === 'tag'
+          ? todo.tags.length > 0
+            ? todo.tags
+            : ['__untagged__']
+          : groupMode === 'status'
+            ? [todo.status]
+            : groupMode === 'priority'
+              ? [todo.priority]
+              : [todo.scope];
+      for (const key of keys) {
+        const list = result.get(key) ?? [];
+        list.push(todo);
+        result.set(key, list);
+      }
+    }
+    return result;
+  }, [todos, groupMode]);
+
   // 全部类型选项（内置 + 自定义去重），供过滤条 / 编辑器类型药丸用。
   const allTypes = useMemo(
     () => [
@@ -375,6 +399,7 @@ export const useTodoPage = () => {
     stats,
     customTypes,
     allTypes,
+    groups,
     // 导航 / 过滤 setter
     setViewMode,
     setFilterScope,

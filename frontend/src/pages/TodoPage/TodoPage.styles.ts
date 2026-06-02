@@ -226,6 +226,41 @@ export const todoPageStyles = (theme: Theme): Styles => {
     metaText: { display: 'inline-flex', alignItems: 'center', gap: 0.25, fontSize: 11.5, color: f.text.secondary },
     metaOverdue: { display: 'inline-flex', alignItems: 'center', gap: 0.25, fontSize: 11.5, color: theme.palette.error.main, fontWeight: 600 },
 
+    // ── 拖拽行 / 分组 ──
+    sortableRow: {
+      display: 'flex',
+      alignItems: 'stretch',
+      '& .todo-grip': { opacity: 0, transition: 'opacity 120ms' },
+      '&:hover .todo-grip': { opacity: 0.6 },
+    },
+    grip: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: 22,
+      flexShrink: 0,
+      cursor: 'grab',
+      color: f.text.secondary,
+      '&:active': { cursor: 'grabbing' },
+    },
+    gripFlex: { flex: 1, minWidth: 0 },
+    groupHeader: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 1,
+      width: '100%',
+      px: 1.5,
+      py: 0.75,
+      borderRadius: 8,
+      textTransform: 'none',
+      color: f.text.secondary,
+      justifyContent: 'flex-start',
+      '&:hover': { backgroundColor: f.bg.hover },
+    },
+    groupChevron: { fontSize: 16, color: f.text.secondary, transition: 'transform 150ms' },
+    groupCount: { ml: 'auto', fontSize: 12, color: f.text.secondary },
+    groupBody: { display: 'flex', flexDirection: 'column', gap: 0.75, pb: 0.75 },
+
     // ── 右栏：编辑器 / 概览（外层 wrap 控 480↔0 折叠，对齐 cc-pane aside transition）──
     rightPaneWrap: {
       flexShrink: 0,

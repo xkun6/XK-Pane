@@ -1,13 +1,24 @@
 import { Box, Button, CircularProgress, Typography, useTheme } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import ChecklistRoundedIcon from '@mui/icons-material/ChecklistRounded';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { useT } from '@/i18n';
 import type { Todo } from '@/services';
 import { todoPageStyles } from './TodoPage.styles';
 import { useTodoPage } from './useTodoPage';
 import { TodoSidebar } from './components/TodoSidebar';
 import { TodoFilterBar } from './components/TodoFilterBar';
-import { TodoListItem } from './components/TodoListItem';
+import { SortableTodoListItem } from './components/SortableTodoListItem';
+import { TodoTagGroup } from './components/TodoTagGroup';
 import { TodoEditor } from './components/TodoEditor';
 import { TodoOverview } from './components/TodoOverview';
 
@@ -33,6 +44,30 @@ export const TodoPage = () => {
       okLabel: t('todo.delete.ok'),
       cancelLabel: t('todo.delete.cancel'),
     });
+  };
+
+  // 拖拽排序（仅平铺模式）：松手后按新顺序重写 sort_order。对齐 cc-pane handleDragEnd。
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor),
+  );
+  const handleDragEnd = (event: DragEndEvent): void => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = vm.todos.findIndex((td) => td.id === active.id);
+    const newIndex = vm.todos.findIndex((td) => td.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(vm.todos, oldIndex, newIndex);
+    void vm.reorder(reordered.map((td) => td.id));
+  };
+
+  // 分组标签（View 持 t()）：状态/优先级/作用域走 i18n，标签原文，未标记走 todo.untagged。
+  const groupLabel = (key: string): string => {
+    if (vm.groupMode === 'tag') return key === '__untagged__' ? t('todo.untagged') : key;
+    if (vm.groupMode === 'status') return t(`todo.status.${key}`);
+    if (vm.groupMode === 'priority') return t(`todo.priority.${key}`);
+    if (vm.groupMode === 'scope') return t(`todo.scope.${key}`);
+    return key;
   };
 
   const showEditor = vm.isCreating || vm.selectedTodo !== null;
@@ -96,17 +131,36 @@ export const TodoPage = () => {
           </Box>
         ) : (
           <Box sx={styles.listScroll}>
-            {vm.todos.map((todo) => (
-              <TodoListItem
-                key={todo.id}
-                todo={todo}
-                selected={vm.selectedTodo?.id === todo.id}
-                onSelect={vm.selectTodo}
-                onToggleStatus={vm.toggleStatus}
-                onToggleMyDay={vm.toggleMyDay}
-                onDelete={handleDelete}
-              />
-            ))}
+            {vm.groups ? (
+              [...vm.groups.entries()].map(([key, groupTodos]) => (
+                <TodoTagGroup
+                  key={key}
+                  label={groupLabel(key)}
+                  todos={groupTodos}
+                  selectedId={vm.selectedTodo?.id ?? null}
+                  onSelect={vm.selectTodo}
+                  onToggleStatus={vm.toggleStatus}
+                  onToggleMyDay={vm.toggleMyDay}
+                  onDelete={handleDelete}
+                />
+              ))
+            ) : (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={vm.todos.map((td) => td.id)} strategy={verticalListSortingStrategy}>
+                  {vm.todos.map((todo) => (
+                    <SortableTodoListItem
+                      key={todo.id}
+                      todo={todo}
+                      selected={vm.selectedTodo?.id === todo.id}
+                      onSelect={vm.selectTodo}
+                      onToggleStatus={vm.toggleStatus}
+                      onToggleMyDay={vm.toggleMyDay}
+                      onDelete={handleDelete}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
+            )}
           </Box>
         )}
       </Box>
