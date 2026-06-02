@@ -81,6 +81,7 @@ export const todoPageEnUS: Messages = {
       addSubtask: 'Add subtask',
     },
     overview: {
+      title: 'Todo Overview',
       total: 'Total',
       todo: 'Todo',
       inProgress: 'In Progress',

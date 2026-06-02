@@ -1,6 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Box, Button, LinearProgress, Typography, useTheme } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import FormatListBulletedRoundedIcon from '@mui/icons-material/FormatListBulletedRounded';
+import ScheduleRoundedIcon from '@mui/icons-material/ScheduleRounded';
+import PlayCircleOutlineRoundedIcon from '@mui/icons-material/PlayCircleOutlineRounded';
+import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
+import FlagRoundedIcon from '@mui/icons-material/FlagRounded';
 import { useT } from '@/i18n';
 import type { Todo, TodoStats } from '@/services';
 import { todoPageStyles } from '../TodoPage.styles';
@@ -27,10 +33,13 @@ export const TodoOverview = ({ stats, recent, onSelectTodo, onCreateNew, onLoadS
   const byStatus = stats?.byStatus ?? {};
   const byPriority = stats?.byPriority ?? {};
 
-  const card = (value: number, label: string, color?: string) => (
+  const card = (icon: ReactNode, value: number, label: string, color?: string) => (
     <Box sx={styles.statCard}>
-      <Typography sx={color ? { ...styles.statValue, color } : styles.statValue}>{value}</Typography>
-      <Typography sx={styles.statLabel}>{label}</Typography>
+      <Box sx={color ? { ...styles.statIconWrap, color } : styles.statIconWrap}>{icon}</Box>
+      <Box sx={styles.statText}>
+        <Typography sx={styles.statValue}>{value}</Typography>
+        <Typography sx={styles.statLabel} noWrap>{label}</Typography>
+      </Box>
     </Box>
   );
 
@@ -54,16 +63,21 @@ export const TodoOverview = ({ stats, recent, onSelectTodo, onCreateNew, onLoadS
   return (
     <Box sx={styles.rightPane}>
       <Box sx={styles.overviewBody}>
+        <Typography sx={styles.overviewTitle}>{t('todo.overview.title')}</Typography>
+
         <Box sx={styles.statGrid}>
-          {card(total, t('todo.overview.total'))}
-          {card(byStatus['todo'] ?? 0, t('todo.overview.todo'))}
-          {card(byStatus['in_progress'] ?? 0, t('todo.overview.inProgress'), theme.palette.info.main)}
-          {card(byStatus['done'] ?? 0, t('todo.overview.done'), theme.palette.success.main)}
-          {card(stats?.overdue ?? 0, t('todo.overview.overdue'), theme.palette.error.main)}
+          {card(<FormatListBulletedRoundedIcon fontSize="small" />, total, t('todo.overview.total'))}
+          {card(<ScheduleRoundedIcon fontSize="small" />, byStatus['todo'] ?? 0, t('todo.overview.todo'))}
+          {card(<PlayCircleOutlineRoundedIcon fontSize="small" />, byStatus['in_progress'] ?? 0, t('todo.overview.inProgress'), theme.palette.info.main)}
+          {card(<CheckCircleRoundedIcon fontSize="small" />, byStatus['done'] ?? 0, t('todo.overview.done'), theme.palette.success.main)}
+          {card(<WarningAmberRoundedIcon fontSize="small" />, stats?.overdue ?? 0, t('todo.overview.overdue'), theme.palette.error.main)}
         </Box>
 
         <Box>
-          <Typography sx={styles.sectionHeading}>{t('todo.overview.priorityDist')}</Typography>
+          <Box sx={styles.sectionHeadingRow}>
+            <FlagRoundedIcon sx={{ fontSize: 14, color: theme.palette.foundation.text.secondary }} />
+            <Typography sx={styles.sectionHeading}>{t('todo.overview.priorityDist')}</Typography>
+          </Box>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             {bar(t('todo.priority.high'), byPriority['high'] ?? 0, theme.palette.error.main)}
             {bar(t('todo.priority.medium'), byPriority['medium'] ?? 0, theme.palette.warning.main)}

@@ -81,6 +81,7 @@ export const todoPageZhCN: Messages = {
       addSubtask: '添加子任务',
     },
     overview: {
+      title: '待办概览',
       total: '总数',
       todo: '待办',
       inProgress: '进行中',

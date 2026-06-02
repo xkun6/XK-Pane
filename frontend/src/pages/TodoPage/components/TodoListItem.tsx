@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Box, Chip, IconButton, Tooltip, Typography, useTheme } from '@mui/material';
+import { keyframes } from '@mui/system';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import DonutLargeRoundedIcon from '@mui/icons-material/DonutLargeRounded';
 import RadioButtonUncheckedRoundedIcon from '@mui/icons-material/RadioButtonUncheckedRounded';
@@ -13,6 +14,10 @@ import { useT } from '@/i18n';
 import { BUILTIN_TODO_TYPES } from '../useTodoPage';
 import type { Todo } from '@/services';
 import { todoPageStyles } from '../TodoPage.styles';
+
+// in_progress 状态图标缓慢自转（对齐 cc-pane animate-[spin_4s_linear_infinite]）；
+// prefers-reduced-motion 时停转（无障碍）。
+const spin = keyframes`to { transform: rotate(360deg); }`;
 
 interface Props {
   todo: Todo;
@@ -51,7 +56,17 @@ export const TodoListItem = ({
 
   const statusIcon = (): ReactNode => {
     if (todo.status === 'done') return <CheckCircleRoundedIcon fontSize="small" sx={{ color: theme.palette.success.main }} />;
-    if (todo.status === 'in_progress') return <DonutLargeRoundedIcon fontSize="small" sx={{ color: theme.palette.info.main }} />;
+    if (todo.status === 'in_progress')
+      return (
+        <DonutLargeRoundedIcon
+          fontSize="small"
+          sx={{
+            color: theme.palette.info.main,
+            animation: `${spin} 4s linear infinite`,
+            '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+          }}
+        />
+      );
     return <RadioButtonUncheckedRoundedIcon fontSize="small" sx={{ color: theme.palette.foundation.text.secondary }} />;
   };
 
