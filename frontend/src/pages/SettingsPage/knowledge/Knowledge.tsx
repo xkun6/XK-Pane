@@ -323,20 +323,35 @@ const ReportSummary = ({ vm, styles, t }: ReportSummaryProps) => {
   const skipped = r.sourcesSkipped ?? [];
   const partial = r.partialErrors ?? [];
   return (
-    <Box sx={styles.reportRow}>
-      <Box component="span" sx={styles.reportChip}>
-        {synced.length > 0
-          ? t('settings.knowledge.sync.report.synced', { list: synced.join(', ') })
-          : t('settings.knowledge.sync.report.none')}
-      </Box>
-      {skipped.length > 0 && (
+    <Box sx={styles.reportBlock}>
+      <Box sx={styles.reportRow}>
         <Box component="span" sx={styles.reportChip}>
-          {t('settings.knowledge.sync.report.skipped', { list: skipped.map((s) => s.source).join(', ') })}
+          {synced.length > 0
+            ? t('settings.knowledge.sync.report.synced', { list: synced.join(', ') })
+            : t('settings.knowledge.sync.report.none')}
         </Box>
-      )}
+        {skipped.length > 0 && (
+          <Box component="span" sx={styles.reportChip}>
+            {t('settings.knowledge.sync.report.skipped', { list: skipped.map((s) => s.source).join(', ') })}
+          </Box>
+        )}
+        {partial.length > 0 && (
+          <Box component="span" sx={styles.reportChip}>
+            {t('settings.knowledge.sync.report.partial', { count: partial.length })}
+          </Box>
+        )}
+      </Box>
+      {/* 部分失败详情：后端 partialErrors 原句（verbatim 诊断文本，同日志区不走 t()）。 */}
       {partial.length > 0 && (
-        <Box component="span" sx={styles.reportChip}>
-          {t('settings.knowledge.sync.report.partial', { count: partial.length })}
+        <Box sx={styles.partialList}>
+          <Typography sx={styles.partialTitle}>
+            {t('settings.knowledge.sync.report.partialDetail')}
+          </Typography>
+          {partial.map((msg, idx) => (
+            <Typography key={idx} sx={[styles.logLine, styles.logWarn] as SxProps<Theme>}>
+              {msg}
+            </Typography>
+          ))}
         </Box>
       )}
     </Box>

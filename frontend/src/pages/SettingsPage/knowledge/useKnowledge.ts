@@ -44,7 +44,9 @@ export type ActionStatus =
   | { kind: 'failed'; message: string };
 
 export const ALL_SOURCES: DocSyncSource[] = ['mcguide', 'mconline', 'mcdocs'];
-const DEFAULT_SOURCES: DocSyncSource[] = ['mcguide', 'mconline'];
+// 面板默认全选三源（含 mcdocs）。注：后端 SyncOptions.sources 为空时的默认仍是 [mcguide, mconline]
+// （对齐 cc-pane），但面板始终显式传 selectedSources，故此处的 UI 默认独立于后端默认。
+const DEFAULT_SOURCES: DocSyncSource[] = ['mcguide', 'mconline', 'mcdocs'];
 const LOG_CAP = 200;
 
 const emptySourcesForm = (): SourcesForm => ({

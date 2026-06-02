@@ -233,11 +233,32 @@ export const knowledgeStyles = (theme: Theme): Record<string, SxProps<Theme>> =>
     },
 
     // 同步报告摘要
+    reportBlock: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 0.75,
+      mt: 0.5,
+    },
     reportRow: {
       display: 'flex',
       flexWrap: 'wrap',
       gap: 1,
-      mt: 0.5,
+    },
+    // 部分失败详情列表
+    partialList: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 0.25,
+      p: 1.5,
+      borderRadius: 1.25,
+      border: `1px solid ${fp.divider}`,
+      backgroundColor: fp.bg.elevated,
+    },
+    partialTitle: {
+      fontSize: 11,
+      fontWeight: 600,
+      color: fp.text.muted,
+      mb: 0.25,
     },
     reportChip: {
       fontSize: 11,

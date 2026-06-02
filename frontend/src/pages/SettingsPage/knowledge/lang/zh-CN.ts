@@ -47,6 +47,7 @@ export const knowledgeZhCN: Messages = {
           synced: '已同步：{{list}}',
           skipped: '已跳过：{{list}}',
           partial: '部分失败 {{count}} 项',
+          partialDetail: '部分失败详情',
           none: '没有来源被同步',
         },
       },
