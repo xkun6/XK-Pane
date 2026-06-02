@@ -65,6 +65,13 @@ func userDataDir() (string, error) {
 	}
 }
 
+// UserDataDir 返回平台规范的用户数据根目录（导出 userDataDir）。供 bedrockdocsync 把 OTA
+// 产物落到 <root>/bedrock-data/（独立于可切换的 SQLite 路径，与 cc-pane AppPaths.data_dir 同义）。
+// 不创建目录，仅算路径。
+func UserDataDir() (string, error) {
+	return userDataDir()
+}
+
 // DefaultDBPath 返回平台默认数据库文件完整路径。
 // 该路径所在目录可能尚不存在；调用者通过 ensureDir 创建。
 func DefaultDBPath() (string, error) {

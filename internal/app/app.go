@@ -8,11 +8,14 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"time"
 
 	"xkpane/internal/events"
 	"xkpane/internal/services/appsettings"
 	"xkpane/internal/services/bedrock"
+	"xkpane/internal/services/bedrockdocsync"
 	"xkpane/internal/services/cliadapters"
 	"xkpane/internal/services/clitools"
 	"xkpane/internal/services/gitsvc"
@@ -122,6 +125,33 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	// Bedrock 知识库（P6f）：只读查询服务，注入 orchestrator 供 bedrock_* MCP 工具调用。
 	// 查询本身无状态、无 storage holder，**不进 Wails Services 列表**（无前端绑定，仅 MCP 暴露）。
 	bedrockSvc := bedrock.New()
+	// Bedrock OTA 文档同步（P6f-9c）：把 gitea/http 引擎 + 索引构建器 + manifest 串成一次同步，
+	// 原子换目录到 <UserDataDir>/bedrock-data/ 后经 BedrockHooks 热切 bedrock 查询层。进 Wails
+	// Services 列表（前端「设置 → 知识库」面板调用），经 SetEmitter 推 BedrockDocSyncProgress 进度。
+	bedrockDataRoot, err := storage.UserDataDir()
+	if err != nil {
+		logx.For("app").Warn("resolve user data dir for bedrock OTA failed (OTA 落相对目录)", "err", err)
+	}
+	bedrockDocSyncSvc := bedrockdocsync.New(bedrockDataRoot, bedrockdocsync.BedrockHooks{
+		SetDataRoot: bedrock.SetDataRoot,
+		RuntimeStats: func() bedrockdocsync.ManifestStats {
+			st := bedrock.RuntimeStats()
+			return bedrockdocsync.ManifestStats{
+				APIEntries:      st.APIEntries,
+				TemplateEntries: st.TemplateEntries,
+				GuideFiles:      st.GuideFiles,
+			}
+		},
+	})
+	// 启动期激活已有 OTA 数据：<root>/bedrock-data/manifest.json 存在即热切到该树（对齐 cc-pane
+	// lib.rs 启动检测）；不存在则保持纯内嵌基线。OTA 同步成功后 service 会再次 SetDataRoot 切换。
+	if bedrockDataRoot != "" {
+		liveDir := filepath.Join(bedrockDataRoot, "bedrock-data")
+		if _, statErr := os.Stat(filepath.Join(liveDir, "manifest.json")); statErr == nil {
+			bedrock.SetDataRoot(liveDir)
+			logx.For("app").Info("bedrock OTA data activated on boot", "dir", liveDir)
+		}
+	}
 
 	app := application.New(application.Options{
 		Name:        "XK-Pane",
@@ -142,10 +172,11 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(clitools.New(cliRegistry)),
 			application.NewService(wsSvc),
 			application.NewService(scanSvc),
-			application.NewService(wailsNotifier), // Wails 通知 service（跑 ServiceStartup 注册 toast）
-			application.NewService(childWinSvc),   // 子窗口系统
-			application.NewService(webAccessSvc),  // Web 网关门面（GetAccessInfo → 配对二维码）
-			application.NewService(mcpeSvc),       // MC PE 控制（包管理 / 启动 / 日志 / 桥状态）
+			application.NewService(wailsNotifier),     // Wails 通知 service（跑 ServiceStartup 注册 toast）
+			application.NewService(childWinSvc),       // 子窗口系统
+			application.NewService(webAccessSvc),      // Web 网关门面（GetAccessInfo → 配对二维码）
+			application.NewService(mcpeSvc),           // MC PE 控制（包管理 / 启动 / 日志 / 桥状态）
+			application.NewService(bedrockDocSyncSvc), // Bedrock OTA 文档同步（设置 → 知识库面板）
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -163,8 +194,9 @@ func Run(assets embed.FS, trayIcon []byte) error {
 		webGateway.RouteEvent(name, payload)
 	}
 	termSvc.SetEmitter(mirrorEmit)
-	mcpeSvc.SetEmitter(mirrorEmit) // MC PE 日志/退出事件双路（桌面 webview + Web 网关）
-	mcpeSvc.SetBridge(mcdkBridge)  // 取桥端口注入 MCDEV_DEBUG_IPC_PORT + 查桥状态
+	mcpeSvc.SetEmitter(mirrorEmit)           // MC PE 日志/退出事件双路（桌面 webview + Web 网关）
+	mcpeSvc.SetBridge(mcdkBridge)            // 取桥端口注入 MCDEV_DEBUG_IPC_PORT + 查桥状态
+	bedrockDocSyncSvc.SetEmitter(mirrorEmit) // OTA 同步进度事件双路（桌面 webview + Web 网关）
 	childWinSvc.AttachApp(app)
 	lhWatcher.AttachApp(app) // watcher 经此向前端 Emit localhistory:changed（live 刷新）
 	// Local History 启停补启接线（决策 D4-4）：
