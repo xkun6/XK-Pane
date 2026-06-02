@@ -5,7 +5,7 @@
 // 落点（D6d-5 拍板，据手测 + codex 源码核对调整）：
 //   - claude / reclaude → <proj>/.claude/settings.local.json 的 hooks 块
 //   - codex            → <proj>/.codex/config.toml 内联 [[hooks.SessionStart]]（[features] hooks=true）
-//                         codex command_windows 用 PowerShell 调用运算符形式（见 codex.go / powershellHookCommand）
+//     codex command_windows 用 PowerShell 调用运算符形式（见 codex.go / powershellHookCommand）
 //
 // 偏好（D6d-2 拍板）：缺省全启用，本期不做 toggle UI / 偏好文件——启动时自动注册全部支持的 hook。
 //
@@ -51,9 +51,10 @@ var codexHookDefs = []hookDef{
 	{subcommand: "session-start", event: "SessionStart", matcher: "startup|resume", timeout: 10},
 }
 
-// Sync 据 cliTool 把 cli-hook 注册进被启动项目的 hook 配置。
+// Sync 据 cliTool 把 cli-hook 注册进被启动项目的 hook 配置，并落地 bundled skill
+// （xkpane-* 到 .claude/skills/ 或 .codex/skills/，见 skills.go）。
 // cliTool ∈ {claude, reclaude, codex}；其余（none / 未知）直接 no-op。
-// 找不到 hook 二进制时返回 error（调用方仅 warn）。
+// 找不到 hook 二进制时返回 error（调用方仅 warn）；hooks 成功后再同步 skills。
 func Sync(projectPath, cliTool string) error {
 	if projectPath == "" {
 		return nil
@@ -64,13 +65,19 @@ func Sync(projectPath, cliTool string) error {
 		if err != nil {
 			return err
 		}
-		return syncClaudeHooks(projectPath, bin)
+		if err := syncClaudeHooks(projectPath, bin); err != nil {
+			return err
+		}
+		return syncClaudeSkills(projectPath)
 	case "codex":
 		bin, err := resolveHookBinary()
 		if err != nil {
 			return err
 		}
-		return syncCodexHooks(projectPath, bin)
+		if err := syncCodexHooks(projectPath, bin); err != nil {
+			return err
+		}
+		return syncCodexSkills(projectPath)
 	default:
 		return nil
 	}
