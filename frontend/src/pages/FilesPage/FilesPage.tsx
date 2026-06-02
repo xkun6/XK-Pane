@@ -3,8 +3,11 @@ import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
 import FolderRoundedIcon from '@mui/icons-material/FolderRounded';
 import FolderOffRoundedIcon from '@mui/icons-material/FolderOffRounded';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
+import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
+import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import { useT } from '@/i18n';
 import { FileSystemTree } from '@/components/FileSystemTree';
+import { formatShortcut, PANEL_SHORTCUT } from '@/shared/keyboardShortcuts';
 import { filesPageStyles } from './FilesPage.styles';
 import { useFilesPage, filesPathBase } from './useFilesPage';
 import { FileEditorPane } from './FileEditorPane';
@@ -35,6 +38,34 @@ export const FilesPage = () => {
           <Typography sx={styles.rootName} title={vm.rootDir ?? ''}>
             {vm.rootDir ? filesPathBase(vm.rootDir) : t('files.noFolder')}
           </Typography>
+          <Tooltip title={`${t('route.git')}  ·  ${formatShortcut(PANEL_SHORTCUT.git)}`} arrow>
+            <span>
+              <IconButton
+                size="small"
+                sx={vm.activePanel === 'git' ? styles.headerBtnActive : styles.headerBtn}
+                disabled={!vm.rootDir}
+                onClick={() => vm.togglePanel('git')}
+                aria-label={t('route.git')}
+                aria-pressed={vm.activePanel === 'git'}
+              >
+                <AccountTreeRoundedIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title={`${t('route.history')}  ·  ${formatShortcut(PANEL_SHORTCUT.history)}`} arrow>
+            <span>
+              <IconButton
+                size="small"
+                sx={vm.activePanel === 'history' ? styles.headerBtnActive : styles.headerBtn}
+                disabled={!vm.rootDir}
+                onClick={() => vm.togglePanel('history')}
+                aria-label={t('route.history')}
+                aria-pressed={vm.activePanel === 'history'}
+              >
+                <HistoryRoundedIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
           <Tooltip title={t('files.reveal')} arrow>
             <span>
               <IconButton

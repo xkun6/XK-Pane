@@ -1,8 +1,6 @@
 import HomeRoundedIcon from '@mui/icons-material/HomeRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
-import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
-import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import VideogameAssetRoundedIcon from '@mui/icons-material/VideogameAssetRounded';
 import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
 import { lazy } from 'react';
@@ -77,24 +75,6 @@ export const routes: RouteDefinition[] = [
     slot: 'primary',
     keepAlive: true, // 保活：保留目录树展开态 / 打开的文件 / Monaco 实例
     desktopOnly: true, // 文件系统访问仅桌面端；Web(viewer) 端 Sidebar 隐藏入口
-  },
-  {
-    id: 'git',
-    labelKey: 'route.git',
-    label: 'Git',
-    icon: AccountTreeRoundedIcon,
-    panel: 'git', // 不再是整页：Sidebar 渲染成右侧抽屉开关，内容绑定当前目录
-    slot: 'primary',
-    desktopOnly: true, // 依赖本机 Git；Web(viewer) 端隐藏入口
-  },
-  {
-    id: 'history',
-    labelKey: 'route.history',
-    label: 'History',
-    icon: HistoryRoundedIcon,
-    panel: 'history', // 同上，右侧抽屉开关（绑定当前目录的本地历史）
-    slot: 'primary',
-    desktopOnly: true, // 依赖本机本地历史；Web(viewer) 端隐藏入口
   },
   {
     id: 'mcpe',

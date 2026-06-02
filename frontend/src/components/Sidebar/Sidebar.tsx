@@ -6,8 +6,7 @@ import { useRouter } from '@/router';
 import type { RouteDefinition } from '@/router';
 import { usePreferences } from '@/preferences';
 import { lifecycleRole } from '@/services/transport';
-import { useRightPanel } from '@/rightpanel';
-import { formatShortcut, PANEL_SHORTCUT, SETTINGS_SHORTCUT } from '@/shared/keyboardShortcuts';
+import { formatShortcut, SETTINGS_SHORTCUT } from '@/shared/keyboardShortcuts';
 import { sidebarStyles } from './Sidebar.styles';
 
 type IconComponent = ComponentType<{ fontSize?: 'small' | 'medium' | 'large' | 'inherit' }>;
@@ -23,7 +22,6 @@ export const Sidebar = () => {
   const theme = useTheme();
   const styles = sidebarStyles(theme);
   const { primary, footer, active, navigate } = useRouter();
-  const { active: activePanel, toggle: togglePanel } = useRightPanel();
   const { preferences } = usePreferences();
   const t = useT();
 
@@ -35,13 +33,12 @@ export const Sidebar = () => {
   const visibleHere = (r: RouteDefinition): boolean =>
     !(r.desktopOnly && lifecycleRole === 'viewer');
 
-  // 数字导航的页序（与 useGlobalShortcuts 的 navItems 同口径：可见、非面板）。
-  const navItems = primary.filter(visibleHere).filter((r) => r.panel === undefined);
+  // 数字导航的页序（与 useGlobalShortcuts 的 navItems 同口径：可见的主导航页）。
+  const navItems = primary.filter(visibleHere);
 
-  // 该条目对应的快捷键提示文本（拼到 tooltip 末尾，便于发现）：面板用 Mod+Shift+G/H，
-  // 设置用 Mod+,，主导航页用 Mod+序号。组合键是平台技术记号（非可翻译文案），不走 t()。
+  // 该条目对应的快捷键提示文本（拼到 tooltip 末尾，便于发现）：设置用 Mod+,，
+  // 主导航页用 Mod+序号。组合键是平台技术记号（非可翻译文案），不走 t()。
   const shortcutHint = (r: RouteDefinition): string | null => {
-    if (r.panel) return formatShortcut(PANEL_SHORTCUT[r.panel]);
     if (r.id === 'settings') return formatShortcut(SETTINGS_SHORTCUT);
     const i = navItems.findIndex((n) => n.id === r.id);
     return i >= 0 && i < 9 ? formatShortcut({ mods: ['mod'], key: String(i + 1) }) : null;
@@ -57,10 +54,7 @@ export const Sidebar = () => {
   };
 
   const renderItem = (r: RouteDefinition) => {
-    // 面板型条目（panel）：渲染成右侧抽屉「开关」—— 激活态跟随 activePanel，点击 toggle；
-    // 普通条目：导航按钮，激活态跟随当前路由。
-    const isPanel = r.panel !== undefined;
-    const isActive = isPanel ? activePanel === r.panel : r.id === active.id;
+    const isActive = r.id === active.id;
     const label = labelOf(r);
     const hint = shortcutHint(r);
     const tip = hint ? `${label}  ·  ${hint}` : label;
@@ -71,11 +65,10 @@ export const Sidebar = () => {
         {wrapTooltip(
           tip,
           <IconButton
-            onClick={() => (isPanel ? togglePanel(r.panel!) : navigate(r.id))}
+            onClick={() => navigate(r.id)}
             sx={isActive ? styles.itemActive : styles.item}
             aria-label={label}
-            aria-current={!isPanel && isActive ? 'page' : undefined}
-            aria-pressed={isPanel ? isActive : undefined}
+            aria-current={isActive ? 'page' : undefined}
           >
             <Icon fontSize="medium" />
           </IconButton>,

@@ -43,6 +43,13 @@ export const filesPageStyles = (theme: Theme): Record<string, SxProps<Theme>> =>
       color: fp.text.secondary,
       '&:hover': { backgroundColor: fp.bg.hover, color: fp.text.primary },
     },
+    // Git / 历史 toggle 按钮的激活态（对应抽屉已打开）：accent 图标 + active 底色
+    headerBtnActive: {
+      borderRadius: 6,
+      color: fp.accent,
+      backgroundColor: fp.bg.active,
+      '&:hover': { backgroundColor: fp.bg.active, color: fp.accent },
+    },
     // —— 左栏空态：无打开目录 ——
     empty: {
       flex: 1,

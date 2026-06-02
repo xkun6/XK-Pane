@@ -30,10 +30,8 @@ export function useGlobalShortcuts(enabled = true): void {
   useEffect(() => {
     if (!enabled) return;
 
-    // 可数字导航的页：主导航中的非面板条目（与 Sidebar 渲染顺序一致；Web 隐藏 desktopOnly）。
-    const navItems = primary.filter(
-      (r) => r.panel === undefined && !(r.desktopOnly && lifecycleRole === 'viewer'),
-    );
+    // 可数字导航的页：主导航页（与 Sidebar 渲染顺序一致；Web 隐藏 desktopOnly）。
+    const navItems = primary.filter((r) => !(r.desktopOnly && lifecycleRole === 'viewer'));
 
     const onKeyDown = (e: KeyboardEvent): void => {
       const target = e.target as Element | null;

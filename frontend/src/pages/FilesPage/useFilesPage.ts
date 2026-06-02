@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useT } from '@/i18n';
 import { useCurrentDir } from '@/currentdir';
+import { useRightPanel, type RightPanelId } from '@/rightpanel';
 import {
   FileService,
   NativeDialogs,
@@ -37,6 +38,9 @@ export interface UseFilesPageResult {
   save: () => Promise<void>;
   setViewMode: (m: FilesViewMode) => void;
   reveal: () => void;
+  // 右侧 Git / 本地历史抽屉开关（入口在本页头部工具栏，绑定当前目录）
+  activePanel: RightPanelId | null;
+  togglePanel: (id: RightPanelId) => void;
 }
 
 const dirOf = (p: string): string => p.replace(/[\\/][^\\/]*$/, '');
@@ -46,6 +50,7 @@ const isMd = (p: string): boolean => /\.(md|markdown)$/i.test(p);
 export const useFilesPage = (): UseFilesPageResult => {
   const t = useT();
   const { rootDir, currentFile, setCurrentDir, setCurrentFile, openInBrowser } = useCurrentDir();
+  const { active: activePanel, toggle: togglePanel } = useRightPanel();
 
   const [recent, setRecent] = useState<RecentDirectory[]>([]);
   const [openFilePath, setOpenFilePath] = useState<string | null>(null);
@@ -176,6 +181,8 @@ export const useFilesPage = (): UseFilesPageResult => {
     save,
     setViewMode,
     reveal,
+    activePanel,
+    togglePanel,
   };
 };
 
