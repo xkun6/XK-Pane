@@ -35,6 +35,7 @@ import (
 	"xkpane/internal/services/storagesvc"
 	"xkpane/internal/services/subprocess"
 	"xkpane/internal/services/terminal"
+	"xkpane/internal/services/transcriptsvc"
 	"xkpane/internal/services/workspace"
 	"xkpane/internal/storage"
 	"xkpane/internal/utils/httpx"
@@ -97,6 +98,9 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	// 扫盘历史会话 service（无状态、纯文件系统只读）。提为变量：既注册给前端 bindings，
 	// 又注入 Web 网关供 GET /api/sessions/scan（手机「按项目恢复会话」）。
 	scanSvc := sessionscan.New()
+	// 结构化时间线门面（卡片视图取数）：把 webapi 的 sessionId→转录解析逻辑包成 Wails 方法，
+	// 让桌面（owner）端 SessionTimeline 也能取数（Web 仍走 /api/sessions/timeline，同源同语义）。
+	transcriptSvc := transcriptsvc.New(termSvc, scanSvc)
 	// Local History 自动捕获 watcher（决策 D4-1 独立包）。依赖 lhSvc（窄接口 Saver：读配置 + 保存）。
 	lhWatcher := lhwatcher.New(lhSvc)
 	// 桌面通知（P6d-4）：Wails 通知 service 单例（须注册进 Services 跑 Windows ServiceStartup，
@@ -172,6 +176,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(clitools.New(cliRegistry)),
 			application.NewService(wsSvc),
 			application.NewService(scanSvc),
+			application.NewService(transcriptSvc), // 结构化时间线（桌面卡片视图取数）
 			application.NewService(wailsNotifier),     // Wails 通知 service（跑 ServiceStartup 注册 toast）
 			application.NewService(childWinSvc),       // 子窗口系统
 			application.NewService(webAccessSvc),      // Web 网关门面（GetAccessInfo → 配对二维码）
