@@ -1557,3 +1557,32 @@ cc-pane Bedrock 知识库（baseline 26 只读工具 + OTA 同步子系统 + 全
 ### 仍未做（明确非本次，roadmap）
 - update_todo 的 Spec 后置钩子（XK 无 SpecService）；reminder 到期实际触发。
 - 纯视觉增强：概览卡片图标/标题、in_progress 转圈动画、dueDate ISO 格式统一。
+
+### 2026-06-03 G1/G2：日期归一 + 提醒到期触发（用户选「格式归一 + 再做提醒触发」）
+研究（workflow wf_2b645461，4 路）确认 cc-pane 提醒为前端 60s 轮询 + 后端纯查询 get_due_reminders；
+另发现 XK 已有完整 notification.Service（原生 toast + app_settings 开关 + 聚焦判定 + 去重），且
+后端 ticker 比前端轮询更可靠（窗口最小化时浏览器 setInterval 被节流）。据此定 Architecture B。
+
+- **G1 日期归一**（5e0295d，纯前端）：编辑器 dueDate/reminderAt 写入即 new Date(v).toISOString()
+  （对齐 cc-pane），修掉：① 后端 overdue 拿纯日期串与 RFC3339 now 字符串比较把今天误判逾期；
+  ② F2 reminder 偏移分支用 RFC3339 解析 datetime-local 串永远失败丢提醒。reminderAt 读回用本地
+  壁钟 isoToLocalInput（比 cc-pane 直接 slice 更正确，避免负时区偏移显示）。MCP 不暴露 dueDate，
+  前端归一即全覆盖。
+- **G2 提醒触发**（d562f0a，后端 ticker）：
+  - todo.CheckReminders 纯查询 reminder_at<=now AND status!='done'（移植 get_due_reminders，不回写）。
+  - 新 internal/services/reminder.Dispatcher：初始 5s + 每 60s 轮询，同一待办 10min 重提醒窗口
+    （notifiedRef 等价物落后端），只在 Result.Sent 记录窗口（禁用/聚焦跳过不消耗→条件变化补发，
+    比 cc-pane 无条件标记更准）。
+  - 复用 notification.Service 发原生 toast（与 cli-hook→orchestrator→Trigger 架构一致）。
+  - app.go 装配后 Start(context.Background())；localeFn 读 app_settings 决定通知标题语言。
+  - **架构偏差说明**：cc-pane 是前端轮询 + Sonner toast；XK 改后端 ticker + 原生通知——更可靠
+    （最小化也触发）、复用现成原生通知服务、无需新前端依赖/全局 Provider。用户可见行为一致。
+
+**验证**：go build（含 production tag）+ go test ./internal/...（新增 10 测：CheckReminders +
+dispatcher 发送/去重/重提醒/skip补发/locale）全绿；前端 typecheck+build 绿；wails3 generate bindings
+已重生成（CheckReminders 绑定就绪，前端暂未用，留作未来 UI 取数）。对抗校验 workflow 进行中。
+
+### 待 live 手测（用户，G1/G2）
+① 编辑器设到期日/提醒时间 → 重开编辑器值正确回显（提醒为本地时间）。
+② 设一个 1~2 分钟后的提醒 → 等待 → 弹出 Windows 原生通知「待办提醒：<标题>」（需 app_settings
+   通知开关开；默认开）。③ 同一待办 10 分钟内不重复弹。④ 设置里关通知开关 → 不弹。
