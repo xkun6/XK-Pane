@@ -259,9 +259,10 @@ export const useTodoPage = () => {
         status: editForm.status,
         priority: editForm.priority,
         scope: editForm.scope,
-        scopeRef: editForm.scopeRef.trim(),
+        // 空串→undefined→不进 patch（对齐 cc-pane：编辑时清空不会清掉旧 scope_ref/todo_type）。
+        scopeRef: editForm.scopeRef.trim() || undefined,
         tags: editForm.tags,
-        todoType: editForm.todoType,
+        todoType: editForm.todoType || undefined,
         dueDate: editForm.dueDate,
         reminderAt: editForm.reminderAt,
         recurrence: editForm.recurrence,
@@ -283,8 +284,11 @@ export const useTodoPage = () => {
 
   const toggleMyDay = useCallback(
     async (todo: Todo): Promise<void> => {
-      const next = !todo.myDay;
-      await TodoService.update(todo.id, { myDay: next, myDayDate: next ? todayLocal() : '' });
+      // 三态（对齐 cc-pane toggle_my_day）：未在 My Day → 加今天；已在且就是今天 → 移除；
+      // 已在但是旧日期（昨天加的）→ 刷新成今天（仍在 My Day）。
+      const todayStr = todayLocal();
+      const next = !todo.myDay || todo.myDayDate !== todayStr;
+      await TodoService.update(todo.id, { myDay: next, myDayDate: next ? todayStr : '' });
       await loadList();
       if (selectedTodo?.id === todo.id) await refreshSelected(todo.id);
     },

@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"xkpane/internal/storage"
@@ -127,7 +128,9 @@ func orDefault(p *string, def string) string {
 
 // Create 新建一个待办（服务端生成 uuid，sort_order 追加到末尾），返回创建后的 DTO。
 func (s *Service) Create(ctx context.Context, in CreateTodoInput) (TodoDTO, error) {
-	if in.Title == "" {
+	// 标题去空后判空（对齐 cc-pane create_todo：trim 后存、纯空白拒），落库 trim 后值。
+	title := strings.TrimSpace(in.Title)
+	if title == "" {
 		return TodoDTO{}, errors.New("title is required")
 	}
 	var maxOrder int
@@ -135,7 +138,7 @@ func (s *Service) Create(ctx context.Context, in CreateTodoInput) (TodoDTO, erro
 
 	t := storage.Todo{
 		ID:          uuid.NewString(),
-		Title:       in.Title,
+		Title:       title,
 		Status:      orDefault(in.Status, "todo"),
 		Priority:    orDefault(in.Priority, "medium"),
 		Scope:       orDefault(in.Scope, "global"),
@@ -193,7 +196,12 @@ func subtaskOrder(db *gorm.DB) *gorm.DB { return db.Order("sort_order, created_a
 func (s *Service) Update(ctx context.Context, id string, in UpdateTodoInput) error {
 	updates := map[string]any{}
 	if in.Title != nil {
-		updates["title"] = *in.Title
+		// 对齐 cc-pane update_todo：title 若提供则 trim 后非空校验，存 trim 后值。
+		tt := strings.TrimSpace(*in.Title)
+		if tt == "" {
+			return errors.New("title is required")
+		}
+		updates["title"] = tt
 	}
 	if in.Description != nil {
 		updates["description"] = *in.Description
@@ -262,6 +270,7 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 
 // AddSubtask 给某待办加一个子任务（sort_order 追加到末尾），返回创建后的子任务。
 func (s *Service) AddSubtask(ctx context.Context, todoID, title string) (storage.TodoSubtask, error) {
+	title = strings.TrimSpace(title)
 	if title == "" {
 		return storage.TodoSubtask{}, errors.New("subtask title is required")
 	}

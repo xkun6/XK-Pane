@@ -333,3 +333,34 @@ func TestBatchUpdateStatus(t *testing.T) {
 		t.Error("BatchUpdateStatus(empty status) err=nil, want error")
 	}
 }
+
+// TestTitleTrim 锁保真修复：Create/Update/AddSubtask 对 title 去空后判空、存 trim 后值（对齐 cc-pane）。
+func TestTitleTrim(t *testing.T) {
+	ctx := context.Background()
+	svc := newTestService(t)
+
+	// Create：首尾空格被 trim 落库。
+	a, err := svc.Create(ctx, CreateTodoInput{Title: "  hello  "})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if a.Title != "hello" {
+		t.Errorf("Create title = %q, want trimmed %q", a.Title, "hello")
+	}
+	// Create：纯空白被拒。
+	if _, err := svc.Create(ctx, CreateTodoInput{Title: "   "}); err == nil {
+		t.Error("Create(whitespace-only) err=nil, want error")
+	}
+	// Update：纯空白 title 被拒。
+	if err := svc.Update(ctx, a.ID, UpdateTodoInput{Title: sp("   ")}); err == nil {
+		t.Error("Update(whitespace-only title) err=nil, want error")
+	}
+	// AddSubtask：纯空白被拒；正常 trim。
+	if _, err := svc.AddSubtask(ctx, a.ID, "  "); err == nil {
+		t.Error("AddSubtask(whitespace-only) err=nil, want error")
+	}
+	sub, err := svc.AddSubtask(ctx, a.ID, "  task  ")
+	if err != nil || sub.Title != "task" {
+		t.Errorf("AddSubtask trim = (%q, %v), want (task, nil)", sub.Title, err)
+	}
+}

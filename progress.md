@@ -1484,3 +1484,50 @@ cc-pane Bedrock 知识库（baseline 26 只读工具 + OTA 同步子系统 + 全
 1. 项目根落出 `.claude/skills/xkpane-*/`（claude/reclaude）与 `.codex/skills/xkpane-*/`（codex）共 9 个 SKILL.md + `.xkpane-skills-version` 标记。
 2. 会话内被 CLI 识别为可用 skill（codex `/skills` 列表可见 `xkpane-*`；Claude 侧 `/xkpane-launch-task` 等可触发）。
 3. 二次启动同项目幂等（不重写、不堆叠）。
+
+---
+
+## 2026-06-02 结合 ccpane 添加 TodoList（以「正确形态」接回 P2 删除的 Todo 子系统）
+
+用户带 cc-pane TodoList 截图要求忠实复刻并「结合 ccpane」。研究（2 个 workflow）确认：这套
+2026-05-30 P2a（dc11388）被删过，当时唯一缺的就是 orchestrator 那层——正是「正确形态」。
+本次以 7 个单元逐一落地（逐单元 go test/typecheck/build 双绿 + 独立提交，未 push）：
+
+- **A1**（e26c07b）从 dc11388^ 恢复 Todo/TodoSubtask 模型 + todo 服务（513行+9测），注册 app.go。
+- **A2**（ef7bc5c）新 taskbinding service（Create/Get/FindBySession/Update/Delete/Query，忠实
+  cc-pane 语义：cliTool 缺省 reclaude、progress 0-100、status 枚举、8 测）。
+- **A3**（41933fb）orchestrator 加 query_todos/create_todo/update_todo + create/update/
+  query_task_binding 6 工具（忠实字段裁剪）+ Deps 注入。**至此 dispatch-todos skill 所需 6 工具
+  齐全**（解锁上条 progress 里「因无 Todo/query_todos 而裁剪不做」的 dispatch-todos）。
+- **B1**（030ebf6）wails3 bindings + TodoService/TaskBindingService 桶导出 + 路由「待办」入口。
+- **C-core**（c902c3a + dab4f67 对齐修正）三栏 TodoManager 完整复刻：左栏主视图/作用域、中栏
+  搜索+三过滤药丸单行+列表+空态、右栏 480↔0 折叠编辑器/概览 + 自动选中第一条（读 cc-pane
+  TodoManager 源确认 aside w-0 折叠行为）。自包含 query VM（弃 Zustand）；customTypes 走
+  Preferences（禁 localStorage）。
+- **C4**（1557aab）TodoTagGroup 分组折叠 + @dnd-kit 拖拽重排（平铺模式）。
+- **D1**（c048354）应用内「分派」按钮（cc-pane 无，XK 新增）：选项目+CLI → TerminalService.create
+  注入 prompt 起会话 → newTab 用 sessionId 绑定（复用「编排 launch_task 场景」零改终端子系统）
+  → TaskBinding 落库 → todo 标 in_progress → 跳终端。prompt 模板对齐 dispatch-todos skill。
+
+**验证**：go test ./internal/... 双模式 28 包 0 失败；前端 typecheck + build 绿。
+
+### ⚠️ 待 live 手测（用户）
+`task dev` 进「待办」页：① 三栏对齐截图（已截图比对，修过过滤换行 + 右栏折叠两处）② 增删/过滤/
+分组/拖拽/子任务 ③ 分派按钮 → 起真实 CLI 会话注入 prompt + TaskBinding 落库 + 跳终端 ④（可选）
+被启动的 Claude/Codex 经 panes MCP 跑 dispatch-todos skill（query_todos→update_todo→launch_task）。
+
+### 已知 TODO（非本次范围）
+- bundled `xkpane-dispatch-todos` skill（projecthooks/templates/skills/）现可补回（6 工具已就绪）。
+- update_todo 的 Spec 后置钩子省略（XK 无 SpecService）；recurrence 轮转 / reminder 未移植。
+- 编辑器 scopeRef 当前自由输入（cc-pane 是 workspace/project 下拉），可后续接 useRegisteredProjects。
+
+### E1 保真审查（4 路 workflow 对照 cc-pane 源）
+判定 minor-gaps（无崩溃/逻辑反真 bug）。已修 4 处自包含高价值项：
+- 后端 todo.Create/Update/AddSubtask title 去空判空（原放过纯空格标题）+ 守门测试。
+- orchestrator 6 工具非法枚举静默降级（复刻 cc-pane `.parse().ok()`：query 过滤被忽略而非空集、
+  update_task_binding 忽略非法 status 而非报错）+ 守门测试。
+- VM toggleMyDay 补三态分支（昨天加进 My Day 的刷成今天，原只翻布尔）。
+- VM 编辑保存 scopeRef/todoType 空串→undefined（对齐 cc-pane patch，避免编辑时误清旧值）。
+记为有意偏差/后续（非 bug）：sort_order 起点 -1 vs 0（相对序无影响）；空 patch update 语义（XK no-op
+更合理）；create scope_ref 必填校验（需前端协同，悬空 todo 无害，缓）；概览缺标题/卡片图标、scopeRef
+改下拉、in_progress 转圈动画（纯视觉增强）；recurrence 轮转/reminder/Spec 钩子（roadmap 已延后）。

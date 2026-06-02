@@ -143,3 +143,38 @@ func TestRegisterTodoToolsSchema(t *testing.T) {
 		t.Fatal("buildMCPHandler 返回 nil")
 	}
 }
+
+// TestTodoToolsEnumDegradation 锁保真修复：非法枚举静默降级（query 过滤被忽略返回全集 /
+// update 忽略该字段不报错），对齐 cc-pane MCP 层 .parse().ok() 语义。
+func TestTodoToolsEnumDegradation(t *testing.T) {
+	ctx := context.Background()
+	s := newTodoToolsService(t)
+
+	resultText(t, mustCall(s.toolCreateTodo(ctx, nil, createTodoParams{Title: "x"})))
+
+	// query_todos 传非法 status → 过滤被忽略，仍返回该待办（非空集，而非 WHERE status='bogus' 的空集）。
+	q := resultText(t, mustCall(s.toolQueryTodos(ctx, nil, queryTodosParams{Status: "bogus"})))
+	var qr struct {
+		Total int `json:"total"`
+	}
+	if err := json.Unmarshal([]byte(q), &qr); err != nil || qr.Total != 1 {
+		t.Fatalf("query_todos(非法status) total=%d err=%v, want 1（过滤应被忽略）", qr.Total, err)
+	}
+
+	// create + update_task_binding 传非法 status → 不报错，status 保持原值 pending，其余字段照写。
+	created := resultText(t, mustCall(s.toolCreateTaskBinding(ctx, nil, createTaskBindingParams{Title: "b", ProjectPath: "/p"})))
+	var tb map[string]any
+	_ = json.Unmarshal([]byte(created), &tb)
+	id, _ := tb["id"].(string)
+	upd := resultText(t, mustCall(s.toolUpdateTaskBinding(ctx, nil, updateTaskBindingParams{ID: id, Status: "bogus", Progress: ptrInt(30)})))
+	if strings.HasPrefix(upd, "错误:") {
+		t.Fatalf("update_task_binding(非法status) 应忽略 status 不报错，实际 %q", upd)
+	}
+	var tbu map[string]any
+	if err := json.Unmarshal([]byte(upd), &tbu); err != nil {
+		t.Fatalf("update_task_binding 返回非 JSON: %v (%s)", err, upd)
+	}
+	if tbu["status"] != "pending" || tbu["progress"].(float64) != 30 {
+		t.Errorf("update_task_binding(非法status) 应保持 status=pending + 写 progress=30，实际 %s", upd)
+	}
+}

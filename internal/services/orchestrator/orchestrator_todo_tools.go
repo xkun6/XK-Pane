@@ -54,6 +54,24 @@ func optStr(s string) *string {
 	return &s
 }
 
+// 枚举白名单：非法/空值降级为 nil（query 不约束 / update 不更新该字段），复刻 cc-pane MCP 层
+// `.parse().ok()` 的静默降级语义——非法 status/priority/scope 不会变成 `WHERE col='非法值'`（空集）
+// 或触发服务层报错，而是被忽略。
+var (
+	todoStatuses   = map[string]bool{"todo": true, "in_progress": true, "done": true}
+	todoPriorities = map[string]bool{"high": true, "medium": true, "low": true}
+	todoScopes     = map[string]bool{"global": true, "workspace": true, "project": true, "external": true, "temp_script": true}
+	tbStatuses     = map[string]bool{"pending": true, "running": true, "waiting": true, "completed": true, "failed": true}
+)
+
+func enumOrNil(v string, valid map[string]bool) *string {
+	if v == "" || !valid[v] {
+		return nil
+	}
+	s := v
+	return &s
+}
+
 // ── 参数结构 ──────────────────────────────────────────────────────────────
 
 type queryTodosParams struct {
@@ -115,8 +133,8 @@ func (s *Service) toolQueryTodos(ctx context.Context, _ *mcp.CallToolRequest, in
 		return textResult("错误: todo 服务不可用"), nil, nil
 	}
 	q := todo.TodoQuery{
-		Status: optStr(in.Status), Priority: optStr(in.Priority), Scope: optStr(in.Scope),
-		ScopeRef: optStr(in.ScopeRef), Search: optStr(in.Search),
+		Status: enumOrNil(in.Status, todoStatuses), Priority: enumOrNil(in.Priority, todoPriorities),
+		Scope: enumOrNil(in.Scope, todoScopes), ScopeRef: optStr(in.ScopeRef), Search: optStr(in.Search),
 	}
 	if in.Limit > 0 {
 		q.Limit = &in.Limit
@@ -135,8 +153,8 @@ func (s *Service) toolCreateTodo(ctx context.Context, _ *mcp.CallToolRequest, in
 	ci := todo.CreateTodoInput{
 		Title:       in.Title,
 		Description: optStr(in.Description),
-		Priority:    optStr(in.Priority),
-		Scope:       optStr(in.Scope),
+		Priority:    enumOrNil(in.Priority, todoPriorities),
+		Scope:       enumOrNil(in.Scope, todoScopes),
 		ScopeRef:    optStr(in.ScopeRef),
 	}
 	if len(in.Tags) > 0 {
@@ -155,8 +173,8 @@ func (s *Service) toolUpdateTodo(ctx context.Context, _ *mcp.CallToolRequest, in
 		return textResult("错误: todo 服务不可用"), nil, nil
 	}
 	ui := todo.UpdateTodoInput{
-		Title: optStr(in.Title), Status: optStr(in.Status),
-		Priority: optStr(in.Priority), Description: optStr(in.Description),
+		Title: optStr(in.Title), Status: enumOrNil(in.Status, todoStatuses),
+		Priority: enumOrNil(in.Priority, todoPriorities), Description: optStr(in.Description),
 	}
 	if err := s.deps.Todos.Update(ctx, in.ID, ui); err != nil {
 		return textResult("错误: " + err.Error()), nil, nil
@@ -200,7 +218,7 @@ func (s *Service) toolUpdateTaskBinding(ctx context.Context, _ *mcp.CallToolRequ
 	// 对齐 cc-pane MCP：不暴露 prompt（固定不更新）。
 	tb, err := s.deps.TaskBindings.Update(ctx, in.ID, taskbinding.UpdateInput{
 		Title:             optStr(in.Title),
-		Status:            optStr(in.Status),
+		Status:            enumOrNil(in.Status, tbStatuses),
 		Progress:          in.Progress,
 		CompletionSummary: optStr(in.CompletionSummary),
 		SessionID:         optStr(in.SessionID),
@@ -217,7 +235,7 @@ func (s *Service) toolQueryTaskBindings(ctx context.Context, _ *mcp.CallToolRequ
 		return textResult("错误: task_binding 服务不可用"), nil, nil
 	}
 	q := taskbinding.Query{
-		Status: optStr(in.Status), ProjectPath: optStr(in.ProjectPath), Search: optStr(in.Search),
+		Status: enumOrNil(in.Status, tbStatuses), ProjectPath: optStr(in.ProjectPath), Search: optStr(in.Search),
 	}
 	if in.Limit > 0 {
 		q.Limit = &in.Limit
