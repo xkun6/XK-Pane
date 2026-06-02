@@ -48,6 +48,20 @@ interface Props {
 
 const RECURRENCE = ['', 'daily', 'weekly', 'monthly'] as const;
 
+// 日期/时间归一：编辑器统一把 dueDate / reminderAt 存为 RFC3339（对齐 cc-pane new Date(v).toISOString()），
+// 让后端 overdue 比较与 recurrence 的 reminder 偏移（RFC3339 解析）一致生效。
+// dateInputToISO："YYYY-MM-DD"（date 输入，按 UTC 午夜解析）→ RFC3339；空串保持空。
+const dateInputToISO = (v: string): string => (v ? new Date(v).toISOString() : '');
+// localInputToISO："YYYY-MM-DDTHH:mm"（datetime-local，按本地时区解析）→ RFC3339。
+const localInputToISO = (v: string): string => (v ? new Date(v).toISOString() : '');
+// isoToLocalInput：RFC3339 → datetime-local 显示值（本地壁钟，避免直接 slice 显示成 UTC 偏移）。
+const isoToLocalInput = (iso: string): string => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 export const TodoEditor = (p: Props) => {
   const theme = useTheme();
   const styles = todoPageStyles(theme);
@@ -284,7 +298,7 @@ export const TodoEditor = (p: Props) => {
             size="small"
             type="date"
             value={form.dueDate ? form.dueDate.slice(0, 10) : ''}
-            onChange={(e) => p.onPatch({ dueDate: e.target.value })}
+            onChange={(e) => p.onPatch({ dueDate: dateInputToISO(e.target.value) })}
             fullWidth
           />,
         )}
@@ -294,8 +308,8 @@ export const TodoEditor = (p: Props) => {
           <TextField
             size="small"
             type="datetime-local"
-            value={form.reminderAt ? form.reminderAt.slice(0, 16) : ''}
-            onChange={(e) => p.onPatch({ reminderAt: e.target.value })}
+            value={form.reminderAt ? isoToLocalInput(form.reminderAt) : ''}
+            onChange={(e) => p.onPatch({ reminderAt: localInputToISO(e.target.value) })}
             fullWidth
           />,
         )}
