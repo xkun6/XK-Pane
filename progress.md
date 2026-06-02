@@ -1431,5 +1431,26 @@ cc-pane MC PE 控制子系统（启动 + 桥 + 5 工具 + 全量前端面板）�
   - P6f-6：`bedrock_validate_test(testJson=...)` VALID/INVALID
   前置：重启 `wails3 dev`（后端改动需重启 + 重嵌 dist）。
 
-### ⏳ OTA 同步（P6f-7 ~ P6f-10，未开始）
-`bedrock_doc_sync` ≈ 6200 行 Rust：httpx 代理扩展 + manifest/progress/proxy 数据层（P6f-7）→ gitea/VuePress 爬取 + HTML→MD（P6f-8，**动手前须精读 4 大文件 + 选 Go HTML→MD 库小验证**）→ 索引构建器 + service 编排（原子换目录 + set_data_root，P6f-9）→ 前端知识库面板（P6f-10，OTA live 手测）。
+### ✅ OTA 同步（P6f-7 ~ P6f-10 全部完成）
+`bedrock_doc_sync` ≈ 6200 行 Rust 忠实移植到 `internal/services/bedrockdocsync/`（无 git2：Gitea API + 纯 HTTP）。
+- **P6f-7 httpx 代理扩展 + OTA 数据层**（`b1b30e6`）：manifest / progress / proxy（camelCase 磁盘格式）。
+- **P6f-8a Gitea 爬取引擎**（`12e4725`）：Tree API 分页 + 子目录/扩展白名单 + 并发 raw blob。
+- **P6f-8b http_sync VuePress 爬取 + HTML→MD**（`0237502`）：app.js 路由发现 + 文章体切片 + `html-to-markdown/v2`（table 插件 + `*` bullet + EscapeDisabled）。
+- **P6f-9a build_api_index**（`2defb08`）：MD→api-index.json（纯 std 行/字节状态机）。
+- **P6f-9b build_templates_index**（`9eacfe5`）：Python 项目树→templates-index.json。findProjects/extractEvents/extractAPIs/extractRegisterSystems/extractModName/detectHas*/countFiles/generateTags 全字节状态机逐字对齐；systems 保遍历序、tags/events/apis/file_count 字典序去重、内部 key 序对齐 serde_json BTreeMap；输出 tag snake_case 对齐 bedrock loader。
+- **P6f-9c service 编排 + app 装配 + bedrock 热切**（`e3891ba`）：discover→gitea/http→条件构建索引→validating→原子换目录（tmp→bak→live→删 bak）+回滚→`SetDataRoot`→写 manifest→completed。默认源 `[mcguide,mconline]`（以代码为准）；context 驱动取消（阶段边界+引擎双重响应）；Status/Reset/ListArchives（留 5）/SetProxy(探测后存)/GetProxy/SetSources/GetSources；manifest/proxy/sources 走 `filex.WriteAtomic`。**窄接口 `BedrockHooks{SetDataRoot,RuntimeStats}` 不 import bedrock**（避免循环）；前置 `storage.UserDataDir()` 导出 + `bedrock.RuntimeStats()/Stats`（双源合并计数）；app.go 注册 Wails Service + SetEmitter 双路进度 + 启动期 manifest.json 存在则 SetDataRoot 激活已有 OTA 数据（对齐 cc-pane lib.rs）。
+- **P6f-10 前端知识库面板**（`6dab3d5`，设置→知识库子页）：MVVM + MUI9 + t() + NativeDialogs + 订阅 `BedrockDocSyncProgress`。状态卡片（OTA/内嵌徽标 + runtime 计数瓦片 + 占用 + 上次同步 + 各源溯源）/ 同步卡片（源勾选 + 同步/取消 + LinearProgress + 原始日志 + 报告摘要 + 原生确认重置）/ 代理卡片 / 源覆盖卡片 / 归档列表。`AppEvents` 增 `BedrockDocSyncProgress`（events.test 同步）。
+- **手测驱动打磨**：默认勾选 mcdocs + 展开 partialErrors 文案（`02166d5`）；SyncReport 增 `Failures` 逐文件失败明细 + 面板「失败文件」块（`64cd580`）；**mcdocs 抓取重试**（瞬时错误×2，线性退避，只在网络层 —— `index.html` 的「no h1」不重试）**+ 面板可调并发 1/2/4/8/16**（`9976146`）。
+- **MCP 工具改名 `bedrock_* → pe_*`**（`46ce5b7`，用户要求「更直观」）：26 个只读知识库工具 Name + 描述交叉引用 + 渲染提示 + help 文本 + 测试断言全部 `pe_<x>`（如 `pe_search_api`）；只改工具名 token，不动 Go 标识符 / cc-pane 模块名 /「Bedrock 引擎」专名。agent 侧即 `mcp__<orchestrator>__pe_*`。
+
+**验证**：各单元 `go build`/`go test`/`go vet`/`gofmt -l` 全过（bedrockdocsync 含 build_templates_index 17 测 + service 端到端用例；bedrock/orchestrator 改名后回归绿）；前端 `tsc -b --noEmit` + `vite build` 绿；`wails3 generate bindings`（20 服务含 bedrockdocsync）。
+
+---
+
+## ✅ P6f 全部完成（P6f-1 ~ P6f-10，2026-06-02）
+cc-pane Bedrock 知识库（baseline 26 只读工具 + OTA 同步子系统 + 全量前端面板）已完整忠实移植到 XK-Pane，并按用户要求把 MCP 工具前缀改为更直观的 `pe_*`。十余提交，每单元自洽可编译 + 独立中文 commit，未 push。
+
+**✅ 全部 live 手测通过（2026-06-02，用户真机）**：
+- **OTA 同步**：设置→知识库面板触发三源（mcguide/mconline/mcdocs）同步成功；首轮 mcdocs 4 个内容页超时（api 计数 1944），加重试/降并发后重新同步补回 →【api-index 完整 1956，与 cc-pane 参考值一致】，验证「重试 + 可调并发」修复生效、partialErrors 逐文件明细可定位。
+- **`pe_*` 查询工具**：`pe_api_stats`（1655 API + 298 事件 + 3 header = 1956，确认读的是同步后数据）/ `pe_search_guide 维度`（跨 mcguide+mconline 20 命中）/ `pe_get_event`（事件卡片）/ `pe_validate_call`（VALID）/ `pe_review_code`（13 规则命中埋坑）/ `pe_help` 全部正常；`pe_search_api`/`pe_get_api` 对「组件工厂方法 / 事件名」正确返回未命中并建议改用对应工具（路由判断正确）。
+- **沉淀**：① OTA 链路闭环 = 同步(带重试)→完整数据→原子换目录+启动激活→`pe_*` 查到的就是同步后最新文档；② mc.163.com 慢/限流时把并发调到 2 + 重试可消除零星超时；③ XK 与 cc-pane 的 `bedrock-data` 体积差异源于 Go `html-to-markdown/v2` vs Rust `html2md` 转换器字节差（内容等价），非 bug。注：P6f-1~6 的 baseline 手测点（原 `bedrock_*` 示例调用）现已统一为 `pe_*`。P6f 收官。
