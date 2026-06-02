@@ -30,6 +30,10 @@ const (
 	MCPeOutput   = "mc_pe:output"   // 一行已过滤/分类的 MC PE 日志
 	MCPeLaunched = "mc_pe:launched" // 一次启动已建 run
 	MCPeExited   = "mc_pe:exited"   // MC PE 进程退出
+
+	// Bedrock 知识库 OTA 同步进度（后端 bedrockdocsync.sync → 前端知识库面板进度对话框）。P6f。
+	// payload 见 BedrockDocSyncProgressPayload，按 stage 分发；对齐 cc-pane ProgressEvent(tag=stage)。
+	BedrockDocSyncProgress = "bedrock-doc-sync:progress"
 )
 
 // TerminalOutputPayload 是 TerminalOutput 事件载荷。
@@ -113,6 +117,26 @@ type MCExitedPayload struct {
 	Code      int    `json:"code"`
 }
 
+// BedrockDocSyncProgressPayload 是 BedrockDocSyncProgress 事件载荷（扁平化 cc-pane 的
+// tagged ProgressEvent：Stage 是判别字段，其余按 stage 取用）。前端按 Stage 分发：
+// started/gitea_sync/http_fetch/build_index/validating/completed/cancelled/failed/log。
+type BedrockDocSyncProgressPayload struct {
+	Stage        string   `json:"stage"`
+	Sources      []string `json:"sources,omitempty"`      // started
+	Source       string   `json:"source,omitempty"`       // gitea_sync / http_fetch
+	Status       string   `json:"status,omitempty"`       // gitea_sync
+	Fetched      uint32   `json:"fetched,omitempty"`      // http_fetch
+	Total        uint32   `json:"total,omitempty"`        // http_fetch
+	Kind         string   `json:"kind,omitempty"`         // build_index
+	Entries      uint32   `json:"entries,omitempty"`      // build_index
+	ManifestPath string   `json:"manifestPath,omitempty"` // completed
+	DurationMs   uint64   `json:"durationMs,omitempty"`   // completed
+	Error        string   `json:"error,omitempty"`        // failed
+	Partial      bool     `json:"partial,omitempty"`      // failed
+	Level        string   `json:"level,omitempty"`        // log（info/warn/error）
+	Msg          string   `json:"msg,omitempty"`          // log
+}
+
 // Register 在 application 初始化前注册所有强类型事件，
 // Wails 的 binding 生成器会据此为前端生成类型化 API。
 func Register() {
@@ -126,4 +150,5 @@ func Register() {
 	application.RegisterEvent[MCOutputPayload](MCPeOutput)
 	application.RegisterEvent[MCLaunchedPayload](MCPeLaunched)
 	application.RegisterEvent[MCExitedPayload](MCPeExited)
+	application.RegisterEvent[BedrockDocSyncProgressPayload](BedrockDocSyncProgress)
 }
