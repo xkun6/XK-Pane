@@ -7,6 +7,7 @@ import type { RouteDefinition } from '@/router';
 import { usePreferences } from '@/preferences';
 import { lifecycleRole } from '@/services/transport';
 import { useRightPanel } from '@/rightpanel';
+import { formatShortcut, PANEL_SHORTCUT, SETTINGS_SHORTCUT } from '@/shared/keyboardShortcuts';
 import { sidebarStyles } from './Sidebar.styles';
 
 type IconComponent = ComponentType<{ fontSize?: 'small' | 'medium' | 'large' | 'inherit' }>;
@@ -34,6 +35,18 @@ export const Sidebar = () => {
   const visibleHere = (r: RouteDefinition): boolean =>
     !(r.desktopOnly && lifecycleRole === 'viewer');
 
+  // 数字导航的页序（与 useGlobalShortcuts 的 navItems 同口径：可见、非面板）。
+  const navItems = primary.filter(visibleHere).filter((r) => r.panel === undefined);
+
+  // 该条目对应的快捷键提示文本（拼到 tooltip 末尾，便于发现）：面板用 Mod+Shift+G/H，
+  // 设置用 Mod+,，主导航页用 Mod+序号。组合键是平台技术记号（非可翻译文案），不走 t()。
+  const shortcutHint = (r: RouteDefinition): string | null => {
+    if (r.panel) return formatShortcut(PANEL_SHORTCUT[r.panel]);
+    if (r.id === 'settings') return formatShortcut(SETTINGS_SHORTCUT);
+    const i = navItems.findIndex((n) => n.id === r.id);
+    return i >= 0 && i < 9 ? formatShortcut({ mods: ['mod'], key: String(i + 1) }) : null;
+  };
+
   const wrapTooltip = (label: string, child: ReactElement): ReactElement => {
     if (!preferences.showTooltip) return child;
     return (
@@ -49,12 +62,14 @@ export const Sidebar = () => {
     const isPanel = r.panel !== undefined;
     const isActive = isPanel ? activePanel === r.panel : r.id === active.id;
     const label = labelOf(r);
+    const hint = shortcutHint(r);
+    const tip = hint ? `${label}  ·  ${hint}` : label;
     const Icon: IconComponent = r.icon ?? HomeRoundedIcon;
     return (
       <Box key={r.id} sx={styles.itemWrap}>
         {isActive && <Box sx={styles.indicator} aria-hidden />}
         {wrapTooltip(
-          label,
+          tip,
           <IconButton
             onClick={() => (isPanel ? togglePanel(r.panel!) : navigate(r.id))}
             sx={isActive ? styles.itemActive : styles.item}

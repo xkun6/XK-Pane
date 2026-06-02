@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/Sidebar';
 import { RouterOutlet, useRouter } from '@/router';
 import { RightPanelDrawer } from '@/rightpanel';
 import { lifecycleRole } from '@/services/transport';
+import { useGlobalShortcuts } from '@/shared/hooks/useGlobalShortcuts';
 import { appLayoutStyles } from './AppLayout.styles';
 
 export interface AppLayoutProps {
@@ -25,6 +26,9 @@ export const AppLayout = ({ title }: AppLayoutProps) => {
   const isNarrow = useMediaQuery(theme.breakpoints.down('sm'));
   const { navigate, active } = useRouter();
   const hideChrome = lifecycleRole === 'viewer' && isNarrow;
+
+  // 全局快捷键（页切换 / 抽屉开关 / Esc 收起）。常驻 AppLayout，不随路由卸载。
+  useGlobalShortcuts();
 
   useEffect(() => {
     if (hideChrome && active.id !== 'terminal') navigate('terminal');
