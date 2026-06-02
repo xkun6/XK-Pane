@@ -26,6 +26,10 @@ export const settingsPageZhCN: Messages = {
         label: '数据存储',
         description: '数据库位置与占用空间',
       },
+      knowledge: {
+        label: '知识库',
+        description: 'Bedrock ModSDK 文档的 OTA 同步与管理',
+      },
       webaccess: {
         label: 'Web 访问',
         description: '手机 / 平板局域网访问与会话互通',

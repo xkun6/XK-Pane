@@ -5,6 +5,7 @@ import { useSettingsPage } from './useSettingsPage';
 import { Personalization } from './personalization';
 import { Language } from './language';
 import { Database } from './database';
+import { Knowledge } from './knowledge';
 import { ProviderSettings } from './provider';
 import { WebAccess } from './webaccess';
 
@@ -62,6 +63,7 @@ export const SettingsPage = () => {
         {vm.activeItem.id === 'language' && <Language />}
         {vm.activeItem.id === 'provider' && <ProviderSettings />}
         {vm.activeItem.id === 'database' && <Database />}
+        {vm.activeItem.id === 'knowledge' && <Knowledge />}
         {vm.activeItem.id === 'webaccess' && <WebAccess />}
       </Box>
     </Box>

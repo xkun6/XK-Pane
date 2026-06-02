@@ -16,6 +16,8 @@ export const AppEvents = {
   MCPeOutput: 'mc_pe:output',
   MCPeLaunched: 'mc_pe:launched',
   MCPeExited: 'mc_pe:exited',
+  // Bedrock 知识库 OTA 同步进度（后端 bedrockdocsync.sync → 前端「设置 → 知识库」面板）。按 stage 分发。P6f。
+  BedrockDocSyncProgress: 'bedrock-doc-sync:progress',
 } as const;
 
 export type AppEventName = (typeof AppEvents)[keyof typeof AppEvents];

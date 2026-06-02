@@ -106,3 +106,20 @@ export {
   type MCLaunchedPayload,
   type MCExitedPayload,
 } from './mcpe/MCPEService';
+export {
+  BedrockDocSyncService,
+  type DocSyncSource,
+  type SyncInput,
+  type BedrockDocSyncProgress,
+  type SyncStatus,
+  type SyncReport,
+  type SyncOptions,
+  type SyncSourcesConfig,
+  type ProxyConfig,
+  type ProbeResult,
+  type ResetReport,
+  type ArchiveInfo,
+  type Manifest,
+  type ManifestStats,
+  type SourceInfo,
+} from './bedrockdocsync/BedrockDocSyncService';

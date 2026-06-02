@@ -23,6 +23,10 @@ export const settingsPageEnUS: Messages = {
         label: 'Data storage',
         description: 'Database location and disk usage',
       },
+      knowledge: {
+        label: 'Knowledge base',
+        description: 'OTA sync & management of the Bedrock ModSDK docs',
+      },
       webaccess: {
         label: 'Web access',
         description: 'LAN access from phone / tablet, shared sessions',

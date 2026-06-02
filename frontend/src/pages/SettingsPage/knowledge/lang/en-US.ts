@@ -1,0 +1,102 @@
+import type { Messages } from '@/i18n';
+
+export const knowledgeEnUS: Messages = {
+  settings: {
+    knowledge: {
+      title: 'Bedrock Knowledge Base',
+      hint: 'The NetEase Minecraft ModSDK knowledge base ships an embedded baseline. You can OTA-sync the latest from upstream (Gitea mirror + the mc.163.com docs site) to override it; synced data lands under bedrock-data/ in the app data directory and can be reset back to the baseline anytime.',
+      status: {
+        title: 'Current status',
+        hint: 'The counts below reflect what the query layer can actually serve right now (OTA data ∪ embedded baseline) — real numbers even on first launch.',
+        presentBadge: 'OTA active',
+        embeddedBadge: 'Embedded baseline',
+        sizeLabel: 'Size',
+        lastSyncLabel: 'Last sync',
+        neverSynced: 'Never synced',
+        sourcesLabel: 'Per-source provenance',
+        stats: {
+          api: 'API entries',
+          templates: 'Templates',
+          guides: 'Guide docs',
+        },
+        kind: {
+          gitea: 'Gitea',
+          http: 'HTTP',
+          embedded: 'Embedded',
+        },
+      },
+      sync: {
+        title: 'Sync',
+        hint: 'Pick the sources to sync, then click “Sync now”. A run can be cancelled at any time; a failed source falls back to the embedded baseline without affecting the others.',
+        sourcesLabel: 'Sources',
+        source: {
+          mcguide: 'mcguide (dev guide)',
+          mconline: 'mconline (online manual)',
+          mcdocs: 'mcdocs (API docs site)',
+        },
+        run: 'Sync now',
+        cancel: 'Cancel sync',
+        reset: 'Reset to baseline',
+        confirmReset: {
+          title: 'Reset knowledge base',
+          message: 'The current OTA data will be archived (last 5 kept) and the query layer reverts to the embedded baseline. Continue?',
+          ok: 'Reset',
+          cancel: 'Cancel',
+        },
+        report: {
+          synced: 'Synced: {{list}}',
+          skipped: 'Skipped: {{list}}',
+          partial: '{{count}} partial failure(s)',
+          none: 'No source was synced',
+        },
+      },
+      progress: {
+        stage: {
+          started: 'Preparing sync…',
+          gitea_sync: 'Syncing from Gitea…',
+          http_fetch: 'Fetching pages…',
+          build_index: 'Building index…',
+          validating: 'Validating…',
+          completed: 'Sync complete',
+          cancelled: 'Cancelled',
+          failed: 'Sync failed',
+        },
+      },
+      proxy: {
+        title: 'Proxy',
+        hint: 'Configure an HTTPS proxy when upstream is unreachable directly. “Test & save” probes github.com through the proxy and only persists on success. Leave blank for direct / system env.',
+        urlLabel: 'Proxy URL',
+        urlPlaceholder: 'e.g. http://127.0.0.1:7890',
+        authLabel: 'Auth (optional)',
+        authPlaceholder: 'user:pass',
+        test: 'Test & save',
+        testing: 'Testing…',
+        ok: 'Probe ok ({{ms}} ms), saved',
+        fail: 'Probe failed, not saved',
+      },
+      sources: {
+        title: 'Source overrides',
+        hint: 'Advanced: override the Gitea remote / branch per source and the mcdocs site URL. Leave blank to use the official defaults.',
+        mcguideRemote: 'mcguide remote',
+        mcguideBranch: 'mcguide branch',
+        mconlineRemote: 'mconline remote',
+        mconlineBranch: 'mconline branch',
+        mcdocsBaseUrl: 'mcdocs site URL',
+        placeholderDefault: 'Official default',
+        save: 'Save sources',
+        saving: 'Saving…',
+        saved: 'Source config saved',
+      },
+      archives: {
+        title: 'Archives',
+        empty: 'No archives yet. Resetting will archive the current data here.',
+        meta: '{{created}} · {{size}}',
+      },
+      feedback: {
+        resetting: 'Resetting…',
+        reset: 'Reset to embedded baseline',
+        failed: 'Operation failed: {{message}}',
+      },
+    },
+  },
+};

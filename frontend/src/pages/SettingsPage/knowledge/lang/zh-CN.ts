@@ -1,0 +1,102 @@
+import type { Messages } from '@/i18n';
+
+export const knowledgeZhCN: Messages = {
+  settings: {
+    knowledge: {
+      title: 'Bedrock 知识库',
+      hint: '网易我的世界 ModSDK 知识库随应用内嵌了一份基线。可从官方上游（Gitea 镜像 + mc.163.com 文档站）OTA 同步到最新，覆盖内嵌基线；同步产物落在应用数据目录的 bedrock-data/ 下，随时可重置回内嵌基线。',
+      status: {
+        title: '当前状态',
+        hint: '下列计数是查询层此刻真正能服务的数量（OTA 数据 ∪ 内嵌基线），首次启动也是真实值。',
+        presentBadge: '已 OTA',
+        embeddedBadge: '内嵌基线',
+        sizeLabel: '占用',
+        lastSyncLabel: '上次同步',
+        neverSynced: '尚未同步',
+        sourcesLabel: '各来源溯源',
+        stats: {
+          api: 'API 条目',
+          templates: '模板',
+          guides: '指南文档',
+        },
+        kind: {
+          gitea: 'Gitea',
+          http: 'HTTP',
+          embedded: '内嵌',
+        },
+      },
+      sync: {
+        title: '同步',
+        hint: '选择要同步的来源后点击「立即同步」。同步过程可随时取消；失败的源会自动回退到内嵌基线，不影响其它源。',
+        sourcesLabel: '同步来源',
+        source: {
+          mcguide: 'mcguide（开发指南）',
+          mconline: 'mconline（在线手册）',
+          mcdocs: 'mcdocs（API 文档站）',
+        },
+        run: '立即同步',
+        cancel: '取消同步',
+        reset: '重置为内嵌基线',
+        confirmReset: {
+          title: '重置知识库',
+          message: '将把当前 OTA 数据归档（保留最近 5 份），查询层回退到内嵌基线。是否继续？',
+          ok: '重置',
+          cancel: '取消',
+        },
+        report: {
+          synced: '已同步：{{list}}',
+          skipped: '已跳过：{{list}}',
+          partial: '部分失败 {{count}} 项',
+          none: '没有来源被同步',
+        },
+      },
+      progress: {
+        stage: {
+          started: '正在准备同步…',
+          gitea_sync: '正在从 Gitea 同步…',
+          http_fetch: '正在抓取页面…',
+          build_index: '正在构建索引…',
+          validating: '正在校验…',
+          completed: '同步完成',
+          cancelled: '已取消',
+          failed: '同步失败',
+        },
+      },
+      proxy: {
+        title: '代理',
+        hint: '上游在境外时可配置 HTTPS 代理。点击「测试并保存」会经该代理探测 github.com，仅在探测成功时持久化。留空表示直连 / 跟随系统环境变量。',
+        urlLabel: '代理 URL',
+        urlPlaceholder: '如 http://127.0.0.1:7890',
+        authLabel: '认证（可选）',
+        authPlaceholder: 'user:pass',
+        test: '测试并保存',
+        testing: '正在测试…',
+        ok: '探测成功（{{ms}} ms），已保存',
+        fail: '探测失败，未保存',
+      },
+      sources: {
+        title: '来源覆盖',
+        hint: '高级：覆盖各来源的 Gitea 远程 / 分支与 mcdocs 文档站地址。留空表示使用官方默认。',
+        mcguideRemote: 'mcguide 远程',
+        mcguideBranch: 'mcguide 分支',
+        mconlineRemote: 'mconline 远程',
+        mconlineBranch: 'mconline 分支',
+        mcdocsBaseUrl: 'mcdocs 文档站地址',
+        placeholderDefault: '官方默认',
+        save: '保存来源',
+        saving: '正在保存…',
+        saved: '已保存来源配置',
+      },
+      archives: {
+        title: '历史归档',
+        empty: '暂无归档。重置时会把当前数据归档到这里。',
+        meta: '{{created}} · {{size}}',
+      },
+      feedback: {
+        resetting: '正在重置…',
+        reset: '已重置为内嵌基线',
+        failed: '操作失败：{{message}}',
+      },
+    },
+  },
+};
