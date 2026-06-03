@@ -154,6 +154,7 @@ export const mcpeStyles = (theme: Theme): Styles => ({
     lineHeight: 1.4,
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
+    userSelect: 'text', // 覆盖全局 body 的 userSelect:none —— 日志要可选中复制
     backgroundColor: theme.palette.foundation.bg.elevated,
   },
   logEmpty: { color: theme.palette.foundation.text.muted, fontStyle: 'italic' },
