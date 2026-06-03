@@ -83,11 +83,12 @@ export const sessionTimelineStyles = (theme: Theme): Record<string, SxProps<Them
       whiteSpace: 'pre-wrap',
       overflowWrap: 'anywhere',
     },
-    // 思考 / 工具：可折叠
+    // 思考 / 工具：可折叠。填充 bg.elevated（与 content 区分，避免折叠态变成"透明横杠"）。
     block: {
       alignSelf: 'stretch',
       borderRadius: 2,
       border: `1px solid ${fp.divider}`,
+      backgroundColor: fp.bg.elevated,
       overflow: 'hidden',
     },
     blockHeader: {
@@ -106,6 +107,7 @@ export const sessionTimelineStyles = (theme: Theme): Record<string, SxProps<Them
       minWidth: 0,
       fontSize: 13,
       fontWeight: 600,
+      color: fp.text.primary,
       whiteSpace: 'nowrap',
       overflow: 'hidden',
       textOverflow: 'ellipsis',

@@ -66,6 +66,7 @@ type Event struct {
 	ToolName  string `json:"toolName,omitempty"`
 	ToolInput string `json:"toolInput,omitempty"` // 紧凑 JSON 字符串（前端按工具名摘要）
 	ToolUseID string `json:"toolUseId,omitempty"`
+	IsError   bool   `json:"isError,omitempty"` // 仅 tool_result：工具调用失败（content 含 <tool_use_error>）
 	Timestamp string `json:"timestamp,omitempty"`
 }
 
@@ -96,6 +97,7 @@ type contentItem struct {
 	Input     json.RawMessage `json:"input"`
 	ToolUseID string          `json:"tool_use_id"`
 	Content   json.RawMessage `json:"content"`
+	IsError   bool            `json:"is_error"`
 }
 
 // Parse 读 path（jsonl），把 [after, 末尾) 的行解析成事件。读不到文件返回空结果（非 nil events）。
@@ -169,7 +171,7 @@ func parseUser(ln rawLine, idx int, res *Result) {
 		case "tool_result":
 			res.Events = append(res.Events, Event{
 				Seq: idx, UUID: ln.UUID, Kind: KindToolResult,
-				ToolUseID: it.ToolUseID, Text: extractToolResult(it), Timestamp: ln.Timestamp,
+				ToolUseID: it.ToolUseID, Text: extractToolResult(it), IsError: it.IsError, Timestamp: ln.Timestamp,
 			})
 		}
 	}

@@ -21,6 +21,7 @@ export interface TimelineEvent {
   toolName?: string;
   toolInput?: string;
   toolUseId?: string;
+  isError?: boolean;
   timestamp?: string;
 }
 

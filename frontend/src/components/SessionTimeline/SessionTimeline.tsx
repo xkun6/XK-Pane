@@ -4,6 +4,7 @@ import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import PsychologyRoundedIcon from '@mui/icons-material/PsychologyRounded';
 import BuildRoundedIcon from '@mui/icons-material/BuildRounded';
 import SubdirectoryArrowRightRoundedIcon from '@mui/icons-material/SubdirectoryArrowRightRounded';
+import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import ExpandLessRoundedIcon from '@mui/icons-material/ExpandLessRounded';
@@ -48,6 +49,7 @@ function prettyInput(ev: TimelineEvent): string {
 }
 
 // 可折叠卡片（思考 / 工具调用 / 工具结果共用）。自带展开态，是纯展示子组件。
+// tone 给图标上强调色：工具调用=accent、失败结果=danger，否则继承标题灰（避免一排卡片成"无差别横杠"）。
 function CollapsibleBlock(props: {
   icon: React.ReactNode;
   label: string;
@@ -55,14 +57,20 @@ function CollapsibleBlock(props: {
   bodyText: string;
   italic?: boolean;
   defaultOpen?: boolean;
+  tone?: 'accent' | 'danger';
 }) {
   const theme = useTheme();
   const styles = sessionTimelineStyles(theme);
+  const fp = theme.palette.foundation;
   const [open, setOpen] = useState(props.defaultOpen ?? false);
+  const toneColor =
+    props.tone === 'danger' ? fp.status.danger : props.tone === 'accent' ? fp.accent : undefined;
   return (
     <Box sx={styles.block}>
       <Box sx={styles.blockHeader} onClick={() => setOpen((o) => !o)}>
-        {props.icon}
+        <Box component="span" sx={{ display: 'inline-flex', flexShrink: 0, color: toneColor }}>
+          {props.icon}
+        </Box>
         <Typography component="span" sx={styles.blockHeaderLabel}>
           {props.label}
         </Typography>
@@ -149,15 +157,23 @@ export const SessionTimeline = ({ sessionId, visible, onSend }: SessionTimelineP
             label={ev.toolName || t('sessionTimeline.tool')}
             summary={summarize(ev)}
             bodyText={prettyInput(ev)}
+            tone="accent"
           />
         );
       case 'tool_result':
         return (
           <CollapsibleBlock
             key={key}
-            icon={<SubdirectoryArrowRightRoundedIcon fontSize="small" />}
+            icon={
+              ev.isError ? (
+                <ErrorOutlineRoundedIcon fontSize="small" />
+              ) : (
+                <SubdirectoryArrowRightRoundedIcon fontSize="small" />
+              )
+            }
             label={t('sessionTimeline.result')}
             bodyText={ev.text ?? ''}
+            tone={ev.isError ? 'danger' : undefined}
           />
         );
       default:
