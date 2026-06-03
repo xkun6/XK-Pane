@@ -167,6 +167,9 @@ func Run(assets embed.FS, trayIcon []byte) error {
 		}
 	}
 
+	// mainWindow 提前声明：SingleInstance 的 OnSecondInstanceLaunch 闭包需捕获它（在下方
+	// app.Window.NewWithOptions 处赋值，回调运行期触发时已非 nil）。
+	var mainWindow *application.WebviewWindow
 	app := application.New(application.Options{
 		Name:        "XK-Pane",
 		Description: "Claude Code 多实例分屏管理桌面应用",
@@ -201,6 +204,21 @@ func Run(assets embed.FS, trayIcon []byte) error {
 		},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
+		},
+		// 单实例锁：同机同时只允许一个 XK-Pane 实例。第二次启动拿不到命名互斥量 → 通知第一实例后
+		// 自身退出（禁止重复运行）；这里把第一实例主窗口从托盘/最小化唤回前台。UnMinimise 内置
+		// IsMinimised 守门（不会把最大化窗口缩小）；回调在后台 goroutine 触发，但窗口方法内部
+		// InvokeSync 到主线程，故可直接调用。
+		SingleInstance: &application.SingleInstanceOptions{
+			UniqueID: "com.xkpane.desktop",
+			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
+				if mainWindow == nil {
+					return
+				}
+				mainWindow.UnMinimise()
+				mainWindow.Show()
+				mainWindow.Focus()
+			},
 		},
 	})
 	subSvc.AttachApp(app)
@@ -243,7 +261,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 		return provider.ResolveLaunchEnv(ctx, holder.Current().GORM, providerID)
 	})
 
-	mainWindow := app.Window.NewWithOptions(windowOptions())
+	mainWindow = app.Window.NewWithOptions(windowOptions())
 	// 通知 only_when_unfocused 判定：注入主窗口聚焦查询（解耦 notification service 与 Wails 窗口 API）。
 	notifSvc.SetFocusCheck(func() bool { return mainWindow.IsFocused() })
 
