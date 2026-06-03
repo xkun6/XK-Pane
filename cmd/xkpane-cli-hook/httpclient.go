@@ -49,6 +49,8 @@ func postJSON(url, token string, body []byte) (int, string, error) {
 		return 0, "", err
 	}
 	defer resp.Body.Close()
-	snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-	return resp.StatusCode, string(snippet), nil
+	// 上限放宽到 32KB：session-start 响应内联 workspaceProjects 清单需完整解析，512 字节会
+	// 截断 JSON。仍设上限防异常大响应撑爆一次性进程。
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 32<<10))
+	return resp.StatusCode, string(respBody), nil
 }
