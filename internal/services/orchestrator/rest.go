@@ -1,12 +1,15 @@
 package orchestrator
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"xkpane/internal/events"
 	"xkpane/internal/services/notification"
+	"xkpane/internal/storage"
 	"xkpane/internal/utils/logx"
 )
 
@@ -80,8 +83,15 @@ func (s *Service) handleSessionStarted(w http.ResponseWriter, r *http.Request) {
 		Cwd:             req.Cwd,
 	})
 
+	// 据 cwd 反查同工作空间兄弟项目回给 cli-hook，让其注入「说项目名即引用绝对路径」。
+	// 仅当前工作空间（同目录隶属多工作空间时合并去重）；查不到 / 不属任何工作空间则省略该字段。
+	resp := map[string]any{"ok": true}
+	if siblings := s.workspaceSiblings(r.Context(), req.Cwd); len(siblings) > 0 {
+		resp["workspaceProjects"] = siblings
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 // handleTriggerNotification 接收 cli-hook notify 的触发：校验 token + 限流 → notification.Trigger。
@@ -112,4 +122,67 @@ func (s *Service) handleTriggerNotification(w http.ResponseWriter, r *http.Reque
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(result)
+}
+
+// siblingProject 是回给 cli-hook 的同工作空间兄弟项目（展示名 + 绝对路径），供其注入上下文，
+// 让用户「说项目名」即可被引用到绝对路径。
+type siblingProject struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+// workspaceSiblings 据 cwd 反查其所属工作空间，返回这些工作空间内【除 cwd 自身外】的项目
+// （按归一化路径去重）。同一目录可隶属多个工作空间 → 合并其全部兄弟。cwd 空 / 不属任何
+// 工作空间 / 查询失败 → 返回 nil。展示名取 Alias，回退目录名（与 toolListProjects 一致）。
+func (s *Service) workspaceSiblings(ctx context.Context, cwd string) []siblingProject {
+	if s.deps.Workspaces == nil {
+		return nil
+	}
+	norm := normalizePath(cwd)
+	if norm == "" {
+		return nil
+	}
+	wss, err := s.deps.Workspaces.List(ctx)
+	if err != nil {
+		return nil
+	}
+	out := []siblingProject{}
+	seen := map[string]bool{norm: true} // 排除自身（按归一化路径）
+	for _, ws := range wss {
+		if !workspaceContains(ws, norm) {
+			continue
+		}
+		for _, p := range ws.Projects {
+			n := normalizePath(p.Path)
+			if seen[n] {
+				continue
+			}
+			seen[n] = true
+			out = append(out, siblingProject{Name: workspaceProjectName(p), Path: p.Path})
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// workspaceContains 判定归一化路径 norm 是否为工作空间 ws 的成员项目。
+func workspaceContains(ws storage.Workspace, norm string) bool {
+	for _, p := range ws.Projects {
+		if normalizePath(p.Path) == norm {
+			return true
+		}
+	}
+	return false
+}
+
+// workspaceProjectName 取工作空间项目展示名：Alias 优先（去空白非空），回退目录名。
+func workspaceProjectName(p storage.WorkspaceProject) string {
+	if p.Alias != nil {
+		if a := strings.TrimSpace(*p.Alias); a != "" {
+			return a
+		}
+	}
+	return baseName(p.Path)
 }
