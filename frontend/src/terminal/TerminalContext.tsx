@@ -276,6 +276,14 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
             // 按 tabId 回填（setTabSession 已改为全树按 tabId 定位）—— P5 moveTab 落地后 Tab 可
             // 跨 pane 迁移，捕获的旧 t.paneId 可能失效；按 tabId 查当前 pane 才不会 no-op 泄漏。
             dispatch({ type: 'setTabSession', tabId: t.tabId, sessionId });
+            // 触发启动历史回填：后端后台轮询扫盘发现本次启动对应的可恢复会话 id 写回记录，
+            // 供「最近启动」点击 resume 续会话。fire-and-forget；none/裸 shell 后端自动 no-op。
+            void LaunchHistoryService.startBackfill({
+              projectPath: t.projectPath,
+              workspacePath: t.workspacePath,
+              cliTool: t.cliTool ?? '',
+              ptySessionId: sessionId,
+            }).catch(() => {});
           } else {
             void TerminalService.kill(sessionId).catch(() => {});
           }

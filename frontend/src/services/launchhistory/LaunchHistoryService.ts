@@ -16,8 +16,8 @@ export interface RecordSpec {
   workspacePath?: string | null;
 }
 
-// LaunchRecord 对外纯接口（与生成类解耦）。MVP 字段集；会话恢复相关字段
-// （resumeSessionId / ptySessionId / lastPrompt 等）待后续再纳入。
+// LaunchRecord 对外纯接口（与生成类解耦）。resumeSessionId 由后端回填（StartBackfill 轮询扫盘
+// 发现本次启动对应的可恢复会话 id）—— 「最近启动」据此 resume 续会话；空 = 尚未回填，点了走新会话。
 export interface LaunchRecord {
   id: number;
   projectId: string;
@@ -28,6 +28,8 @@ export interface LaunchRecord {
   launchedAt: string; // 后端 time.Time 序列化（UTC RFC3339）
   workspaceName: string | null;
   workspacePath: string | null;
+  /** 可恢复会话 id（后端回填；明文 → CLI resume）；空 = 未回填（无法 resume，点击走新会话）。 */
+  resumeSessionId: string | null;
 }
 
 function toRecord(r: RawLaunchHistory): LaunchRecord {
@@ -41,6 +43,7 @@ function toRecord(r: RawLaunchHistory): LaunchRecord {
     launchedAt: typeof r.launchedAt === 'string' ? r.launchedAt : '',
     workspaceName: r.workspaceName ?? null,
     workspacePath: r.workspacePath ?? null,
+    resumeSessionId: r.resumeSessionId ?? null,
   };
 }
 
@@ -63,5 +66,21 @@ export const LaunchHistoryService = {
   async list(limit: number): Promise<LaunchRecord[]> {
     const rows = await Binding.List(limit);
     return (rows ?? []).map(toRecord);
+  },
+
+  // 会话创建成功后触发：后端后台轮询扫盘发现本次启动的可恢复会话 id，回填到对应启动记录。
+  // fire-and-forget（后端立即返回，轮询在后台）；none/裸 shell 后端自动 no-op。
+  async startBackfill(spec: {
+    projectPath: string;
+    workspacePath?: string | null;
+    cliTool: string;
+    ptySessionId: string;
+  }): Promise<void> {
+    await Binding.StartBackfill(
+      spec.projectPath,
+      spec.workspacePath ?? '',
+      spec.cliTool,
+      spec.ptySessionId,
+    );
   },
 } as const;

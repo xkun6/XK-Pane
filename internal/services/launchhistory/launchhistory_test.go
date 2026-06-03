@@ -142,3 +142,118 @@ func TestListEmpty(t *testing.T) {
 		t.Fatalf("len = %d, want 0", len(list))
 	}
 }
+
+// ── 回填（会话恢复）─────────────────────────────────────────────────────────
+
+type fakeDetector struct{ id string }
+
+func (f fakeDetector) DetectResumeSession(_, _, _, _ string, _ int64) string { return f.id }
+
+// updateSessionStarted 只回填「最近一条窗口内、resume 仍空、project+cli 匹配」的记录，三列写入；
+// 更旧的匹配行 / 已回填行 / 异 cli 行均不动。
+func TestUpdateSessionStartedBackfillsMostRecentMatch(t *testing.T) {
+	svc := newTestService(t)
+	now := time.Now().UTC()
+	older := storage.LaunchHistory{ProjectPath: "/proj", CliTool: "claude", RuntimeKind: "local", LaunchedAt: now.Add(-30 * time.Second)}
+	newer := storage.LaunchHistory{ProjectPath: "/proj", CliTool: "claude", RuntimeKind: "local", LaunchedAt: now.Add(-5 * time.Second)}
+	resumed := storage.LaunchHistory{ProjectPath: "/proj", CliTool: "claude", RuntimeKind: "local", LaunchedAt: now, ResumeSessionID: ptr("already")}
+	otherCli := storage.LaunchHistory{ProjectPath: "/proj", CliTool: "codex", RuntimeKind: "local", LaunchedAt: now}
+	for _, r := range []*storage.LaunchHistory{&older, &newer, &resumed, &otherCli} {
+		if err := svc.db().Create(r).Error; err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+
+	id, err := svc.updateSessionStarted("/proj", "claude", "pty-1", "resume-xyz", time.Now().Unix())
+	if err != nil {
+		t.Fatalf("updateSessionStarted: %v", err)
+	}
+	if id != newer.ID {
+		t.Fatalf("backfilled id = %d, want newer %d", id, newer.ID)
+	}
+
+	var got storage.LaunchHistory
+	svc.db().First(&got, newer.ID)
+	if got.ResumeSessionID == nil || *got.ResumeSessionID != "resume-xyz" {
+		t.Errorf("ResumeSessionID = %v, want resume-xyz", got.ResumeSessionID)
+	}
+	if got.PtySessionID == nil || *got.PtySessionID != "pty-1" {
+		t.Errorf("PtySessionID = %v, want pty-1", got.PtySessionID)
+	}
+	if got.ClaudeSessionID == nil || *got.ClaudeSessionID != "resume-xyz" {
+		t.Errorf("ClaudeSessionID = %v, want resume-xyz", got.ClaudeSessionID)
+	}
+
+	var oldRow storage.LaunchHistory
+	svc.db().First(&oldRow, older.ID)
+	if oldRow.ResumeSessionID != nil {
+		t.Errorf("older row should stay NULL, got %v", *oldRow.ResumeSessionID)
+	}
+	var resumedRow storage.LaunchHistory
+	svc.db().First(&resumedRow, resumed.ID)
+	if resumedRow.ResumeSessionID == nil || *resumedRow.ResumeSessionID != "already" {
+		t.Errorf("resumed row changed: %v", resumedRow.ResumeSessionID)
+	}
+}
+
+// 窗口外（launched_at 早于 afterUnix-slack）的记录不回填，返回 0。
+func TestUpdateSessionStartedRespectsWindow(t *testing.T) {
+	svc := newTestService(t)
+	stale := storage.LaunchHistory{ProjectPath: "/proj", CliTool: "claude", RuntimeKind: "local", LaunchedAt: time.Now().UTC().Add(-2 * time.Hour)}
+	if err := svc.db().Create(&stale).Error; err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	id, err := svc.updateSessionStarted("/proj", "claude", "pty", "rid", time.Now().Unix())
+	if err != nil {
+		t.Fatalf("updateSessionStarted: %v", err)
+	}
+	if id != 0 {
+		t.Fatalf("id = %d, want 0 (stale row out of window)", id)
+	}
+}
+
+// StartBackfill 守门：无 detector / none / 空 cli / 空路径 / 空 pty 均同步 no-op 返回 nil。
+func TestStartBackfillNoopGuards(t *testing.T) {
+	svc := newTestService(t)
+	if err := svc.StartBackfill(context.Background(), "/p", "", "claude", "pty"); err != nil {
+		t.Fatalf("nil detector should no-op: %v", err)
+	}
+	svc.SetResumeDetector(fakeDetector{id: "x"})
+	cases := []struct{ proj, cli, pty string }{
+		{"/p", "none", "pty"},
+		{"/p", "", "pty"},
+		{"", "claude", "pty"},
+		{"/p", "claude", ""},
+	}
+	for _, c := range cases {
+		if err := svc.StartBackfill(context.Background(), c.proj, "", c.cli, c.pty); err != nil {
+			t.Errorf("StartBackfill(%+v) = %v, want nil", c, err)
+		}
+	}
+}
+
+// 端到端：Record 一行 → StartBackfill（假 detector 立即返回 id）→ 后台 goroutine 回填该行。
+func TestStartBackfillEndToEnd(t *testing.T) {
+	svc := newTestService(t)
+	svc.SetResumeDetector(fakeDetector{id: "rid-1"})
+	rec, err := svc.Record(context.Background(), RecordSpec{ProjectPath: "/proj", CliTool: "claude", RuntimeKind: "local"})
+	if err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	if err := svc.StartBackfill(context.Background(), "/proj", "", "claude", "pty-9"); err != nil {
+		t.Fatalf("StartBackfill: %v", err)
+	}
+	// 首轮无前置 sleep，回填应很快落地；轮询等待避免硬编码时延。
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		var got storage.LaunchHistory
+		if err := svc.db().First(&got, rec.ID).Error; err == nil && got.ResumeSessionID != nil {
+			if *got.ResumeSessionID != "rid-1" {
+				t.Fatalf("ResumeSessionID = %q, want rid-1", *got.ResumeSessionID)
+			}
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("backfill did not complete within deadline")
+}

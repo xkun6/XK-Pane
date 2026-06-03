@@ -102,6 +102,10 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	// 扫盘历史会话 service（无状态、纯文件系统只读）。提为变量：既注册给前端 bindings，
 	// 又注入 Web 网关供 GET /api/sessions/scan（手机「按项目恢复会话」）。
 	scanSvc := sessionscan.New()
+	// 启动历史（最近启动 + 会话恢复回填）：提为变量以注入扫盘发现器 scanSvc —— 前端建会话后触发
+	// StartBackfill，后端轮询发现本次启动的可恢复会话 id 回填到对应记录（resume 点「最近启动」即续会话）。
+	lhHistSvc := launchhistory.New(holder)
+	lhHistSvc.SetResumeDetector(scanSvc)
 	// 结构化时间线门面（卡片视图取数）：把 webapi 的 sessionId→转录解析逻辑包成 Wails 方法，
 	// 让桌面（owner）端 SessionTimeline 也能取数（Web 仍走 /api/sessions/timeline，同源同语义）。
 	transcriptSvc := transcriptsvc.New(termSvc, scanSvc)
@@ -180,7 +184,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(storagesvc.New(holder, cfgMgr)),
 			application.NewService(projSvc),
 			application.NewService(file.New(holder)), // 文件浏览器：列目录/读写文件/RevealInOS/最近目录
-			application.NewService(launchhistory.New(holder)),
+			application.NewService(lhHistSvc),
 			application.NewService(todoSvc), // 待办 CRUD（结合 ccpane；orchestrator 复用同实例）
 			application.NewService(tbSvc),   // 编排任务绑定 CRUD（结合 ccpane；orchestrator 复用同实例）
 			application.NewService(provider.New(holder)),

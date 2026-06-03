@@ -30,7 +30,7 @@ export interface UseHomePageResult {
   navigate: (id: string) => void;
   /** 打开右侧抽屉（Git / 本地历史）。git/history 已是面板而非页面，不能 navigate。 */
   openPanel: (id: RightPanelId) => void;
-  /** 重新启动一条最近记录（按其 cliTool 新建终端 Tab）并跳到终端页。 */
+  /** 启动一条最近记录：有回填的 resumeSessionId 则 resume 续会话，否则新建；并跳到终端页。 */
   relaunch: (r: LaunchRecord) => void;
 }
 
@@ -64,11 +64,16 @@ export const useHomePage = (): UseHomePageResult => {
 
   const relaunch = useCallback(
     (r: LaunchRecord): void => {
+      // 回填过 resumeSessionId 则续会话（裸 id 才能透传 CLI resume，含 ':' 的丢弃，对照 SessionSubList）；
+      // 未回填（空）则 resumeId=undefined → 走新会话，与旧行为一致。
+      const resumeId =
+        r.resumeSessionId && !r.resumeSessionId.includes(':') ? r.resumeSessionId : undefined;
       launchProject({
         projectId: r.projectId,
         projectName: r.projectName,
         projectPath: r.projectPath,
         cliTool: r.cliTool,
+        resumeId,
       });
       navigate('terminal');
     },

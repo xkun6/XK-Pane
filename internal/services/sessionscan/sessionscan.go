@@ -52,6 +52,81 @@ func (s *Service) ListProjectSessions(_ context.Context, projectPath string, lim
 	return out, nil
 }
 
+// DetectResumeSession 发现「一次启动」对应的可恢复会话 id（launch_history 回填用）。
+//   - claude / reclaude：XK 启动时用 `--session-id <ptyId>` 钉死转录 id，故 pinnedSessionID
+//     对应的 <id>.jsonl 一旦落盘即本次启动的确切转录 → 直接返回 pinnedSessionID；尚未命中
+//     时回退为 afterUnix 之后最新的转录（兜底极少数 pin 未生效场景）。
+//   - codex：无钉死 id，取 cwd 匹配且 afterUnix 之后最新的 session（对齐 cc-pane detect_resume_session）。
+//   - 其余引擎 / 裸 shell 返回 ""。
+// projectPath 优先、workspacePath 兜底（多目录 CLI 的 --add-dir 场景，对齐 cc-pane paths_to_try）。
+func (s *Service) DetectResumeSession(projectPath, workspacePath, cliTool, pinnedSessionID string, afterUnix int64) string {
+	switch cliTool {
+	case "claude", "reclaude":
+		for _, p := range candidatePaths(projectPath, workspacePath) {
+			if id := detectClaudeAfter(p, pinnedSessionID, afterUnix); id != "" {
+				return id
+			}
+		}
+	case "codex":
+		for _, p := range candidatePaths(projectPath, workspacePath) {
+			if id := newestAfter(scanCodexProject(p), afterUnix); id != "" {
+				return id
+			}
+		}
+	}
+	return ""
+}
+
+// candidatePaths 返回去重的 [projectPath, workspacePath]（空串与重复剔除）。
+func candidatePaths(projectPath, workspacePath string) []string {
+	out := make([]string, 0, 2)
+	for _, p := range []string{projectPath, workspacePath} {
+		if p == "" {
+			continue
+		}
+		dup := false
+		for _, e := range out {
+			if e == p {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// detectClaudeAfter：pinnedSessionID 对应转录已落盘则优先返回它；否则取 afterUnix 后最新转录。
+func detectClaudeAfter(projectPath, pinnedSessionID string, afterUnix int64) string {
+	sessions := scanClaudeProject(projectPath)
+	if pinnedSessionID != "" {
+		for _, s := range sessions {
+			if s.ID == pinnedSessionID {
+				return pinnedSessionID
+			}
+		}
+	}
+	return newestAfter(sessions, afterUnix)
+}
+
+// newestAfter 取 ModifiedAt >= afterUnix 中最新一条的 id；无则 ""。
+func newestAfter(sessions []ResumeSession, afterUnix int64) string {
+	id := ""
+	var best int64 = -1
+	for _, s := range sessions {
+		if s.ModifiedAt < afterUnix {
+			continue
+		}
+		if s.ModifiedAt > best {
+			best = s.ModifiedAt
+			id = s.ID
+		}
+	}
+	return id
+}
+
 // scanLineCap 单行 jsonl 上限（会话行可能很长，超 bufio 默认 64KB）。
 const scanLineCap = 16 * 1024 * 1024
 

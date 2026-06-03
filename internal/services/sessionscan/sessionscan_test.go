@@ -81,6 +81,56 @@ func TestExtractClaudeDescription_ArrayContent(t *testing.T) {
 	}
 }
 
+func TestNewestAfter(t *testing.T) {
+	sessions := []ResumeSession{
+		{ID: "old", ModifiedAt: 100},
+		{ID: "mid", ModifiedAt: 200},
+		{ID: "new", ModifiedAt: 300},
+	}
+	// 取窗口内最新一条。
+	if got := newestAfter(sessions, 150); got != "new" {
+		t.Errorf("newestAfter(>=150) = %q, want new", got)
+	}
+	// afterUnix 卡在最新之后 → 全部被过滤，返回空。
+	if got := newestAfter(sessions, 400); got != "" {
+		t.Errorf("newestAfter(>=400) = %q, want empty", got)
+	}
+	// 边界：等于 afterUnix 也算命中。
+	if got := newestAfter(sessions, 300); got != "new" {
+		t.Errorf("newestAfter(>=300) = %q, want new", got)
+	}
+	if got := newestAfter(nil, 0); got != "" {
+		t.Errorf("newestAfter(nil) = %q, want empty", got)
+	}
+}
+
+func TestCandidatePaths(t *testing.T) {
+	// 去重 + 剔除空串。
+	if got := candidatePaths("/a", "/a"); len(got) != 1 || got[0] != "/a" {
+		t.Errorf("candidatePaths(/a,/a) = %v, want [/a]", got)
+	}
+	if got := candidatePaths("/a", ""); len(got) != 1 || got[0] != "/a" {
+		t.Errorf("candidatePaths(/a,'') = %v, want [/a]", got)
+	}
+	if got := candidatePaths("/a", "/b"); len(got) != 2 || got[0] != "/a" || got[1] != "/b" {
+		t.Errorf("candidatePaths(/a,/b) = %v, want [/a /b]", got)
+	}
+	if got := candidatePaths("", ""); len(got) != 0 {
+		t.Errorf("candidatePaths('','') = %v, want []", got)
+	}
+}
+
+// 非 claude/codex 引擎或裸 shell：DetectResumeSession 不扫盘、直接空。
+func TestDetectResumeSessionUnsupportedTool(t *testing.T) {
+	s := New()
+	if got := s.DetectResumeSession("/p", "", "none", "", 0); got != "" {
+		t.Errorf("DetectResumeSession(none) = %q, want empty", got)
+	}
+	if got := s.DetectResumeSession("/p", "", "gemini", "pin", 0); got != "" {
+		t.Errorf("DetectResumeSession(gemini) = %q, want empty", got)
+	}
+}
+
 func TestParseCodexMetaAndDescription(t *testing.T) {
 	p := writeFile(t,
 		`{"type":"session_meta","payload":{"id":"session-42","cwd":"/tmp/project"}}`,
