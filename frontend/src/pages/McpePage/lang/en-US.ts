@@ -70,6 +70,7 @@ export const mcpePageEnUS: Messages = {
       levelType: 'World type',
       typeDefault: 'Default',
       typeFlat: 'Flat',
+      levelTypeImportedHint: 'Imported maps keep their own world type; this only applies to newly created maps',
       enableCheats: 'Enable cheats',
       keepInventory: 'Keep inventory',
       doDaylightCycle: 'Daylight cycle',

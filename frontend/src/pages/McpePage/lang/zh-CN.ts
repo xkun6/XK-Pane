@@ -70,6 +70,7 @@ export const mcpePageZhCN: Messages = {
       levelType: '世界类型',
       typeDefault: '默认',
       typeFlat: '超平坦',
+      levelTypeImportedHint: '导入地图沿用其自身世界类型，此项仅对新建地图生效',
       enableCheats: '启用作弊',
       keepInventory: '死亡不掉落',
       doDaylightCycle: '昼夜循环',

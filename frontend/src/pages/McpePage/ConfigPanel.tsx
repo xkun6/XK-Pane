@@ -358,10 +358,14 @@ export const ConfigPanel = ({ pkg }: { pkg: MCPackage }) => {
             <MenuItem value="survival">{t('mcpe.world.modeSurvival')}</MenuItem>
           </TextField>
         </Field>
-        <Field label={t('mcpe.world.levelType')}>
+        <Field
+          label={t('mcpe.world.levelType')}
+          hint={local.world.sourceDir ? t('mcpe.world.levelTypeImportedHint') : undefined}
+        >
           <TextField
             size="small"
             select
+            disabled={!!local.world.sourceDir}
             value={local.world.levelType}
             onChange={(e) => patchWorld({ levelType: e.target.value as MCPackage['world']['levelType'] })}
             sx={numberSx}
