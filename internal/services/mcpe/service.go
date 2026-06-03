@@ -367,7 +367,8 @@ func (s *Service) Launch(id string) (storage.MCRunSessionInfo, error) {
 
 	// 7. level.dat（强制 OP：permissionsLevel=1，否则调试指令被当访客拒绝）
 	levelDat := filepath.Join(worldPath, "level.dat")
-	if !isFile(levelDat) {
+	isNewWorld := !isFile(levelDat)
+	if isNewWorld {
 		if err := writeDefaultLevelDat(levelDat); err != nil {
 			return storage.MCRunSessionInfo{}, err
 		}
@@ -380,7 +381,12 @@ func (s *Service) Launch(id string) (storage.MCRunSessionInfo, error) {
 	info.putString("LevelName", pkg.Name)
 	info.putLong("RandomSeed", pkg.World.Seed)
 	info.putInt("GameType", pkg.World.GameMode.Code())
-	info.putInt("Generator", pkg.World.LevelType.Code())
+	// Generator 只在新建世界时按 LevelType 写；导入的现成地图保留它自己的 Generator——
+	// 网易自定义维度地图通常为 Generator=2，被覆盖成默认 1 会使自定义维度退回 0-255、
+	// Y<0 地形不渲染、无法放置（dim 0 不受影响）。这是 Y<0 不显示的真正根因。
+	if isNewWorld {
+		info.putInt("Generator", pkg.World.LevelType.Code())
+	}
 	info.putBool("cheatsEnabled", pkg.World.EnableCheats)
 	info.putBool("keepInventory", pkg.World.KeepInventory)
 	info.putBool("dodaylightcycle", pkg.World.DoDaylightCycle)
