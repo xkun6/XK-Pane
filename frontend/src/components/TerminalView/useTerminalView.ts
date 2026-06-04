@@ -42,8 +42,11 @@ import {
   type TerminalWriteFlowControl,
 } from './compat/terminalWriteFlowControl';
 
+// 拉丁 / 数字 / 符号 / box-drawing 用打包的 JetBrains Mono —— 移动端 WebView 缺 Consolas 等桌面
+// 等宽字体时不再 fallback 到比例字体（那会让字符被等宽 cell 拉开）。CJK 字形回退到系统等宽全角
+// 字体（配合 unicode11 保证 2 宽），ui-monospace / monospace 兜底。
 const TERMINAL_FONT_FAMILY =
-  'Consolas, "Courier New", "Microsoft YaHei Mono", "Noto Sans Mono CJK SC", "PingFang SC", monospace';
+  '"JetBrains Mono", ui-monospace, "Noto Sans Mono CJK SC", "Microsoft YaHei Mono", "PingFang SC", monospace';
 const TERMINAL_SCROLLBACK = 10000;
 const RESIZE_DEBOUNCE_MS = 150;
 const MIN_CONTAINER_DELTA = 5;

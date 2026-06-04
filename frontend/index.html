@@ -6,6 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>XK-Pane</title>
     <style>
+      /* 终端等宽字体：打包进前端，确保移动端 WebView 也用真等宽字体渲染，
+         不再 fallback 到系统比例字体（那会让 xterm 按等宽 cell 摆比例字形 → 字符被拉开）。 */
+      @font-face {
+        font-family: 'JetBrains Mono';
+        src: url('/fonts/JetBrainsMono-Regular.woff2') format('woff2');
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+      }
+
       /* ===== 启动骨架 (Startup Skeleton) =====
          目的：webview 拿到 HTML 立刻显示版式骨架，等 React mount 完成后再淡出。
          消除 wails 启动 → React 渲染 之间的白屏（Windows / Linux 无边框窗口尤甚）。
