@@ -1,1 +1,0 @@
-export { SystrayService } from './SystrayService';

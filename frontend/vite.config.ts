@@ -53,7 +53,6 @@ export default defineConfig({
       input: {
         main: path.resolve(__dirname, "index.html"),
         child: path.resolve(__dirname, "child.html"),
-        systray: path.resolve(__dirname, "systray.html"),
       },
     },
   },
