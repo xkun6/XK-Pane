@@ -34,6 +34,10 @@ const (
 	// Bedrock 知识库 OTA 同步进度（后端 bedrockdocsync.sync → 前端知识库面板进度对话框）。P6f。
 	// payload 见 BedrockDocSyncProgressPayload，按 stage 分发；对齐 cc-pane ProgressEvent(tag=stage)。
 	BedrockDocSyncProgress = "bedrock-doc-sync:progress"
+
+	// NavigateSettings 托盘「设置」菜单 → 主窗口前端导航到设置页（桌面托盘专属，无 payload，
+	// 不进 Web 镜像白名单）。前端 AppLayout 经 useTrayNavigation 监听后 navigate('settings')。
+	NavigateSettings = "app:navigate-settings"
 )
 
 // TerminalOutputPayload 是 TerminalOutput 事件载荷。

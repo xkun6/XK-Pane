@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"xkpane/internal/events"
@@ -47,6 +48,7 @@ import (
 	"xkpane/internal/webapi"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	wailsevents "github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 )
 
@@ -266,6 +268,16 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	})
 
 	mainWindow = app.Window.NewWithOptions(windowOptions())
+	// 关闭主窗口 = 隐藏到托盘（而非退出应用）：用户点窗口关闭键时 WindowClosing hook 拦截并改为
+	// Hide；仅当托盘「退出」菜单先把 quitting 置位后才放行真正关闭。必须用 RegisterHook 才能
+	// Cancel（OnWindowEvent 仅是观察者，无法取消关闭）。
+	var quitting atomic.Bool
+	mainWindow.RegisterHook(wailsevents.Common.WindowClosing, func(e *application.WindowEvent) {
+		if !quitting.Load() {
+			e.Cancel()
+			mainWindow.Hide()
+		}
+	})
 	// 通知 only_when_unfocused 判定：注入主窗口聚焦查询（解耦 notification service 与 Wails 窗口 API）。
 	notifSvc.SetFocusCheck(func() bool { return mainWindow.IsFocused() })
 
@@ -283,8 +295,9 @@ func Run(assets embed.FS, trayIcon []byte) error {
 		return row.LocaleChoice
 	}).Start(reminderCtx)
 
-	// 系统托盘（foundation 框架能力，本项目启用）：托盘图标 + 隐藏面板窗口 + 右键菜单。
-	setupSystray(app, trayIcon)
+	// 系统托盘：左键单击显示主窗口，右键菜单（显示主窗口 / 设置 / 退出）。「退出」置位 quitting
+	// 让上面的 WindowClosing hook 放行真正关闭。
+	setupSystray(app, mainWindow, trayIcon, &quitting)
 
 	// —— MCP/Orchestrator 地基（P6a）：本地 HTTP+MCP server，让 pane 内 CLI 经 MCP 反向调用宿主。——
 	// 启动失败 fail-open（CLI 裸跑无 MCP 注入，不阻断应用启动）；端口/token 注入 terminal 供 P6b 生成 MCP 配置。
