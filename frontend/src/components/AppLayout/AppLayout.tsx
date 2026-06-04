@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Box, useMediaQuery, useTheme } from '@mui/material';
 import { TitleBar } from '@/components/TitleBar';
 import { Sidebar } from '@/components/Sidebar';
 import { RouterOutlet, useRouter } from '@/router';
 import { RightPanelDrawer } from '@/rightpanel';
 import { lifecycleRole } from '@/services/transport';
+import { useTrayNavigation } from '@/shared/hooks/useTrayNavigation';
 import { appLayoutStyles } from './AppLayout.styles';
 
 export interface AppLayoutProps {
@@ -29,6 +30,9 @@ export const AppLayout = ({ title }: AppLayoutProps) => {
   useEffect(() => {
     if (hideChrome && active.id !== 'terminal') navigate('terminal');
   }, [hideChrome, active.id, navigate]);
+
+  // 托盘「设置」菜单 → 跳转设置页（窗口已被托盘 showMain 唤回，这里仅切路由）。
+  useTrayNavigation(useCallback(() => navigate('settings'), [navigate]));
 
   return (
     <>
