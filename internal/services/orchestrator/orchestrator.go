@@ -237,9 +237,9 @@ func (s *Service) Stop() error {
 	if srv == nil {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	return srv.Shutdown(ctx)
+	// 退出时立即强制关闭（含活跃 MCP 长连接）——不走 graceful Shutdown，避免 pane 内 CLI 还连着
+	// MCP 时阻塞到 3s 超时（旧 graceful 是「从托盘退出要等几秒」的主因）。
+	return srv.Close()
 }
 
 // buildMCPHandler 构造 MCP server（官方 go-sdk）并包成 Streamable HTTP handler。
