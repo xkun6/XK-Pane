@@ -25,6 +25,7 @@ import { lifecycleRole } from '@/services/transport';
 import { isMac, isWindows } from '@/shared/platform';
 import {
   createTerminalLayoutScheduler,
+  isTerminalHostRenderable,
   type TerminalLayoutScheduler,
 } from '@/terminal/layoutScheduler';
 import { recordTerminalSize } from '@/terminal/terminalSize';
@@ -165,6 +166,21 @@ export function useTerminalView({
 
     termRef.current = term;
     fitRef.current = fit;
+
+    // 趁本组件（TerminalView）的 mount effect 先于 TerminalContext 的 reconcile effect 执行（React 子
+    // effect 先于父）：open 后立即同步 fit 一次并记录真实列宽，让紧随其后的「创建会话」(含 resume) 直接
+    // 拿到本终端容器自己的真实列宽作 PTY 初始尺寸，无需回退默认 80 —— reclaude --resume 从一开始就按对的
+    // 列宽重放历史，根除冷启动首个会话的列宽不匹配。host 此刻已挂载、布局完成（commit 后），尺寸真实；隐藏
+    // tab（尺寸 0）由 renderable 检查跳过，由已有终端的 lastTerminalSize 兜底。字体已 <link preload>，
+    // 此刻大概率就绪，cell 宽准。
+    if (isTerminalHostRenderable(host)) {
+      try {
+        fit.fit();
+        recordTerminalSize(term.cols, term.rows);
+      } catch {
+        // host 尺寸异常时跳过；scheduler 的 initial.fit 会补一次。
+      }
+    }
 
     // ── TUI 兼容层：注册 CSI/OSC 应答处理器，回应经 PTY 写回 ──
     // reply: 有应答则写回 PTY 并返回 true（抑制 xterm 默认处理，避免重复应答）；否则放行。

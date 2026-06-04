@@ -5,6 +5,9 @@
     <link rel="icon" type="image/svg+xml" href="/wails.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>XK-Pane</title>
+    <!-- 预加载终端等宽字体：HTML 解析阶段就并行下载，确保 React mount / 终端创建时字体已就绪，首个
+         终端 fit 即用真实 cell 宽算列宽（否则 fallback cell 宽会让初始列宽偏，影响 resume 历史重放对齐）。 -->
+    <link rel="preload" href="/fonts/JetBrainsMono-Regular.woff2" as="font" type="font/woff2" crossorigin />
     <style>
       /* 终端等宽字体：打包进前端，确保移动端 WebView 也用真等宽字体渲染，
          不再 fallback 到系统比例字体（那会让 xterm 按等宽 cell 摆比例字形 → 字符被拉开）。 */
