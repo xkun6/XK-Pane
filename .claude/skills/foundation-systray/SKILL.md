@@ -1,262 +1,171 @@
 ---
 name: foundation-systray
-description: Foundation 系统托盘使用指南：SystrayService（Enable/Disable）、注册式模块系统、托盘面板弹窗（MUI 风格）、内置模块（AppStatus/QuickActions/Notifications/ExitButton）、新增模块标准操作，以及 settings.ts 功能配置。
+description: XK-Pane 系统托盘实现指南：后端 setupSystray（左键单击显示主窗口 / 右键菜单 显示·设置·退出 / 关闭主窗口=隐藏到托盘）、菜单文案随应用语言切换重建、托盘图标 embed appicon、托盘「设置」跳转链路、退出加速。注意：原 foundation 注册式弹出面板系统（systray.html / src/systray / settings.ts）已整套删除。
 ---
 
-# Foundation 系统托盘
+# XK-Pane 系统托盘
 
-Foundation 内置一套**注册式系统托盘**方案，点击托盘图标弹出 MUI 风格的面板窗口。面板内容通过模块注册表动态组装，业务方可自由增删模块。
+XK-Pane 的托盘是**后端纯原生实现**：一个托盘图标 + 左键单击显示主窗口 + 右键原生菜单。**没有前端面板窗口**。
 
-- **后端 Service**：`internal/app/systray.go` — `SystrayService`（Enable/Disable/IsEnabled）
-- **前端面板**：`frontend/src/systray/` — 注册式模块系统 + MUI 面板
-- **前端配置**：`frontend/src/settings.ts` — 功能开关（默认不启用）
-- **入口**：`frontend/systray.html` + `frontend/src/systrayEntry.tsx`
+- **核心**：`internal/app/systray.go` — `setupSystray(...)`（启动期一次性创建，非 Wails Service）
+- **装配**：`internal/app/app.go` — 创建主窗口、注册关闭 hook、接线菜单 i18n
+- **图标**：`main.go` — `//go:embed build/appicon.png`（与任务栏 / exe 图标同源）
 
-> 托盘面板是真正的 OS 窗口（Frameless + AlwaysOnTop + Hidden），点击托盘图标弹出，失焦自动隐藏。
+> ⚠️ **原 foundation 注册式弹出面板已删除**。旧版「点击托盘弹 MUI 面板 + 注册式模块」整套——`frontend/systray.html`、`frontend/src/systray/`、`frontend/src/services/systray/`、`frontend/src/settings.ts`、`internal/app/systray_*.go`、后端 `SystrayService` struct——**均已不存在**。若仍需面板形态请重新设计，别按 git 历史里的旧文件找。
 
 ---
 
-## 1. 铁律
+## 1. 交互行为
+
+| 操作 | 行为 | 实现 |
+|------|------|------|
+| 左键单击托盘图标 | 显示并聚焦主窗口 | `tray.OnClick(showMain)` |
+| 右键单击托盘图标 | 弹出菜单【显示主窗口 / 设置 / 退出】 | `tray.OnRightClick(tray.OpenMenu)` |
+| 菜单「显示主窗口」 | 同左键 | `showMain()` |
+| 菜单「设置」 | 显示主窗口 + 跳转设置页 | `showMain()` + `Emit(NavigateSettings)` |
+| 菜单「退出」 | 真正退出应用 | `quitting.Store(true)` + `app.Quit()` |
+| 点标题栏关闭(X) | **隐藏到托盘**（不退出） | 主窗口 `WindowClosing` hook → `Cancel()` + `Hide()` |
+
+`showMain` = `UnMinimise()` + `Show()` + `Focus()`，覆盖「最小化 / 隐藏到托盘 / 仅失焦」三态。
+
+---
+
+## 2. 铁律
 
 | # | 规则 | 原因 |
 |---|------|------|
-| 1 | **托盘默认不启用** | `settings.ts` 中 `systray.enabled: false`，需显式调用 `SystrayService.enable()` |
-| 2 | **面板 UI 必须走 MUI + `theme.palette.foundation.*`** | 视觉一致性 |
-| 3 | **面板文案必须走 i18n**（`useT()` + `t('systray.*')`） | 禁止硬编码 |
-| 4 | **模块通过 registry 注册** | 禁止在 SystrayPanel 中硬编码模块列表 |
-| 5 | **模块自注册**（副作用 import） | `import '@/systray/modules/XXX'` 触发注册 |
-| 6 | **托盘面板不共享主窗口 React 树** | 跨窗口数据走事件总线 |
+| 1 | **托盘动作全走后端直驱窗口 API** | 关闭主窗口会销毁 webview，前端事件无人接收；后端直接 `mainWindow.Show/Hide/Focus` 才可靠 |
+| 2 | **关闭=隐藏到托盘必须用 `RegisterHook` 才能 `Cancel`** | `OnWindowEvent` 只是观察者，无法取消关闭 |
+| 3 | **真正退出前必须 `quitting.Store(true)`** | 否则 `app.Quit()` 触发的关闭会被 hook 拦成 Hide，应用退不出去 |
+| 4 | **托盘图标 embed `build/appicon.png`** | 与任务栏 / exe 图标同源，避免不一致 |
+| 5 | **菜单文案随语言切换重建（非右键临时重建）** | 预重建好，`OpenMenu` 时即用最新菜单，无 `SetMenu→OpenMenu` 时序假设 |
 
 ---
 
-## 2. 架构总览
+## 3. 关闭=隐藏到托盘机制（核心）
 
+主窗口创建后注册 `WindowClosing` hook，`quitting`（`atomic.Bool`）守门：
+
+```go
+// internal/app/app.go
+var quitting atomic.Bool
+mainWindow.RegisterHook(wailsevents.Common.WindowClosing, func(e *application.WindowEvent) {
+    if !quitting.Load() {
+        e.Cancel()        // 拦截关闭
+        mainWindow.Hide() // 改为隐藏到托盘
+    }
+})
 ```
-┌─────────────────────────────────────────────────────────┐
-│  主窗口                                                  │
-│  settings.ts → SystrayService.enable() → 后端启用托盘    │
-└─────────────────────────────┬───────────────────────────┘
-                              │ Wails bindings
-                              ▼
-┌─────────────────────────────────────────────────────────┐
-│  后端 SystrayService                                     │
-│  internal/app/systray.go                                 │
-│  - Enable(): 创建 SystemTray + AttachWindow              │
-│  - Disable(): 标记禁用                                   │
-│  - IsEnabled(): 查询状态                                 │
-└─────────────────────────────┬───────────────────────────┘
-                              │ systray.html (320×420, Frameless)
-                              ▼
-┌─────────────────────────────────────────────────────────┐
-│  托盘面板窗口                                            │
-│  systrayEntry.tsx → SystrayPanel                         │
-│  registry.list() → 按 order 渲染注册模块                  │
-│  modules/AppStatus | QuickActions | Notifications | Exit │
-└─────────────────────────────────────────────────────────┘
+
+唯一的真正退出路径是托盘菜单「退出」：
+
+```go
+menu.Add(lb.quit).OnClick(func(*application.Context) {
+    quitting.Store(true) // 先置位，放行下面 app.Quit 触发的 WindowClosing
+    app.Quit()
+})
 ```
+
+> SingleInstance 的 `OnSecondInstanceLaunch` 也调 `UnMinimise/Show/Focus`：隐藏到托盘后再次启动 exe 同样唤回主窗口。
 
 ---
 
-## 3. settings.ts 功能配置
+## 4. 菜单文案随语言切换（i18n）
 
-`frontend/src/settings.ts` 是应用功能配置中心（与 `main.tsx` 同级）：
+后端原生菜单**不在前端 i18n 框架内**，靠「读 `app_settings.locale_choice` + 语言变更时重建菜单」实现：
 
-```ts
-export interface FoundationSettings {
-  systray: {
-    enabled: boolean;
-  };
+```go
+// internal/app/systray.go
+func trayLabelsFor(locale string) trayLabels {
+    if strings.HasPrefix(strings.ToLower(locale), "en") {
+        return trayLabels{"Show Window", "Settings", "Quit"}
+    }
+    return trayLabels{"显示主窗口", "设置", "退出"} // zh-CN / auto / 未知 → 中文兜底
 }
 
-export const settings: FoundationSettings = {
-  systray: {
-    enabled: false,  // 改为 true 则启动时自动启用托盘
-  },
-};
+// setupSystray 返回 rebuildMenu，据当前 locale 整体重建菜单（Wails Rebuild Menu 模式）
+return func() { tray.SetMenu(buildMenu()) }
 ```
 
-业务方可在此文件中扩展更多功能开关。
+切语言 → 重建的接线（app.go）：
 
----
-
-## 4. 启用/禁用托盘
-
-### 从前端控制
-
-```ts
-import { SystrayService } from '@/services/systray';
-
-// 启用托盘（托盘图标出现在系统通知区域）
-await SystrayService.enable();
-
-// 禁用托盘
-await SystrayService.disable();
-
-// 查询状态
-const enabled = await SystrayService.isEnabled();
+```go
+rebuildTrayMenu := setupSystray(app, mainWindow, trayIcon, &quitting, trayLocale)
+appSettingsSvc.SetLocaleChangeHook(func(string) { rebuildTrayMenu() })
 ```
 
-### 启动时自动启用（基于 settings.ts）
+`appsettings.SetLocaleChoice` 写库成功后触发 `onLocaleChange`：
 
-在 `App.tsx` 或入口处：
-```ts
-import { settings } from '@/settings';
-import { SystrayService } from '@/services/systray';
-
-if (settings.systray.enabled) {
-  SystrayService.enable();
+```go
+// internal/services/appsettings/appsettings.go
+func (s *Service) SetLocaleChoice(ctx context.Context, choice string) error {
+    if err := /* 写 locale_choice */; err != nil { return err }
+    if s.onLocaleChange != nil { s.onLocaleChange(choice) }
+    return nil
 }
 ```
 
----
-
-## 5. 注册式模块系统
-
-### 核心概念
-
-```ts
-// frontend/src/systray/types.ts
-interface SystrayModule {
-  id: string;              // 唯一标识
-  order: number;           // 排序权重（越小越靠上）
-  component: ComponentType; // React 组件
-}
-```
-
-### 注册表 API
-
-```ts
-import { systrayRegistry } from '@/systray/registry';
-
-// 注册模块
-systrayRegistry.register({ id: 'my-module', order: 50, component: MyModule });
-
-// 注销模块
-systrayRegistry.unregister('my-module');
-
-// 获取已注册模块列表（按 order 排序）
-const modules = systrayRegistry.list();
-```
-
-### 内置模块
-
-| 模块 | order | 功能 |
-|------|-------|------|
-| `AppStatus` | 10 | 应用名 + 版本 + 运行状态指示灯 |
-| `QuickActions` | 20 | 显示主窗口、打开设置 |
-| `Notifications` | 30 | 最近活动列表（占位） |
-| `ExitButton` | 100 | 退出应用 |
+> `auto` 后端读不到浏览器 navigator，统一兜底中文（与 reminder 通知一致）。
 
 ---
 
-## 6. 新增托盘模块（标准操作）
+## 5. 托盘「设置」跳转链路
 
-### Step 1：创建模块文件夹
+后端发事件 → 前端 hook 接住 → 路由跳转：
 
 ```
-frontend/src/systray/modules/<ModuleName>/
-├── <ModuleName>.tsx    — React 组件
-└── index.ts            — 自注册到 registry
+托盘菜单「设置」OnClick
+  └─ showMain() + app.Event.Emit(events.NavigateSettings)        // 后端 internal/app/systray.go
+       └─ useTrayNavigation 监听 AppEvents.NavigateSettings       // 前端 src/shared/hooks/useTrayNavigation.ts
+            └─ navigate('settings')                               // AppLayout 接入
 ```
 
-### Step 2：编写组件
+事件名 `"app:navigate-settings"` **三处同步**：`internal/events/events.go` / `frontend/src/shared/events.ts` / `events.test.ts`（`toEqual` 精确断言防漂移）。
 
-```tsx
-// frontend/src/systray/modules/MyModule/MyModule.tsx
-import { Box, Typography, useTheme } from '@mui/material';
-import { useT } from '@/i18n';
+---
 
-export const MyModule = () => {
-  const theme = useTheme();
-  const fp = theme.palette.foundation;
-  const t = useT();
+## 6. setupSystray 签名
 
-  return (
-    <Box sx={{ px: 2, py: 1.5, borderTop: `1px solid ${fp.divider}` }}>
-      <Typography sx={{ fontSize: 13, color: fp.text.primary }}>
-        {t('systray.myModule.title')}
-      </Typography>
-    </Box>
-  );
-};
+```go
+// 返回 rebuildMenu（切语言重建菜单）；localeFn 读当前 app_settings.locale_choice。
+func setupSystray(
+    app *application.App,
+    mainWindow *application.WebviewWindow,
+    iconData []byte,
+    quitting *atomic.Bool,
+    localeFn func() string,
+) (rebuildMenu func())
 ```
 
-### Step 3：自注册
+macOS 用 `SetTemplateIcon`（自适应深色），其余平台 `SetIcon` + `SetDarkModeIcon`。
 
-```ts
-// frontend/src/systray/modules/MyModule/index.ts
-import { systrayRegistry } from '@/systray/registry';
-import { MyModule } from './MyModule';
+---
 
-systrayRegistry.register({ id: 'my-module', order: 50, component: MyModule });
+## 7. 文件清单
+
 ```
-
-### Step 4：在入口中导入（触发副作用注册）
-
-在 `frontend/src/systrayEntry.tsx` 追加：
-
-```ts
-import '@/systray/modules/MyModule';
-```
-
-### Step 5：添加 i18n 文案
-
-在 `frontend/src/systray/lang/zh-CN.ts` 和 `en-US.ts` 中追加：
-
-```ts
-systray: {
-  // ...existing keys
-  myModule: { title: '我的模块' },
-}
+main.go                                       — //go:embed build/appicon.png（托盘图标源）
+internal/app/systray.go                       — setupSystray + trayLabelsFor（菜单文案中英）
+internal/app/app.go                           — 主窗口 WindowClosing hook + quitting + 菜单 i18n 接线
+internal/events/events.go                     — NavigateSettings 事件常量
+internal/services/appsettings/appsettings.go  — onLocaleChange hook（切语言通知托盘重建）
+frontend/src/shared/events.ts                 — AppEvents.NavigateSettings（+ events.test.ts 断言）
+frontend/src/shared/hooks/useTrayNavigation.ts — 监听 NavigateSettings → 回调
+frontend/src/components/AppLayout/AppLayout.tsx — 接入 useTrayNavigation → navigate('settings')
 ```
 
 ---
 
-## 7. 面板窗口行为
+## 8. 常见改动
 
-| 行为 | 说明 |
-|------|------|
-| 弹出位置 | 托盘图标附近（`AttachWindow` + `WindowOffset(5)`） |
-| 隐藏触发 | 面板失焦自动隐藏（Wails 内置行为） |
-| 窗口尺寸 | 320×420（平台文件中配置） |
-| 任务栏 | Windows 上 `HiddenOnTaskbar: true` |
+### 加一个菜单项
+在 `internal/app/systray.go` 的 `buildMenu` 闭包里 `menu.Add(...)`；文案加进 `trayLabels` 结构 + `trayLabelsFor`（中英两版）。`OnClick` 里走后端窗口 API 或 `app.Event.Emit` 通知前端。
 
----
+### 改图标
+替换 `build/appicon.png`（PNG，`SetIcon` 接受）。它同时是 exe / 任务栏图标源（`build/` 打包资源），改一处即统一。
 
-## 8. 文件清单
-
-```
-后端：
-  internal/app/systray.go              — SystrayService（Enable/Disable/IsEnabled）
-  internal/app/systray_windows.go      — Windows 平台窗口配置
-  internal/app/systray_darwin.go       — macOS 平台窗口配置
-  internal/app/systray_linux.go        — Linux 平台窗口配置
-
-前端配置：
-  frontend/src/settings.ts             — 应用功能配置中心
-
-前端入口：
-  frontend/systray.html                — 托盘面板 HTML 入口
-  frontend/src/systrayEntry.tsx        — 托盘面板 React 入口
-
-前端模块系统：
-  frontend/src/systray/
-  ├── types.ts                         — SystrayModule 接口
-  ├── registry.ts                      — 模块注册表
-  ├── SystrayPanel.tsx                 — 面板容器 View
-  ├── useSystrayPanel.ts               — 面板 ViewModel
-  ├── SystrayPanel.styles.ts           — 面板样式
-  ├── lang/                            — i18n
-  ├── index.ts                         — 汇总导出
-  └── modules/                         — 内置模块
-      ├── AppStatus/                   — 应用状态 (order: 10)
-      ├── QuickActions/                — 快捷操作 (order: 20)
-      ├── Notifications/               — 通知列表 (order: 30)
-      └── ExitButton/                  — 退出按钮 (order: 100)
-
-前端 Service：
-  frontend/src/services/systray/       — SystrayService 包装层
-```
+### 加一个「后端→前端」托盘动作
+仿「设置」：events.go 加常量 → 前端 `events.ts` + `events.test.ts` 同步 → 加监听 hook → 在 RouterProvider 内的组件接入。
 
 ---
 
@@ -264,45 +173,8 @@ systray: {
 
 | 错误做法 | 正确做法 | 原因 |
 |----------|----------|------|
-| 在 SystrayPanel 中硬编码模块列表 | 用 `systrayRegistry.list()` 动态获取 | 违反注册式架构 |
-| 模块中直接 import 主窗口的 Context | 通过事件总线 `broadcast` 通信 | 跨窗口不共享 React 树 |
-| 启动时直接在 `app.go` 中调用 `Enable()` | 前端根据 `settings.ts` 按需调用 | 默认不启用 |
-| 托盘面板硬编码中文文案 | 使用 `useT()` + i18n key | 违反 i18n 铁律 |
-| 模块文件不写 `index.ts` 自注册 | 必须在 `index.ts` 中 `systrayRegistry.register(...)` | 副作用 import 是注册机制 |
-
----
-
-## 10. 后端 Service API
-
-```go
-// Enable 启用系统托盘（创建托盘图标 + 面板窗口）
-func (s *SystrayService) Enable()
-
-// Disable 禁用系统托盘（标记状态，Wails v3 暂不支持运行时移除）
-func (s *SystrayService) Disable()
-
-// IsEnabled 返回托盘是否已启用
-func (s *SystrayService) IsEnabled() bool
-```
-
----
-
-## 11. 与子窗口系统的关系
-
-托盘面板和子窗口共享同一套事件通信总线：
-
-```ts
-import { broadcast, onBroadcast, getWindowId } from '@/services/childwindow';
-
-// 托盘面板中的 QuickActions 模块通过 broadcast 通知主窗口
-broadcast({ from: getWindowId(), type: 'app:show-window' });
-
-// 主窗口监听
-onBroadcast((msg) => {
-  if (msg.type === 'app:show-window') {
-    // 显示并聚焦主窗口
-  }
-});
-```
-
-托盘面板窗口 ID 固定为 `"systray-panel"`（在平台文件的 `Name` 字段中设置）。
+| 托盘动作 `app.Event.Emit` 让前端自己 Show 窗口 | 后端直接 `mainWindow.Show/Focus` | 关闭后 webview 销毁，前端监听器没了，事件无人接 |
+| 用 `OnWindowEvent(WindowClosing)` 拦截关闭 | 用 `RegisterHook` + `e.Cancel()` | OnWindowEvent 是观察者，不能取消 |
+| `app.Quit()` 前忘了 `quitting.Store(true)` | 退出路径先置位 | 否则被关闭 hook 拦成 Hide，退不出 |
+| 右键回调里 `SetMenu` 临时重建菜单 | 语言变更时预重建（rebuildMenu hook） | 避免 `SetMenu→OpenMenu` 时序竞争 |
+| 托盘图标 embed `frontend/public/wails.png` | embed `build/appicon.png` | 前者是 Wails 默认 logo，与应用图标不一致 |
