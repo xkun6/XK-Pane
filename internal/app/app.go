@@ -98,6 +98,8 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	// 打 Local History 标签（cc-pane auto_label_before_git）。两者皆注册，连接经 SetAutoLabeler。
 	gitSvc := gitsvc.New()
 	lhSvc := localhistorysvc.New()
+	// appsettings service 提为变量：除注册给前端，还供 systray 注册语言变更 hook（切语言重建托盘菜单）。
+	appSettingsSvc := appsettings.New(holder)
 	// project / workspace service 提为变量：既注册给前端，又供 watcher 启动扫描「已登记项目」。
 	projSvc := project.New(holder)
 	wsSvc := workspace.New(holder)
@@ -182,7 +184,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 		Services: []application.Service{
 			application.NewService(greet.New()),
 			application.NewService(preferences.New(holder)),
-			application.NewService(appsettings.New(holder)),
+			application.NewService(appSettingsSvc),
 			application.NewService(storagesvc.New(holder, cfgMgr)),
 			application.NewService(projSvc),
 			application.NewService(file.New(holder)), // 文件浏览器：列目录/读写文件/RevealInOS/最近目录
@@ -296,8 +298,17 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	}).Start(reminderCtx)
 
 	// 系统托盘：左键单击显示主窗口，右键菜单（显示主窗口 / 设置 / 退出）。「退出」置位 quitting
-	// 让上面的 WindowClosing hook 放行真正关闭。
-	setupSystray(app, mainWindow, trayIcon, &quitting)
+	// 让上面的 WindowClosing hook 放行真正关闭。菜单文案随应用语言：setupSystray 返回 rebuildMenu，
+	// 注册到 appsettings 语言变更 hook，用户切语言即据新文案重建托盘菜单。
+	trayLocale := func() string {
+		var row storage.AppSettings
+		if err := holder.Current().GORM.First(&row, "id = ?", 1).Error; err != nil {
+			return "zh-CN"
+		}
+		return row.LocaleChoice
+	}
+	rebuildTrayMenu := setupSystray(app, mainWindow, trayIcon, &quitting, trayLocale)
+	appSettingsSvc.SetLocaleChangeHook(func(string) { rebuildTrayMenu() })
 
 	// —— MCP/Orchestrator 地基（P6a）：本地 HTTP+MCP server，让 pane 内 CLI 经 MCP 反向调用宿主。——
 	// 启动失败 fail-open（CLI 裸跑无 MCP 注入，不阻断应用启动）；端口/token 注入 terminal 供 P6b 生成 MCP 配置。
