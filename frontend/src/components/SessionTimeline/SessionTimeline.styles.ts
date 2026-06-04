@@ -48,6 +48,9 @@ export const sessionTimelineStyles = (theme: Theme): Record<string, SxProps<Them
       flexDirection: 'column',
       gap: 1.25,
       WebkitOverflowScrolling: 'touch',
+      // flex column 子项默认 flex-shrink:1；带 overflow:hidden 的折叠卡片(block)其 min-height:auto
+      // 坍缩为 0 → 卡片一多就被压扁成一条 bg 横线（而非滚动）。钉死所有子项不压缩，超出走滚动。
+      '& > *': { flexShrink: 0 },
     },
     empty: {
       flex: 1,
