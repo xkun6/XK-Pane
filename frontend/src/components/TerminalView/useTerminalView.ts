@@ -27,6 +27,7 @@ import {
   createTerminalLayoutScheduler,
   type TerminalLayoutScheduler,
 } from '@/terminal/layoutScheduler';
+import { recordTerminalSize } from '@/terminal/terminalSize';
 import { buildCursorPositionReport } from './compat/terminalCpr';
 import {
   buildPrimaryDeviceAttributesReport,
@@ -252,6 +253,9 @@ export function useTerminalView({
         });
       },
       resizeBackend: (cols, rows) => {
+        // 记录真实 fit 列宽，供后续新建 / resume 会话作 PTY 初始尺寸（见 terminalSize.ts），避免
+        // reclaude --resume 按后端默认列宽重放历史而错位。
+        recordTerminalSize(cols, rows);
         const sid = sessionIdRef.current;
         if (sid) void TerminalService.resize(sid, cols, rows).catch(() => {});
       },

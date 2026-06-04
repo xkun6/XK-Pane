@@ -34,6 +34,7 @@ import {
   treeSessionIds,
 } from './sessionReconcile';
 import type { PaneEdge, PaneNode, SplitDirection, TabViewMode } from './types';
+import { lastTerminalSize } from './terminalSize';
 
 /** 启动一个项目终端所需的最小信息（projectPath = PTY cwd，铁律 D7）。 */
 export interface LaunchProjectInput {
@@ -261,11 +262,17 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
     // 1) 为「有 projectPath 且无 session」的 Tab 创建 PTY，完成后回填 sessionId。
     for (const t of tabsNeedingSession(tabs, creatingRef.current)) {
       creatingRef.current.add(t.tabId);
+      // 初始列宽 = 当前终端面板最近 fit 出的真实列宽（terminalSize 模块快照）。让 PTY 一创建就贴近
+      // 真实显示尺寸 —— 否则 reclaude --resume 会按后端默认列宽折行重放历史，与前端实际列宽不符而整屏
+      // 错位（详见 terminalSize.ts）。cols=0（冷启动尚无终端 fit 过）则回退后端默认。
+      const initialSize = lastTerminalSize();
       TerminalService.create({
         projectPath: t.projectPath,
         workspacePath: t.workspacePath,
         cliTool: t.cliTool,
         resumeId: t.resumeId,
+        cols: initialSize.cols,
+        rows: initialSize.rows,
       })
         .then((sessionId) => {
           // 创建途中 Tab 可能已被关闭 → 二次校验，避免把 session 回填到不存在的 Tab（泄漏）。
