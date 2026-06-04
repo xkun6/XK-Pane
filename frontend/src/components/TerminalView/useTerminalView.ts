@@ -17,6 +17,8 @@
 import { useEffect, useRef } from 'react';
 import { useTheme } from '@mui/material';
 import { FitAddon } from '@xterm/addon-fit';
+import { WebglAddon } from '@xterm/addon-webgl';
+import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { Terminal, type ITheme } from '@xterm/xterm';
 import { TerminalService, attachSessionOutput } from '@/services';
 import { lifecycleRole } from '@/services/transport';
@@ -135,9 +137,31 @@ export function useTerminalView({
       scrollback: TERMINAL_SCROLLBACK,
       theme: xtermTheme,
     });
+    // unicode11：用 Unicode 11 宽度表算 CJK / emoji 的列宽（xterm 默认旧表会把全角字符当半角 →
+    // 中文光标 / 字符水平错位）。必须在 open 前 load 并激活。
+    const unicode11 = new Unicode11Addon();
+    term.loadAddon(unicode11);
+    term.unicode.activeVersion = '11';
+
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(host);
+
+    // WebGL 渲染器：整屏 GPU canvas 取代 DOM 逐行 div —— 消除移动 WebView 上行间合成接缝（横线），
+    // 兼带高吞吐渲染。必须在 open 之后 load（需 canvas 上下文）。旧 WebView 不支持 WebGL 或运行时
+    // 上下文丢失时，dispose 让 xterm 自动回退到 DOM 渲染器（功能不缺，仅失去接缝修复 / 性能增益）。
+    let webgl: WebglAddon | null = null;
+    try {
+      webgl = new WebglAddon();
+      webgl.onContextLoss(() => {
+        webgl?.dispose();
+        webgl = null;
+      });
+      term.loadAddon(webgl);
+    } catch {
+      webgl = null;
+    }
+
     termRef.current = term;
     fitRef.current = fit;
 
