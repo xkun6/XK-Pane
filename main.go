@@ -10,7 +10,7 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-//go:embed frontend/public/wails.png
+//go:embed build/appicon.png
 var trayIcon []byte
 
 func main() {
