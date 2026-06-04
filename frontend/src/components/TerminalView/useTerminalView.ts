@@ -284,6 +284,25 @@ export function useTerminalView({
     // 首次布局：非活动 tab 会留 pending，切回可见时 flush。
     scheduler.schedule('initial.fit');
 
+    // @font-face 的 JetBrains Mono 是异步加载（font-display:swap）。上面 WebGL loadAddon 时已按
+    // 「当时的字体」把字形栅格化进纹理图集、测 cell 尺寸 —— 若此刻字体尚未就绪，烘焙的是 fallback
+    // 字形且 WebGL 不会自动重建（DOM 渲染器会随 swap 自动重排，故旧版桌面无此症，加 WebGL 后 resume
+    // 满屏错位）。字体就绪后重设 fontFamily 触发 xterm 重测 cell + 渲染器重建图集，再强制 fit 让列数 /
+    // 后端 PTY 宽度跟上变化后的 cell。document.fonts.load 主动拉取并等待（不靠按需加载 —— WebGL canvas
+    // 不是 DOM 文本，不会触发 @font-face 按需加载）。chrome 验证：fallback 初始化的 WebGL 切 fontFamily
+    // 后字形确实重建为 JetBrains Mono。
+    if (typeof document !== 'undefined' && document.fonts?.load) {
+      void document.fonts
+        .load('14px "JetBrains Mono"')
+        .then(() => {
+          const t = termRef.current;
+          if (!t) return;
+          t.options.fontFamily = TERMINAL_FONT_FAMILY;
+          schedulerRef.current?.schedule('font-ready.fit', { force: true });
+        })
+        .catch(() => {});
+    }
+
     return () => {
       onData.dispose();
       for (const d of disposables) d.dispose();
