@@ -63,6 +63,7 @@ export const sessionTimelineStyles = (theme: Theme): Record<string, SxProps<Them
     // —— 气泡 / 卡片 ——
     userRow: { display: 'flex', justifyContent: 'flex-end' },
     userBubble: {
+      position: 'relative',
       maxWidth: '88%',
       backgroundColor: fp.bg.active,
       color: fp.text.primary,
@@ -73,8 +74,11 @@ export const sessionTimelineStyles = (theme: Theme): Record<string, SxProps<Them
       lineHeight: 1.5,
       whiteSpace: 'pre-wrap',
       overflowWrap: 'anywhere',
+      userSelect: 'text', // 解除全局 body userSelect:none —— 气泡正文可拖选复制
+      '@media (hover: hover)': { '&:hover .xk-copy-btn': { opacity: 1 } },
     },
     assistantBubble: {
+      position: 'relative',
       alignSelf: 'stretch',
       backgroundColor: fp.bg.elevated,
       color: fp.text.primary,
@@ -85,6 +89,8 @@ export const sessionTimelineStyles = (theme: Theme): Record<string, SxProps<Them
       lineHeight: 1.55,
       whiteSpace: 'pre-wrap',
       overflowWrap: 'anywhere',
+      userSelect: 'text', // 解除全局 body userSelect:none —— 气泡正文可拖选复制
+      '@media (hover: hover)': { '&:hover .xk-copy-btn': { opacity: 1 } },
     },
     // 思考 / 工具：可折叠。填充 bg.elevated（与 content 区分，避免折叠态变成"透明横杠"）。
     block: {
@@ -93,6 +99,7 @@ export const sessionTimelineStyles = (theme: Theme): Record<string, SxProps<Them
       border: `1px solid ${fp.divider}`,
       backgroundColor: fp.bg.elevated,
       overflow: 'hidden',
+      '@media (hover: hover)': { '&:hover .xk-copy-btn': { opacity: 1 } },
     },
     blockHeader: {
       display: 'flex',
@@ -137,6 +144,7 @@ export const sessionTimelineStyles = (theme: Theme): Record<string, SxProps<Them
       lineHeight: 1.5,
       whiteSpace: 'pre-wrap',
       overflowWrap: 'anywhere',
+      userSelect: 'text', // 工具输入/结果正文可选中复制
       maxHeight: 'min(50vh, 420px)',
       overflowY: 'auto',
     },
@@ -150,6 +158,7 @@ export const sessionTimelineStyles = (theme: Theme): Record<string, SxProps<Them
       lineHeight: 1.5,
       whiteSpace: 'pre-wrap',
       overflowWrap: 'anywhere',
+      userSelect: 'text', // 思考正文可选中复制
       maxHeight: 'min(40vh, 320px)',
       overflowY: 'auto',
     },
@@ -172,6 +181,34 @@ export const sessionTimelineStyles = (theme: Theme): Record<string, SxProps<Them
         backgroundColor: fp.bg.content,
         fontSize: 14,
       },
+    },
+    // —— 复制按钮（hover 显示；touch 设备无 hover → opacity 常驻 1）——
+    // 折叠卡：贴在 header 内（展开图标左侧），跟随 flex 布局。
+    copyBtnInline: {
+      flexShrink: 0,
+      p: 0.25,
+      borderRadius: 1.5, // 6px，对齐方圆按钮规范
+      fontSize: 16,
+      color: fp.text.muted,
+      opacity: 1,
+      transition: 'opacity .15s ease, color .15s ease',
+      '@media (hover: hover)': { opacity: 0 },
+      '&:hover': { color: fp.text.primary, backgroundColor: fp.bg.hover },
+    },
+    // 气泡：绝对定位浮在右上角，带不透明底（盖在正文上仍清晰）。
+    copyBtnFloat: {
+      position: 'absolute',
+      top: 4,
+      right: 4,
+      p: 0.5,
+      borderRadius: 1.5,
+      fontSize: 16,
+      color: fp.text.muted,
+      backgroundColor: fp.bg.elevated,
+      opacity: 1,
+      transition: 'opacity .15s ease, color .15s ease',
+      '@media (hover: hover)': { opacity: 0 },
+      '&:hover': { color: fp.text.primary, backgroundColor: fp.bg.hover },
     },
   };
 };

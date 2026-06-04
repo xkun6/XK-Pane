@@ -11,5 +11,7 @@ export const sessionTimelineEnUS: Messages = {
     showChat: 'Show conversation',
     composePlaceholder: 'Message the agent…',
     send: 'Send',
+    copy: 'Copy',
+    copied: 'Copied',
   },
 };
