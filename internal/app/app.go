@@ -35,6 +35,7 @@ import (
 	"xkpane/internal/services/reminder"
 	"xkpane/internal/services/session"
 	"xkpane/internal/services/sessionscan"
+	"xkpane/internal/services/sshmachine"
 	"xkpane/internal/services/storagesvc"
 	"xkpane/internal/services/subprocess"
 	"xkpane/internal/services/taskbinding"
@@ -192,6 +193,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(todoSvc), // 待办 CRUD（结合 ccpane；orchestrator 复用同实例）
 			application.NewService(tbSvc),   // 编排任务绑定 CRUD（结合 ccpane；orchestrator 复用同实例）
 			application.NewService(provider.New(holder)),
+			application.NewService(sshmachine.New(holder)), // SSH 机器管理（CRUD + cryptox 密码 + 连通测试），同 provider 档
 			application.NewService(session.New(holder)),
 			application.NewService(gitSvc),
 			application.NewService(lhSvc),
