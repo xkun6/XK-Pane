@@ -218,6 +218,24 @@ type CreateSpec struct {
 	// ResumeID 恢复已有会话的 id；"" = 新会话。明文透传给 adapter（claude --resume /
 	// codex resume / reclaude --resume）。CLI resume 必需明文，不加密（拍板点 5）。
 	ResumeID string `json:"resumeId"`
+	// RuntimeKind 运行时：""/"local"（默认，本地 PTY）| "ssh"（本地 ssh 客户端拉起远程会话）。
+	RuntimeKind string `json:"runtimeKind"`
+	// SSH 是 RuntimeKind=="ssh" 时的连接信息（去规范化字段 + machineId）；local 时为 nil。
+	SSH *SSHSpec `json:"ssh"`
+}
+
+// SSHSpec 是一次 SSH 启动的连接信息（对齐 cc-pane SshConnectionInfo）。
+// 字段去规范化：host/port/user/identityFile/authMethod 通常由前端从所选机器 DTO 拷入，
+// 故 buildSSHCommand 不依赖后端反查即可独立启动；MachineID 仅供后端「密码自动应答」helper
+// （E 单元）反查解密密码用。RemotePath 远端默认 cd 目录（"~" / "" 跳过 cd）。
+type SSHSpec struct {
+	MachineID    string `json:"machineId"`
+	Host         string `json:"host"`
+	Port         int    `json:"port"`
+	User         string `json:"user"`
+	RemotePath   string `json:"remotePath"`
+	IdentityFile string `json:"identityFile"`
+	AuthMethod   string `json:"authMethod"` // password | key | agent
 }
 
 // SessionInfo 是 List 返回的会话快照。

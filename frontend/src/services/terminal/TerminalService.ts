@@ -12,6 +12,18 @@ import { Service as Binding } from '@bindings/xkpane/internal/services/terminal'
 import { AppEvents } from '@/shared/events';
 import { eventTransport, httpClient, isDesktop } from '@/services/transport';
 
+// SSHSpec 对齐后端 terminal.SSHSpec（RuntimeKind=='ssh' 时的连接信息）。
+// 去规范化字段通常由前端从所选机器 DTO 拷入；machineId 仅供后端密码自动应答反查。
+export interface SSHSpec {
+  machineId?: string;
+  host: string;
+  port?: number;       // 缺省 22
+  user?: string;
+  remotePath?: string; // 远端默认 cd 目录；'~' / '' 跳过 cd
+  identityFile?: string;
+  authMethod?: string; // password | key | agent
+}
+
 // CreateSpec 对齐后端 terminal.CreateSpec（路径字段铁律 D7：projectPath = PTY cwd）。
 export interface CreateSpec {
   projectPath: string;
@@ -22,6 +34,8 @@ export interface CreateSpec {
   rows?: number;
   initialPrompt?: string; // 初始 prompt（CLI 位置参数）；缺省 ''
   resumeId?: string;      // 恢复会话 id（明文 → CLI resume）；缺省 '' = 新会话
+  runtimeKind?: string;   // ''/'local'（默认）| 'ssh'（本地 ssh 客户端拉起远程会话）
+  ssh?: SSHSpec;          // runtimeKind=='ssh' 时必填
 }
 
 export interface SessionInfo {
@@ -94,6 +108,18 @@ export const TerminalService = {
       rows: spec.rows ?? 0,
       initialPrompt: spec.initialPrompt ?? '',
       resumeId: spec.resumeId ?? '',
+      runtimeKind: spec.runtimeKind ?? 'local',
+      ssh: spec.ssh
+        ? {
+            machineId: spec.ssh.machineId ?? '',
+            host: spec.ssh.host,
+            port: spec.ssh.port ?? 22,
+            user: spec.ssh.user ?? '',
+            remotePath: spec.ssh.remotePath ?? '',
+            identityFile: spec.ssh.identityFile ?? '',
+            authMethod: spec.ssh.authMethod ?? '',
+          }
+        : null,
     });
   },
 
