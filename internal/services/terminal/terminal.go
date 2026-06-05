@@ -259,6 +259,18 @@ func claudeTranscriptID(cliTool, resumeID, sessionID string) string {
 	return sessionID
 }
 
+// spawnCwd 决定 PTY 的本地工作目录：local 运行时 = 操作目标 ProjectPath（路径字段铁律 D7）；
+// ssh 运行时 = 本机 home —— 此时 ProjectPath 是远端路径（本地多半不存在），本地 ssh 客户端
+// 进程的 cwd 无业务语义，落 home 避免 ptyx.Spawn 因 cwd 不存在而失败。home 取不到则回退 ProjectPath。
+func spawnCwd(spec CreateSpec) string {
+	if spec.RuntimeKind == "ssh" {
+		if home, err := os.UserHomeDir(); err == nil && home != "" {
+			return home
+		}
+	}
+	return spec.ProjectPath
+}
+
 // CreateSession 在 ProjectPath 下用 CliTool（或裸 shell）启动 PTY 会话，返回 sessionId。
 // 启动后输出经 terminal:output 事件流式推送，退出经 terminal:exit 通知。
 func (s *Service) CreateSession(ctx context.Context, spec CreateSpec) (string, error) {
@@ -279,14 +291,19 @@ func (s *Service) CreateSession(ctx context.Context, spec CreateSpec) (string, e
 	// 启动前把 cli-hook 注册进被启动项目的 hook 配置（claude/reclaude→.claude/settings.local.json，
 	// codex→.codex/hooks.json+config.toml；P6d-2）。settings 必须在 CLI 启动前就位，故同步调；
 	// failure 仅 warn，绝不阻断启动（对齐 cc-pane）。none/裸 shell 时 Sync 内部 no-op。
-	if err := projecthooks.Sync(spec.ProjectPath, spec.CliTool); err != nil {
-		s.logger.Warn("project hooks sync failed", "session", id, "cliTool", spec.CliTool, "err", err)
+	// SSH 模式跳过：项目在远端主机，本地无对应 .claude 目录可写（写了也不会被远端 CLI 读到）。
+	if spec.RuntimeKind != "ssh" {
+		if err := projecthooks.Sync(spec.ProjectPath, spec.CliTool); err != nil {
+			s.logger.Warn("project hooks sync failed", "session", id, "cliTool", spec.CliTool, "err", err)
+		}
 	}
 
+	// PTY 本地工作目录：local=ProjectPath（铁律 D7）；ssh=本机 home —— ProjectPath 此时
+	// 是远端路径（本地多半不存在），ssh 客户端进程 cwd 无语义，落本机 home 防 spawn 失败。
 	pt, err := ptyx.Spawn(context.Background(), ptyx.Spec{
 		Command: command,
 		Args:    args,
-		Cwd:     spec.ProjectPath,
+		Cwd:     spawnCwd(spec),
 		Env:     env,
 		Cols:    spec.Cols,
 		Rows:    spec.Rows,
@@ -318,7 +335,8 @@ func (s *Service) CreateSession(ctx context.Context, spec CreateSpec) (string, e
 	s.logger.Info("session created", "session", id, "pid", sess.pid, "command", command, "cwd", spec.ProjectPath)
 
 	// 通知 watcher 在该项目补启自动捕获（launchProject 时机，决策 D4-4）。异步避免阻塞会话创建。
-	if hook := s.sessionStartHook; hook != nil {
+	// SSH 模式跳过：项目在远端，本地 Local History watcher 无从监控远端目录。
+	if hook := s.sessionStartHook; hook != nil && spec.RuntimeKind != "ssh" {
 		go hook(spec.ProjectPath)
 	}
 
@@ -514,6 +532,20 @@ func (s *Service) resolveLaunch(ctx context.Context, id string, spec CreateSpec)
 		}
 		providerEnv = penv
 		cli = pc
+	}
+
+	// SSH 分支：RuntimeKind=='ssh' → 把本地 ssh 客户端当 PTY 命令拉起远程会话。providerEnv
+	// （Tier-A）被 buildSSHCommand 烘进远端 `export K=V`，故本地进程 env 不重复设（返回 nil）。
+	// 远端裸命令名 + cd，不走本地 adapter、不注入 orchestrator/MCP（远程够不到本地端点）。
+	if spec.RuntimeKind == "ssh" {
+		if spec.SSH == nil {
+			return "", nil, nil, nil, nil, errors.New("terminal: ssh runtime requires ssh config")
+		}
+		cmd, sshArgs, serr := buildSSHCommand(*spec.SSH, spec.CliTool, providerEnv)
+		if serr != nil {
+			return "", nil, nil, nil, nil, serr
+		}
+		return cmd, sshArgs, nil, nil, nil, nil
 	}
 
 	toolID := spec.CliTool
