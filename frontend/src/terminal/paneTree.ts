@@ -5,6 +5,9 @@
 // 相对路径（非 @ 别名）：paneTree 在 vitest 的 reducer/sessionReconcile 测试图里被传递 import，
 // 而 vitest 不对「传递 import 的源文件」套用 vite 的 @ 别名 → 用相对路径才能在 build 与 test 都解析。
 import { randomId } from '../shared/uuid';
+// SSHSpec 为 type-only import（编译期擦除，无运行时解析）→ 不受上面 randomId 那条
+// 「vitest 传递 import 不套 @ 别名」约束影响，可安全用 @ 别名。
+import type { SSHSpec } from '@/services/terminal/TerminalService';
 import type {
   CliTool,
   PaneNode,
@@ -59,6 +62,10 @@ export function createTab(
     workspacePath?: string;
     title?: string;
     resumeId?: string;
+    /** 运行时：缺省/'local' = 本地；'ssh' = 远程会话（本地 ssh 客户端拉起）。 */
+    runtimeKind?: string;
+    /** runtimeKind=='ssh' 时的连接信息（透传后端 buildSSHCommand）。 */
+    ssh?: SSHSpec;
     /** 后端已建会话 id（编排 launch_task 场景）；非空 = leaf/Tab 直接绑定，reconcile 不再建会话。 */
     sessionId?: string;
   } = {},
@@ -88,6 +95,8 @@ export function createTab(
     cliTool: opts.cliTool,
     workspacePath: opts.workspacePath,
     resumeId: opts.resumeId,
+    runtimeKind: opts.runtimeKind,
+    ssh: opts.ssh,
     terminalRootPane: leaf,
     activeTerminalPaneId: leaf.id,
   };

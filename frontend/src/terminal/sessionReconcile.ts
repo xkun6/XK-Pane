@@ -2,6 +2,7 @@
 // 这里只做无副作用的集合/筛选计算（可 Vitest 覆盖）；真正的 create/kill/dispatch 在 Provider 里。
 import { collectPanels } from './paneTree';
 import type { PaneNode } from './types';
+import type { SSHSpec } from '@/services/terminal/TerminalService';
 
 export interface TabWithPane {
   paneId: string;
@@ -10,6 +11,8 @@ export interface TabWithPane {
   workspacePath?: string;
   cliTool?: string;
   resumeId?: string;
+  runtimeKind?: string;
+  ssh?: SSHSpec;
   sessionId: string | null;
 }
 
@@ -23,6 +26,8 @@ export function collectTabsWithPane(root: PaneNode): TabWithPane[] {
       workspacePath: tab.workspacePath,
       cliTool: tab.cliTool,
       resumeId: tab.resumeId,
+      runtimeKind: tab.runtimeKind,
+      ssh: tab.ssh,
       sessionId: tab.sessionId,
     })),
   );

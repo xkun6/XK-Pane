@@ -12,6 +12,8 @@
 //   - 非终端 Tab：contentType 的 editor / mcp-config / skill-manager / ... 变体（Phase 4/5）
 //   - UI 细节：pinned / minimized / dirty / filePath / reclaimKey（后续）
 
+import type { SSHSpec } from '@/services/terminal/TerminalService';
+
 /** CLI 工具 id（已知值自动补全 + 允许任意字符串，对齐后端 cliadapters 保留的 3 适配器）。 */
 export type KnownCliTool = 'none' | 'claude' | 'reclaude' | 'codex';
 export type CliTool = KnownCliTool | (string & {});
@@ -60,6 +62,10 @@ export interface Tab {
   workspacePath?: string;
   /** 恢复已有会话的 id（明文透传后端 → CLI resume）；undefined = 新会话。 */
   resumeId?: string;
+  /** 运行时：缺省/'local' = 本地 PTY；'ssh' = 本地 ssh 客户端拉起远程会话。 */
+  runtimeKind?: string;
+  /** runtimeKind=='ssh' 时的连接信息（与 CreateSpec.ssh 同形，透传后端 buildSSHCommand）。 */
+  ssh?: SSHSpec;
   /** 该 Tab 内的终端分屏树根；单终端时即一个 leaf。 */
   terminalRootPane?: TerminalPaneNode;
   activeTerminalPaneId?: string;

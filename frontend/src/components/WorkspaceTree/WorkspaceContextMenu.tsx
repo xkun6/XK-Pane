@@ -2,6 +2,7 @@ import { Divider, ListItemIcon, ListItemText, Menu, MenuItem } from '@mui/materi
 import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
 import SmartToyRoundedIcon from '@mui/icons-material/SmartToyRounded';
 import CreateNewFolderRoundedIcon from '@mui/icons-material/CreateNewFolderRounded';
+import DnsRoundedIcon from '@mui/icons-material/DnsRounded';
 import DriveFileRenameOutlineRoundedIcon from '@mui/icons-material/DriveFileRenameOutlineRounded';
 import LabelRoundedIcon from '@mui/icons-material/LabelRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
@@ -27,6 +28,7 @@ export interface WorkspaceMenuStrings {
   launchLoading: string;
   notInstalled: string;
   importProject: string;
+  addSSHProject: string;
   rename: string;
   setAlias: string;
   delete: string;
@@ -45,6 +47,7 @@ export interface WorkspaceContextMenuProps {
   onClose: () => void;
   onLaunch: (cliTool: string) => void;
   onImportProject: () => void;
+  onAddSSHProject: () => void;
   onRename: () => void;
   onSetAlias: () => void;
   onDelete: () => void;
@@ -65,6 +68,7 @@ export const WorkspaceContextMenu = ({
   onClose,
   onLaunch,
   onImportProject,
+  onAddSSHProject,
   onRename,
   onSetAlias,
   onDelete,
@@ -73,6 +77,8 @@ export const WorkspaceContextMenu = ({
   onOpenInExplorer,
   onOpenInFileBrowser,
 }: WorkspaceContextMenuProps) => {
+  // SSH 远程项目：本地文件管理器 / 文件浏览器入口无意义，按 ssh!=null 隐藏。
+  const isSSHProject = menu?.kind === 'project' && menu.project.ssh != null;
   return (
     <Menu
       open={menu !== null}
@@ -114,6 +120,12 @@ export const WorkspaceContextMenu = ({
           </ListItemIcon>
           <ListItemText>{strings.importProject}</ListItemText>
         </MenuItem>,
+        <MenuItem key="ssh" onClick={onAddSSHProject}>
+          <ListItemIcon>
+            <DnsRoundedIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>{strings.addSSHProject}</ListItemText>
+        </MenuItem>,
         <MenuItem key="rename" onClick={onRename}>
           <ListItemIcon>
             <DriveFileRenameOutlineRoundedIcon fontSize="small" />
@@ -135,19 +147,24 @@ export const WorkspaceContextMenu = ({
       ]}
 
       {menu?.kind === 'project' && [
-        <MenuItem key="reveal" onClick={onOpenInExplorer}>
-          <ListItemIcon>
-            <OpenInNewRoundedIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>{strings.openInExplorer}</ListItemText>
-        </MenuItem>,
-        <MenuItem key="browse" onClick={onOpenInFileBrowser}>
-          <ListItemIcon>
-            <FolderOpenRoundedIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>{strings.openInFileBrowser}</ListItemText>
-        </MenuItem>,
-        <Divider key="proj-div" />,
+        // 本地文件管理器 / 文件浏览器入口仅本地项目可用（SSH 远程项目隐藏，含其后的分隔符）。
+        ...(!isSSHProject
+          ? [
+              <MenuItem key="reveal" onClick={onOpenInExplorer}>
+                <ListItemIcon>
+                  <OpenInNewRoundedIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>{strings.openInExplorer}</ListItemText>
+              </MenuItem>,
+              <MenuItem key="browse" onClick={onOpenInFileBrowser}>
+                <ListItemIcon>
+                  <FolderOpenRoundedIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>{strings.openInFileBrowser}</ListItemText>
+              </MenuItem>,
+              <Divider key="proj-div" />,
+            ]
+          : []),
         <MenuItem key="copy" onClick={onCopyPath}>
           <ListItemIcon>
             <ContentCopyRoundedIcon fontSize="small" />

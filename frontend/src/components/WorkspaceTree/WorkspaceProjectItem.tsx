@@ -1,21 +1,14 @@
 import { useState } from 'react';
 import { Box, IconButton } from '@mui/material';
 import FolderRoundedIcon from '@mui/icons-material/FolderRounded';
+import PublicRoundedIcon from '@mui/icons-material/PublicRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import { useSortable } from '@dnd-kit/sortable';
 import type { WorkspaceProject } from '@/services';
 import type { WorkspaceTreeSx } from './WorkspaceTree.styles';
 import type { MenuAnchor } from './WorkspaceContextMenu';
 import { SessionSubList } from './SessionSubList';
-
-// 项目路径末段（兼容 / 与 \\，去尾分隔符）作为无别名时的显示名。
-function basename(path: string): string {
-  const norm = path.replace(/[\\/]+$/, '');
-  const idx = Math.max(norm.lastIndexOf('/'), norm.lastIndexOf('\\'));
-  return idx >= 0 ? norm.slice(idx + 1) : norm;
-}
-
-const displayName = (p: WorkspaceProject): string => p.alias ?? basename(p.path);
+import { projectDisplayName, projectSubtitle } from './projectDisplay';
 
 export interface WorkspaceProjectItemProps {
   project: WorkspaceProject;
@@ -36,6 +29,8 @@ export const WorkspaceProjectItem = ({
     id: project.id,
   });
   const [sessionsOpen, setSessionsOpen] = useState(false);
+  // SSH 远程项目：路径是合成键、会话扫盘按本地路径无意义 → 不展开本地会话子列表，行首占位对齐。
+  const isSSH = project.ssh != null;
   // 垂直列表：只取 Y 轴位移，锁定 X=0（否则指针水平移动会把节点推出，触发横向滚动条）。
   const style = {
     transform: transform ? `translate3d(0px, ${transform.y}px, 0)` : undefined,
@@ -50,7 +45,7 @@ export const WorkspaceProjectItem = ({
     <Box ref={setNodeRef} style={style}>
       <Box
         sx={styles.projectRow}
-        title={project.path}
+        title={projectSubtitle(project)}
         {...attributes}
         {...listeners}
         role="button"
@@ -68,32 +63,40 @@ export const WorkspaceProjectItem = ({
           }
         }}
       >
-        <IconButton
-          size="small"
-          sx={styles.projectChevron}
-          aria-label={sessionsToggleLabel}
-          aria-expanded={sessionsOpen}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            setSessionsOpen((v) => !v);
-          }}
-        >
-          <ChevronRightRoundedIcon
-            fontSize="small"
-            sx={{ transform: sessionsOpen ? 'rotate(90deg)' : 'none', transition: 'transform 120ms ease' }}
-          />
-        </IconButton>
-        <FolderRoundedIcon fontSize="small" sx={styles.projectIcon} />
+        {isSSH ? (
+          <Box sx={styles.projectChevron} />
+        ) : (
+          <IconButton
+            size="small"
+            sx={styles.projectChevron}
+            aria-label={sessionsToggleLabel}
+            aria-expanded={sessionsOpen}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSessionsOpen((v) => !v);
+            }}
+          >
+            <ChevronRightRoundedIcon
+              fontSize="small"
+              sx={{ transform: sessionsOpen ? 'rotate(90deg)' : 'none', transition: 'transform 120ms ease' }}
+            />
+          </IconButton>
+        )}
+        {isSSH ? (
+          <PublicRoundedIcon fontSize="small" sx={styles.projectIcon} />
+        ) : (
+          <FolderRoundedIcon fontSize="small" sx={styles.projectIcon} />
+        )}
         <Box sx={styles.projectText}>
-          <Box sx={styles.projectName}>{displayName(project)}</Box>
-          <Box sx={styles.projectPath}>{project.path}</Box>
+          <Box sx={styles.projectName}>{projectDisplayName(project)}</Box>
+          <Box sx={styles.projectPath}>{projectSubtitle(project)}</Box>
         </Box>
       </Box>
 
-      {sessionsOpen && (
+      {!isSSH && sessionsOpen && (
         <SessionSubList
-          target={{ id: project.id, name: displayName(project), path: project.path }}
+          target={{ id: project.id, name: projectDisplayName(project), path: project.path }}
           styles={styles}
         />
       )}

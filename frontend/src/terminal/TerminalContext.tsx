@@ -20,6 +20,7 @@ import {
   type ReactNode,
 } from 'react';
 import { LaunchHistoryService, OrchestratorService, TerminalService } from '@/services';
+import type { SSHSpec } from '@/services/terminal/TerminalService';
 import { lifecycleRole } from '@/services/transport';
 import {
   createInitialTreeState,
@@ -45,6 +46,10 @@ export interface LaunchProjectInput {
   cliTool: string;
   /** 恢复已有会话 id（明文 → CLI resume）；缺省 = 新会话。 */
   resumeId?: string;
+  /** 运行时：缺省/'local' = 本地 PTY；'ssh' = 本地 ssh 客户端拉起远程会话。 */
+  runtimeKind?: string;
+  /** runtimeKind=='ssh' 时的连接信息（来自侧栏 SSH 项目；透传后端 buildSSHCommand）。 */
+  ssh?: SSHSpec;
 }
 
 export interface TerminalContextValue {
@@ -140,6 +145,8 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
           projectPath: input.projectPath,
           cliTool: effectiveCliTool,
           resumeId: input.resumeId,
+          runtimeKind: input.runtimeKind,
+          ssh: input.ssh,
           title,
         },
       });
@@ -149,7 +156,7 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
         projectName: input.projectName,
         projectPath: input.projectPath,
         cliTool: effectiveCliTool,
-        runtimeKind: 'local',
+        runtimeKind: input.runtimeKind ?? 'local',
       }).catch(() => {});
     },
     [state.activePaneId],
@@ -271,6 +278,8 @@ export const TerminalProvider = ({ children, initial }: TerminalProviderProps) =
         workspacePath: t.workspacePath,
         cliTool: t.cliTool,
         resumeId: t.resumeId,
+        runtimeKind: t.runtimeKind,
+        ssh: t.ssh,
         cols: initialSize.cols,
         rows: initialSize.rows,
       })

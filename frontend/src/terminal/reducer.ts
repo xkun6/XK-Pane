@@ -26,6 +26,7 @@ import {
   findTerminalPaneParent,
   generateId,
 } from './paneTree';
+import type { SSHSpec } from '@/services/terminal/TerminalService';
 import type { CliTool, PaneEdge, PaneNode, Panel, SplitDirection, Tab, TabViewMode } from './types';
 
 export interface TerminalTreeState {
@@ -41,6 +42,10 @@ export interface NewTabOptions {
   title?: string;
   /** 恢复已有会话 id（明文 → CLI resume）；缺省 = 新会话。 */
   resumeId?: string;
+  /** 运行时：缺省/'local' = 本地；'ssh' = 远程会话。 */
+  runtimeKind?: string;
+  /** runtimeKind=='ssh' 时的连接信息。 */
+  ssh?: SSHSpec;
   /** 后端已创建的会话 id（编排 launch_task 场景）；非空 = 直接附着，reconcile 跳过建会话。 */
   sessionId?: string;
 }
@@ -220,6 +225,8 @@ export function terminalTreeReducer(
         workspacePath: action.opts.workspacePath,
         title: action.opts.title,
         resumeId: action.opts.resumeId,
+        runtimeKind: action.opts.runtimeKind,
+        ssh: action.opts.ssh,
         sessionId: action.opts.sessionId,
       });
       pane.tabs.push(newTab);

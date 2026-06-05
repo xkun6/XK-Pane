@@ -2,7 +2,7 @@
 // 不返回 JSX、不持翻译串——提示文案由 View 传入（遵 MVVM 铁律）。
 // 折叠状态为单选互斥（同一时刻最多展开一个工作空间），存组件本地 state（禁 localStorage）。
 import { useState } from 'react';
-import { FileService, NativeDialogs, type Workspace } from '@/services';
+import { FileService, NativeDialogs, type SshProjectInfo, type Workspace } from '@/services';
 import { useWorkspaces } from '@/workspace';
 import { useTerminal } from '@/terminal';
 import { useRouter } from '@/router';
@@ -10,10 +10,12 @@ import { useCurrentDir } from '@/currentdir';
 
 // 启动目标：工作空间节点用 ws.path / ws.id；项目节点用 project.path / project.id。
 // projectId 落 LaunchHistory（软关联，不外键全局 projects 表）；path 为空（工作空间未设根目录）则不启动。
+// ssh 非空 = SSH 远程项目：runtimeKind 走 'ssh'，path 为合成键（仅作标识，后端不当本地 cwd 用）。
 export interface LaunchTarget {
   id: string;
   name: string;
   path: string | null;
+  ssh?: SshProjectInfo | null;
 }
 
 export interface ConfirmStrings {
@@ -41,6 +43,7 @@ export interface WorkspaceTreeModel {
   deleteWorkspace: (ws: Workspace, s: ConfirmStrings) => Promise<void>;
   launch: (target: LaunchTarget, cliTool: string) => void;
   importProject: (workspaceId: string, s: ImportStrings) => Promise<void>;
+  addSSHProject: (workspaceId: string, cfg: SshProjectInfo, errorTitle: string) => Promise<void>;
   submitRename: (id: string, name: string, errorTitle: string) => Promise<void>;
   submitAlias: (id: string, alias: string, errorTitle: string) => Promise<void>;
   submitProjectAlias: (projectId: string, alias: string, errorTitle: string) => Promise<void>;
@@ -101,6 +104,7 @@ export function useWorkspaceTree(): WorkspaceTreeModel {
   };
 
   // 启动 CLI/裸终端：path 为空（工作空间未设根目录）则静默忽略（View 已 disable 这些项）。
+  // ssh 非空 → runtimeKind='ssh'，把连接信息透传后端（本地 ssh 客户端拉起远程会话）。
   const launch = (target: LaunchTarget, cliTool: string): void => {
     if (!target.path) return;
     launchProject({
@@ -108,6 +112,8 @@ export function useWorkspaceTree(): WorkspaceTreeModel {
       projectName: target.name,
       projectPath: target.path,
       cliTool,
+      runtimeKind: target.ssh ? 'ssh' : undefined,
+      ssh: target.ssh ?? undefined,
     });
   };
 
@@ -118,6 +124,19 @@ export function useWorkspaceTree(): WorkspaceTreeModel {
       await ctx.addProject(workspaceId, dir);
     } catch (e) {
       await NativeDialogs.error(s.errorTitle, messageOf(e));
+    }
+  };
+
+  // 在工作空间下登记 SSH 远程项目（cfg 已由 View 从所选机器 DTO 合成，不含密码）。
+  const addSSHProject = async (
+    workspaceId: string,
+    cfg: SshProjectInfo,
+    errorTitle: string,
+  ): Promise<void> => {
+    try {
+      await ctx.addSSHProject(workspaceId, cfg);
+    } catch (e) {
+      await NativeDialogs.error(errorTitle, messageOf(e));
     }
   };
 
@@ -216,6 +235,7 @@ export function useWorkspaceTree(): WorkspaceTreeModel {
     deleteWorkspace,
     launch,
     importProject,
+    addSSHProject,
     submitRename,
     submitAlias,
     submitProjectAlias,

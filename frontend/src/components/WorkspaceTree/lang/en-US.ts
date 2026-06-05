@@ -37,6 +37,7 @@ export const workspaceTreeEnUS: Messages = {
       notInstalled: 'Not installed',
       importProject: 'Import project',
       importDialogTitle: 'Choose a project directory',
+      addSSHProject: 'Add SSH project',
       rename: 'Rename',
       setAlias: 'Set alias',
       copyPath: 'Copy path',
@@ -47,6 +48,15 @@ export const workspaceTreeEnUS: Messages = {
         title: 'Remove project',
         message: 'Remove project "{{name}}" from this workspace? It is only removed from the list; files on disk are not deleted.',
       },
+    },
+    sshDialog: {
+      title: 'Add SSH project',
+      machineLabel: 'Remote machine',
+      pathLabel: 'Remote path',
+      pathPlaceholder: "Leave empty to use the machine's default path",
+      add: 'Add',
+      noMachines: 'No SSH machines yet',
+      noMachinesHint: 'Add one under Settings → SSH machines first, then register a remote project here.',
     },
     error: {
       title: 'Workspace operation failed',

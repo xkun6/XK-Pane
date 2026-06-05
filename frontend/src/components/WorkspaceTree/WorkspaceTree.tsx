@@ -12,8 +12,9 @@ import {
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useT } from '@/i18n';
 import { useCliTools } from '@/shared/hooks/useCliTools';
+import { useSshMachines } from '@/sshmachine';
 import { TextInputDialog } from '@/components/TextInputDialog';
-import type { Workspace, WorkspaceProject } from '@/services';
+import type { Workspace } from '@/services';
 import { workspaceTreeStyles } from './WorkspaceTree.styles';
 import { useWorkspaceTree } from './useWorkspaceTree';
 import { WorkspaceItem, type WorkspaceItemStrings } from './WorkspaceItem';
@@ -23,14 +24,12 @@ import {
   type WorkspaceMenuState,
   type WorkspaceMenuStrings,
 } from './WorkspaceContextMenu';
-
-// 项目无别名时的显示名（路径末段）。
-function basename(path: string): string {
-  const norm = path.replace(/[\\/]+$/, '');
-  const idx = Math.max(norm.lastIndexOf('/'), norm.lastIndexOf('\\'));
-  return idx >= 0 ? norm.slice(idx + 1) : norm;
-}
-const projectDisplayName = (p: WorkspaceProject): string => p.alias ?? basename(p.path);
+import {
+  AddSshProjectDialog,
+  type AddSshProjectDialogStrings,
+  type SshProjectDraft,
+} from './AddSshProjectDialog';
+import { projectDisplayName, sshAddress } from './projectDisplay';
 
 interface TextDialogConfig {
   title: string;
@@ -51,10 +50,13 @@ export const WorkspaceTree = () => {
   const t = useT();
   const vm = useWorkspaceTree();
   const { tools, loading: toolsLoading } = useCliTools();
+  const { machines } = useSshMachines();
 
   const [menu, setMenu] = useState<WorkspaceMenuState | null>(null);
   const [textOpen, setTextOpen] = useState(false);
   const [textConfig, setTextConfig] = useState<TextDialogConfig | null>(null);
+  // 「添加 SSH 项目」对话框：记住目标工作空间 id（从工作空间右键菜单打开）。
+  const [sshTargetWsId, setSshTargetWsId] = useState<string | null>(null);
 
   const errTitle = (): string => t('workspaceTree.error.title');
   const openText = (cfg: TextDialogConfig): void => {
@@ -107,11 +109,23 @@ export const WorkspaceTree = () => {
     projectCountAria: (count) => t('workspaceTree.projectCountAria', { count }),
   };
 
+  const sshDialogStrings: AddSshProjectDialogStrings = {
+    title: t('workspaceTree.sshDialog.title'),
+    machineLabel: t('workspaceTree.sshDialog.machineLabel'),
+    pathLabel: t('workspaceTree.sshDialog.pathLabel'),
+    pathPlaceholder: t('workspaceTree.sshDialog.pathPlaceholder'),
+    add: t('workspaceTree.sshDialog.add'),
+    cancel: t('common.cancel'),
+    noMachines: t('workspaceTree.sshDialog.noMachines'),
+    noMachinesHint: t('workspaceTree.sshDialog.noMachinesHint'),
+  };
+
   const menuStrings: WorkspaceMenuStrings = {
     openTerminal: t('workspaceTree.menu.openTerminal'),
     launchLoading: t('workspaceTree.menu.launchLoading'),
     notInstalled: t('workspaceTree.menu.notInstalled'),
     importProject: t('workspaceTree.menu.importProject'),
+    addSSHProject: t('workspaceTree.menu.addSSHProject'),
     rename: t('workspaceTree.menu.rename'),
     setAlias: t('workspaceTree.menu.setAlias'),
     delete: t('workspaceTree.delete'),
@@ -128,7 +142,7 @@ export const WorkspaceTree = () => {
       vm.launch({ id: ws.id, name: ws.alias ?? ws.name, path: ws.path }, cliTool);
     } else if (menu?.kind === 'project') {
       const p = menu.project;
-      vm.launch({ id: p.id, name: projectDisplayName(p), path: p.path }, cliTool);
+      vm.launch({ id: p.id, name: projectDisplayName(p), path: p.path, ssh: p.ssh }, cliTool);
     }
     closeMenu();
   };
@@ -141,6 +155,33 @@ export const WorkspaceTree = () => {
       });
     }
     closeMenu();
+  };
+
+  // 「添加 SSH 项目」：记住目标工作空间 → 打开机器选择对话框（关闭右键菜单）。
+  const handleAddSSHProject = (): void => {
+    if (menu?.kind === 'workspace') setSshTargetWsId(menu.workspace.id);
+    closeMenu();
+  };
+
+  // 对话框提交：按 draft.machineId 取机器 DTO，合成 SshProjectInfo（remotePath 留空兜底 defaultPath）。
+  const submitSSHProject = (draft: SshProjectDraft): void => {
+    const wsId = sshTargetWsId;
+    const m = machines.find((x) => x.id === draft.machineId);
+    setSshTargetWsId(null);
+    if (!wsId || !m) return;
+    void vm.addSSHProject(
+      wsId,
+      {
+        machineId: m.id,
+        host: m.host,
+        port: m.port,
+        user: m.user,
+        remotePath: draft.remotePath || m.defaultPath,
+        identityFile: m.identityFile,
+        authMethod: m.authMethod,
+      },
+      errTitle(),
+    );
   };
 
   const handleRename = (): void => {
@@ -198,7 +239,11 @@ export const WorkspaceTree = () => {
   };
 
   const handleCopyPath = (): void => {
-    if (menu?.kind === 'project') vm.copyPath(menu.project.path);
+    // SSH 项目复制友好地址 user@host:remotePath；本地项目复制磁盘路径（合成键无复制价值）。
+    if (menu?.kind === 'project') {
+      const p = menu.project;
+      vm.copyPath(p.ssh ? sshAddress(p) : p.path);
+    }
     closeMenu();
   };
 
@@ -305,6 +350,7 @@ export const WorkspaceTree = () => {
         onClose={closeMenu}
         onLaunch={handleLaunch}
         onImportProject={handleImportProject}
+        onAddSSHProject={handleAddSSHProject}
         onRename={handleRename}
         onSetAlias={handleSetAlias}
         onDelete={handleDelete}
@@ -324,6 +370,14 @@ export const WorkspaceTree = () => {
         allowEmpty={textConfig?.allowEmpty ?? false}
         onSubmit={(value) => textConfig?.onSubmit(value)}
         onClose={() => setTextOpen(false)}
+      />
+
+      <AddSshProjectDialog
+        open={sshTargetWsId !== null}
+        machines={machines}
+        strings={sshDialogStrings}
+        onSubmit={submitSSHProject}
+        onClose={() => setSshTargetWsId(null)}
       />
     </Box>
   );

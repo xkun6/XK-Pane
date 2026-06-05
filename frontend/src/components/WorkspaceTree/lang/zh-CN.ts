@@ -38,6 +38,7 @@ export const workspaceTreeZhCN: Messages = {
       notInstalled: '未安装',
       importProject: '导入项目',
       importDialogTitle: '选择项目目录',
+      addSSHProject: '添加 SSH 项目',
       rename: '重命名',
       setAlias: '设置别名',
       copyPath: '复制路径',
@@ -48,6 +49,15 @@ export const workspaceTreeZhCN: Messages = {
         title: '移除项目',
         message: '确定从工作空间移除项目「{{name}}」吗？这只从列表移除，不会删除磁盘上的文件。',
       },
+    },
+    sshDialog: {
+      title: '添加 SSH 项目',
+      machineLabel: '远程机器',
+      pathLabel: '远端路径',
+      pathPlaceholder: '留空则用机器默认路径',
+      add: '添加',
+      noMachines: '还没有 SSH 机器',
+      noMachinesHint: '先到「设置 → SSH 机器」添加一台，再回来登记远程项目。',
     },
     error: {
       title: '工作空间操作失败',
