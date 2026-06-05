@@ -36,6 +36,7 @@ export {
   WorkspaceService,
   type Workspace,
   type WorkspaceProject,
+  type SshProjectInfo,
 } from './workspace/WorkspaceService';
 export {
   GitService,

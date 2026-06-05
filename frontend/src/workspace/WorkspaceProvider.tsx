@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { WorkspaceService, type Workspace, type WorkspaceProject } from '@/services';
+import { WorkspaceService, type Workspace, type WorkspaceProject, type SshProjectInfo } from '@/services';
 import type { WorkspaceContextValue } from './types';
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -118,6 +118,15 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
     [reload],
   );
 
+  const addSSHProject = useCallback(
+    async (workspaceId: string, cfg: SshProjectInfo): Promise<WorkspaceProject> => {
+      const created = await WorkspaceService.addSSHProject(workspaceId, cfg);
+      await reload();
+      return created;
+    },
+    [reload],
+  );
+
   const removeProject = useCallback(
     async (projectId: string): Promise<void> => {
       await WorkspaceService.removeProject(projectId);
@@ -162,6 +171,7 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
       setPath,
       setPinned,
       addProject,
+      addSSHProject,
       removeProject,
       setProjectAlias,
       reorder,
@@ -178,6 +188,7 @@ export const WorkspaceProvider = ({ children }: WorkspaceProviderProps) => {
       setPath,
       setPinned,
       addProject,
+      addSSHProject,
       removeProject,
       setProjectAlias,
       reorder,

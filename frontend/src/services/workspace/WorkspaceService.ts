@@ -11,13 +11,47 @@ import type {
 } from '@bindings/xkpane/internal/storage/models';
 import { httpClient, isDesktop } from '@/services/transport';
 
-// WorkspaceProject 对外纯接口（树第二层节点）。path = PTY cwd / 操作目标（原样存储）。
+// SshProjectInfo：SSH 远程项目的连接信息（对齐后端 workspace.SshProjectConfig）。
+// 不含密码——仅 machineId 引用机器，密码由后端 sshmachine.ResolveForSSH 启动时解密。
+export interface SshProjectInfo {
+  machineId: string;
+  host: string;
+  port: number;
+  user: string;
+  remotePath: string;
+  identityFile: string;
+  authMethod: string; // password | key | agent
+}
+
+// WorkspaceProject 对外纯接口（树第二层节点）。本地项目 path = PTY cwd / 操作目标（原样存储）；
+// SSH 远程项目 ssh!=null（path 是合成键 `ssh://...`，仅作唯一标识，不当本地路径用）。
 export interface WorkspaceProject {
   id: string;
   workspaceId: string;
   path: string;
   alias: string | null; // null = 未设；显示名取 alias || basename(path)
+  ssh: SshProjectInfo | null; // null = 本地项目；非空 = SSH 远程项目
   sortOrder: number;
+}
+
+// parseSsh：后端 WorkspaceProject.SSH 是 JSON 字符串列（*string → string|null|undefined）；
+// 解析成结构化 SshProjectInfo（空 / 坏 JSON → null）。
+function parseSsh(raw: string | null | undefined): SshProjectInfo | null {
+  if (!raw) return null;
+  try {
+    const o = JSON.parse(raw) as Partial<SshProjectInfo>;
+    return {
+      machineId: o.machineId ?? '',
+      host: o.host ?? '',
+      port: typeof o.port === 'number' && o.port > 0 ? o.port : 22,
+      user: o.user ?? '',
+      remotePath: o.remotePath ?? '',
+      identityFile: o.identityFile ?? '',
+      authMethod: o.authMethod ?? 'key',
+    };
+  } catch {
+    return null;
+  }
 }
 
 // Workspace 对外纯接口（树第一层）。projects 已内联（List 预加载，按 sortOrder 排序）。
@@ -41,6 +75,7 @@ function toWorkspaceProject(p: RawWorkspaceProject): WorkspaceProject {
     workspaceId: p.workspaceId ?? '',
     path: p.path ?? '',
     alias: p.alias ?? null,
+    ssh: parseSsh(p.ssh),
     sortOrder: typeof p.sortOrder === 'number' ? p.sortOrder : 0,
   };
 }
@@ -103,6 +138,21 @@ export const WorkspaceService = {
   // 在工作空间下登记项目节点（归一化去重 + 幂等：已存在直接返回那条）。
   async addProject(workspaceId: string, path: string): Promise<WorkspaceProject> {
     return toWorkspaceProject(await Binding.AddProject(workspaceId, path));
+  },
+
+  // 在工作空间下登记 SSH 远程项目节点（合成键去重幂等）。cfg 不含密码（仅 machineId 引用机器）。
+  async addSSHProject(workspaceId: string, cfg: SshProjectInfo): Promise<WorkspaceProject> {
+    return toWorkspaceProject(
+      await Binding.AddSSHProject(workspaceId, {
+        machineId: cfg.machineId,
+        host: cfg.host,
+        port: cfg.port,
+        user: cfg.user,
+        remotePath: cfg.remotePath,
+        identityFile: cfg.identityFile,
+        authMethod: cfg.authMethod,
+      }),
+    );
   },
 
   // 删除项目节点。

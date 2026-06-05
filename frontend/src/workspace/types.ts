@@ -1,4 +1,4 @@
-import type { Workspace, WorkspaceProject } from '@/services';
+import type { Workspace, WorkspaceProject, SshProjectInfo } from '@/services';
 
 // WorkspaceContextValue：Workspace 两层树的全局状态 + 动作（纯 Context，弃 Zustand）。
 //
@@ -16,6 +16,7 @@ export interface WorkspaceContextValue {
   setPath: (id: string, path: string | null) => Promise<void>;
   setPinned: (id: string, pinned: boolean) => Promise<void>;
   addProject: (workspaceId: string, path: string) => Promise<WorkspaceProject>;
+  addSSHProject: (workspaceId: string, cfg: SshProjectInfo) => Promise<WorkspaceProject>;
   removeProject: (projectId: string) => Promise<void>;
   setProjectAlias: (projectId: string, alias: string | null) => Promise<void>;
   reorder: (ids: string[]) => Promise<void>;
