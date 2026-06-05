@@ -15,6 +15,7 @@ package workspace
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"runtime"
 	"strings"
@@ -33,7 +34,21 @@ var (
 	errProjectPathEmpty = errors.New("Project path cannot be empty")
 	errProjectMissing   = errors.New("Workspace project does not exist")
 	errReorderMismatch  = errors.New("Reorder ids do not match existing rows")
+	errSSHHostEmpty     = errors.New("SSH host cannot be empty")
 )
+
+// SshProjectConfig 是「SSH 远程项目」的连接信息（去规范化字段 + machineId 引用）。
+// 落 WorkspaceProject.SSH 列（JSON）；启动时前端把它转成 terminal.SSHSpec。不含密码——
+// 密码由 sshmachine.ResolveForSSH 据 MachineID 在后端解密，绝不入此 JSON。
+type SshProjectConfig struct {
+	MachineID    string `json:"machineId"`
+	Host         string `json:"host"`
+	Port         int    `json:"port"`
+	User         string `json:"user"`
+	RemotePath   string `json:"remotePath"`
+	IdentityFile string `json:"identityFile"`
+	AuthMethod   string `json:"authMethod"`
+}
 
 type Service struct {
 	holder *storage.Holder
@@ -208,6 +223,83 @@ func (s *Service) AddProject(ctx context.Context, workspaceID, path string) (sto
 		return storage.WorkspaceProject{}, err
 	}
 	return wp, nil
+}
+
+// AddSSHProject 在工作空间下登记一个「SSH 远程项目」节点。远端无本地 path，故用合成键
+// `ssh://<machineId 或 host>/<remotePath>` 填 Path 满足 (workspaceID, path) 唯一约束；
+// cfg 序列化进 SSH 列。按合成键去重 + 幂等（命中已存在直接返回）。SortOrder 追加末尾。
+func (s *Service) AddSSHProject(ctx context.Context, workspaceID string, cfg SshProjectConfig) (storage.WorkspaceProject, error) {
+	cfg.Host = strings.TrimSpace(cfg.Host)
+	if cfg.Host == "" {
+		return storage.WorkspaceProject{}, errSSHHostEmpty
+	}
+	if cfg.Port <= 0 {
+		cfg.Port = 22
+	}
+	cfg.AuthMethod = strings.TrimSpace(cfg.AuthMethod)
+	cfg.RemotePath = strings.TrimSpace(cfg.RemotePath)
+
+	wsExists, err := s.workspaceExists(ctx, workspaceID)
+	if err != nil {
+		return storage.WorkspaceProject{}, err
+	}
+	if !wsExists {
+		return storage.WorkspaceProject{}, errWorkspaceMissing
+	}
+
+	syntheticPath := sshSyntheticPath(cfg)
+
+	var siblings []storage.WorkspaceProject
+	if err := s.db().WithContext(ctx).
+		Where("workspace_id = ?", workspaceID).
+		Order("sort_order ASC").Find(&siblings).Error; err != nil {
+		return storage.WorkspaceProject{}, err
+	}
+	norm := normalizeProjectPath(syntheticPath)
+	for _, sib := range siblings {
+		if normalizeProjectPath(sib.Path) == norm {
+			return sib, nil // 幂等：同机器+同远端路径已存在则直接返回
+		}
+	}
+
+	blob, err := json.Marshal(cfg)
+	if err != nil {
+		return storage.WorkspaceProject{}, err
+	}
+	js := string(blob)
+	wp := storage.WorkspaceProject{
+		ID:          uuid.NewString(),
+		WorkspaceID: workspaceID,
+		Path:        syntheticPath,
+		SSH:         &js,
+		SortOrder:   len(siblings),
+	}
+	if err := s.db().WithContext(ctx).Create(&wp).Error; err != nil {
+		if isUniqueViolation(err) {
+			var existing storage.WorkspaceProject
+			if e := s.db().WithContext(ctx).
+				Where("workspace_id = ? AND path = ?", workspaceID, syntheticPath).
+				First(&existing).Error; e == nil {
+				return existing, nil
+			}
+		}
+		return storage.WorkspaceProject{}, err
+	}
+	return wp, nil
+}
+
+// sshSyntheticPath 为 SSH 远程项目生成稳定唯一的 Path 键：`ssh://<machineId 或 host>/<remotePath>`。
+// machineId 优先（稳定，机器改 host 不破键）；缺省 host。remotePath 空 → "~"。
+func sshSyntheticPath(cfg SshProjectConfig) string {
+	key := cfg.MachineID
+	if key == "" {
+		key = cfg.Host
+	}
+	rp := cfg.RemotePath
+	if rp == "" {
+		rp = "~"
+	}
+	return "ssh://" + key + "/" + strings.TrimPrefix(rp, "/")
 }
 
 // RemoveProject 按 id 删除项目节点。

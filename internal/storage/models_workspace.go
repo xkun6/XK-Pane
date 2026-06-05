@@ -13,8 +13,10 @@ import "time"
 //   - 忠实保留完整 schema（含暂不接 UI 的列：ProviderID / LaunchProfileID / Hidden /
 //     DefaultEnvironment），这些是 AutoMigrate 友好的零成本映射；service / UI 只实现 P3a 真正
 //     消费的部分（避免无调用方的投机方法）。
-//   - SSH 嵌套配置（WorkspaceProject.ssh:45）随对应启动环境子系统进入，
-//     此处不落地。
+//   - SSH 嵌套配置（WorkspaceProject.SSH）：以 JSON 文本列存（同 AppSettings.CustomTheme 范式），
+//     非空 = 该项目是「SSH 远程项目」，侧栏 globe 渲染 + 启动走 ssh 客户端；service 层
+//     owns 序列化（见 workspace.AddSSHProject）。不含密码（仅 machineId 引用机器，密码由
+//     sshmachine.ResolveForSSH 在启动时解密），故本列不敏感。
 
 func init() {
 	// 工作空间是组织结构，含项目归属/排序，非"可重建的缓存"→ Clearable:false（同 projects 档）。
@@ -46,11 +48,13 @@ type Workspace struct {
 
 // WorkspaceProject 是 Workspace 下的项目节点（树的第二层）。
 // (WorkspaceID, Path) 联合唯一 = 同一工作空间内 path 去重（service 层归一化后存）。
+// SSH 远程项目无本地 path，service 用合成键 `ssh://<machineId>/<remotePath>` 填 Path 满足唯一约束。
 type WorkspaceProject struct {
 	ID              string    `gorm:"primaryKey;size:36" json:"id"`
 	WorkspaceID     string    `gorm:"type:text;not null;uniqueIndex:idx_ws_proj_path,priority:1" json:"workspaceId"`
-	Path            string    `gorm:"type:text;not null;uniqueIndex:idx_ws_proj_path,priority:2" json:"path"` // 归一化后存
+	Path            string    `gorm:"type:text;not null;uniqueIndex:idx_ws_proj_path,priority:2" json:"path"` // 本地项目=原始路径；SSH 项目=合成键
 	Alias           *string   `gorm:"type:text" json:"alias,omitempty"`
+	SSH             *string   `gorm:"type:text" json:"ssh,omitempty"` // 非空=SSH 远程项目；JSON(SshProjectConfig)，service 层序列化
 	LaunchProfileID *string   `gorm:"type:text" json:"launchProfileId,omitempty"`
 	SortOrder       int       `gorm:"not null;default:0" json:"sortOrder"`
 	CreatedAt       time.Time `json:"createdAt"`
