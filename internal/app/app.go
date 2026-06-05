@@ -270,6 +270,16 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	termSvc.SetProviderResolver(func(ctx context.Context, providerID string) (map[string]string, *cliadapters.Provider, error) {
 		return provider.ResolveLaunchEnv(ctx, holder.Current().GORM, providerID)
 	})
+	// 注入 SSH 密码解析器：ssh+password 会话据 machineID 解密机器存储的明文登录密码，供 readLoop
+	// 自动应答密码 prompt。闭包从 holder 取活跃 DB（切库后仍正确）。sshmachine.ResolveForSSH 非绑定
+	// （不暴露明文给前端）。返回机器不存在/无密码 → ""（不武装，回退手动输入）。
+	termSvc.SetSSHPasswordResolver(func(ctx context.Context, machineID string) (string, error) {
+		m, err := sshmachine.ResolveForSSH(ctx, holder.Current().GORM, machineID)
+		if err != nil || m == nil {
+			return "", err
+		}
+		return m.Password, nil
+	})
 
 	mainWindow = app.Window.NewWithOptions(windowOptions())
 	// 关闭主窗口 = 隐藏到托盘（而非退出应用）：用户点窗口关闭键时 WindowClosing hook 拦截并改为

@@ -69,6 +69,10 @@ type Service struct {
 	// nil 时跳过 provider 注入（与 ProviderID=="" 等效）。由 SetProviderResolver 注入。
 	resolveProvider ProviderResolver
 
+	// resolveSSHPassword 据 machineID 解密机器存储的明文 SSH 密码，供 ssh+password 会话自动应答
+	// 密码 prompt；nil = 不武装（key/agent 登录或未接线）。由 SetSSHPasswordResolver 注入。
+	resolveSSHPassword SSHPasswordResolver
+
 	// sessionStartHook 在会话成功创建后回调（参数 = 该会话的 ProjectPath = launchProject 目标）。
 	// 供 lhwatcher 在「启动项目」时补启自动捕获（决策 D4-4）；nil = 无（裸单测 / app 未接线）。
 	sessionStartHook func(projectPath string)
@@ -103,6 +107,12 @@ type deadBuffer struct {
 // SetProviderResolver 注入 provider 解析器（app 装配阶段调，镜像 AttachApp 模式）。
 func (s *Service) SetProviderResolver(r ProviderResolver) {
 	s.resolveProvider = r
+}
+
+// SetSSHPasswordResolver 注入 SSH 密码解析器（app 装配阶段调）。仅 ssh+password 会话用于
+// 自动应答密码 prompt；明文经此进 PTY，**绝不暴露给前端**。
+func (s *Service) SetSSHPasswordResolver(r SSHPasswordResolver) {
+	s.resolveSSHPassword = r
 }
 
 // SetSessionStartHook 注入「会话启动 → 补启 Local History watcher」回调（app 装配阶段调）。
@@ -154,6 +164,10 @@ type session struct {
 	lastOutputMs atomic.Int64
 	// rawBuf 保留原始 ANSI 输出（有界）供 attach 重放重建 xterm 画面（P7 M4，区别于 stripANSI 的 outBuf）。
 	rawBuf *rawRingBuffer
+
+	// sshAuth 是 ssh+password 会话的密码自动应答运行时；nil = 不武装（本地/key/agent）。
+	// 仅 readLoop goroutine 读写，无需同步。
+	sshAuth *sshAuthRuntime
 }
 
 // New 构造终端服务。registry 提供 CLI 工具命令拼装（Phase 1 cliadapters）。
@@ -326,6 +340,8 @@ func (s *Service) CreateSession(ctx context.Context, spec CreateSpec) (string, e
 		batcherDone:     make(chan struct{}),
 		outBuf:          newOutputBuffer(liveOutputMaxLines, liveOutputMaxBytes),
 		rawBuf:          newRawRingBuffer(rawReplayMaxBytes),
+		// ssh+password 会话武装密码自动应答（解密一次缓存于会话内存）；其余为 nil（readLoop no-op）。
+		sshAuth: s.armSSHPassword(ctx, spec),
 	}
 
 	s.mu.Lock()
@@ -615,6 +631,8 @@ func (s *Service) readLoop(sess *session) {
 				case <-sess.cancelCh:
 					return
 				}
+				// ssh+password 会话：检出密码 prompt → 一次性自动应答（非 ssh 会话 no-op）。
+				s.feedSSHPassword(sess, data)
 			}
 		}
 		if err != nil {
