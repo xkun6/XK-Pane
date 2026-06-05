@@ -225,6 +225,8 @@ export const sessionTimelineStyles = (theme: Theme): Record<string, SxProps<Them
       '&:hover': { borderColor: fp.accent, backgroundColor: fp.bg.hover },
     },
     askOptionSelected: { borderColor: fp.accent, backgroundColor: fp.bg.active },
+    askOptionTick: { flexShrink: 0, mt: '1px', color: fp.text.muted },
+    askOptionTickOn: { color: fp.accent },
     askOptionReadonly: {
       cursor: 'default',
       opacity: 0.7,
@@ -239,17 +241,15 @@ export const sessionTimelineStyles = (theme: Theme): Record<string, SxProps<Them
       whiteSpace: 'pre-wrap',
       overflowWrap: 'anywhere',
     },
-    askAnswered: {
-      display: 'flex',
+    askConfirmRow: { display: 'flex', justifyContent: 'flex-end', pt: 0.25 },
+    askWaitingHint: {
+      display: 'inline-flex',
       alignItems: 'center',
       gap: 0.5,
-      fontSize: 13,
-      fontWeight: 600,
-      color: fp.status.success,
-      overflowWrap: 'anywhere',
+      fontSize: 12,
+      fontStyle: 'italic',
+      color: fp.text.muted,
     },
-    askConfirmRow: { display: 'flex', justifyContent: 'flex-end', pt: 0.25 },
-    askWaitingHint: { fontSize: 11.5, fontStyle: 'italic', color: fp.text.muted, pt: 0.25 },
     // —— 输入条 ——
     composeBar: {
       flexShrink: 0,

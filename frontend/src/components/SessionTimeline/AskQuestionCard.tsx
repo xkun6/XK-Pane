@@ -2,19 +2,21 @@ import { useState } from 'react';
 import { Box, Button, Typography, useTheme } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
 import HelpOutlineRoundedIcon from '@mui/icons-material/HelpOutlineRounded';
-import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
-import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
+import SendRoundedIcon from '@mui/icons-material/SendRounded';
+import HourglassEmptyRoundedIcon from '@mui/icons-material/HourglassEmptyRounded';
+import RadioButtonCheckedRoundedIcon from '@mui/icons-material/RadioButtonCheckedRounded';
+import RadioButtonUncheckedRoundedIcon from '@mui/icons-material/RadioButtonUncheckedRounded';
 import CheckBoxRoundedIcon from '@mui/icons-material/CheckBoxRounded';
 import CheckBoxOutlineBlankRoundedIcon from '@mui/icons-material/CheckBoxOutlineBlankRounded';
 import { useT } from '@/i18n';
 import type { TimelineQuestion } from '@/services';
 import { sessionTimelineStyles } from './SessionTimeline.styles';
-import { buildSingleSelectKeys, buildMultiSelectKeys } from './answerKeys';
+import { buildAllAnswersKeys } from './answerKeys';
 
 export interface AskQuestionCardProps {
   questions: TimelineQuestion[];
-  // 仅当这是「最新且待答」的 AskUserQuestion 才允许作答（= 选择器正等待输入）。否则只读渲染：
-  // 避免把按键注入一个已结束 / 不在前台的选择器（会污染会话）。父组件按「该事件是否为时间线末尾」判定。
+  // 仅当这是「最新且待答」的 AskUserQuestion 才允许作答（= 选择器正等待输入）。否则只读渲染（历史卡）：
+  // 避免把按键注入一个已结束 / 不在前台的选择器（会污染会话）。父组件按「是否 pending 待答」判定。
   interactive: boolean;
   onRawInput: (data: string) => void;
 }
@@ -23,34 +25,35 @@ export interface AskQuestionCardProps {
 const sx = (...parts: Array<SxProps<Theme> | false | undefined>): SxProps<Theme> =>
   parts.filter(Boolean) as SxProps<Theme>;
 
-// AskQuestionCard：把 AskUserQuestion 渲染成可点选项的问题卡，点选 → 翻译成 PTY 按键驱动选择器作答。
-// 多题逐题推进（对齐选择器一次一题）：step 之前=已答（显示选中），step 当前=可作答，step 之后=待答。
+// AskQuestionCard：把 AskUserQuestion 渲染成「表单式」问题卡 —— 所有问题同屏可选（单选=单选钮、多选=复选框），
+// 全部答完后点底部「提交」一次性把所有选择翻译成 PTY 按键序列驱动选择器作答（对齐选择器逐题推进、末题 Enter 提交）。
 export const AskQuestionCard = ({ questions, interactive, onRawInput }: AskQuestionCardProps) => {
   const theme = useTheme();
   const s = sessionTimelineStyles(theme);
   const t = useT();
-  const [step, setStep] = useState(0); // 当前待答题序号
-  const [answers, setAnswers] = useState<Record<number, number[]>>({}); // qIdx -> 选中项（供显示）
-  const [pending, setPending] = useState<number[]>([]); // 当前多选题的本地勾选（未提交）
+  const [selections, setSelections] = useState<Record<number, number[]>>({}); // qIdx -> 选中项下标
+  const [submitted, setSubmitted] = useState(false); // 已提交 → 锁定卡片，等待转录的只读历史卡接管
 
-  const answerSingle = (qIdx: number, optIdx: number, count: number): void => {
-    onRawInput(buildSingleSelectKeys(optIdx, count));
-    setAnswers((a) => ({ ...a, [qIdx]: [optIdx] }));
-    setPending([]);
-    setStep(qIdx + 1);
-  };
-  const toggleMulti = (optIdx: number): void => {
-    setPending((p) => (p.includes(optIdx) ? p.filter((i) => i !== optIdx) : [...p, optIdx]));
-  };
-  const answerMulti = (qIdx: number, count: number): void => {
-    if (pending.length === 0) return;
-    onRawInput(buildMultiSelectKeys(pending, count));
-    setAnswers((a) => ({ ...a, [qIdx]: [...pending].sort((x, y) => x - y) }));
-    setPending([]);
-    setStep(qIdx + 1);
+  const pick = (qIdx: number, optIdx: number, multi: boolean): void => {
+    if (submitted) return;
+    setSelections((prev) => {
+      const cur = prev[qIdx] ?? [];
+      if (multi) {
+        const next = cur.includes(optIdx) ? cur.filter((i) => i !== optIdx) : [...cur, optIdx];
+        return { ...prev, [qIdx]: next };
+      }
+      return { ...prev, [qIdx]: [optIdx] }; // 单选：替换
+    });
   };
 
-  const allDone = step >= questions.length;
+  // 每题至少选一项才允许提交（单选必有 1；多选要求 ≥1）。
+  const allAnswered = questions.every((_, qIdx) => (selections[qIdx]?.length ?? 0) > 0);
+
+  const submit = (): void => {
+    if (!allAnswered || submitted) return;
+    onRawInput(buildAllAnswersKeys(questions, selections));
+    setSubmitted(true);
+  };
 
   return (
     <Box sx={s.askCard}>
@@ -59,7 +62,7 @@ export const AskQuestionCard = ({ questions, interactive, onRawInput }: AskQuest
         <Typography component="span" sx={s.askCardHeaderText}>
           {t('sessionTimeline.ask.title')}
         </Typography>
-        {!interactive && !allDone ? (
+        {!interactive ? (
           <Typography component="span" sx={s.askCardHint}>
             {t('sessionTimeline.ask.readonly')}
           </Typography>
@@ -67,10 +70,8 @@ export const AskQuestionCard = ({ questions, interactive, onRawInput }: AskQuest
       </Box>
 
       {questions.map((q, qIdx) => {
-        const count = q.options.length;
-        const done = qIdx < step;
-        const active = interactive && qIdx === step;
-        const chosen = answers[qIdx] ?? [];
+        const multi = !!q.multiSelect;
+        const locked = !interactive || submitted; // 只读历史卡 or 已提交 → 选项不可点
         return (
           <Box key={qIdx} sx={s.askQ}>
             <Box sx={s.askQHeaderRow}>
@@ -80,96 +81,79 @@ export const AskQuestionCard = ({ questions, interactive, onRawInput }: AskQuest
                 </Box>
               ) : null}
               <Box component="span" sx={s.askMultiHint}>
-                {q.multiSelect
+                {multi
                   ? t('sessionTimeline.ask.multiSelectHint')
                   : t('sessionTimeline.ask.singleSelectHint')}
               </Box>
             </Box>
             {q.question ? <Typography sx={s.askQText}>{q.question}</Typography> : null}
 
-            {done ? (
-              <Box sx={s.askAnswered}>
-                <CheckCircleRoundedIcon fontSize="inherit" />
-                <Box component="span">
-                  {chosen
-                    .map((i) => q.options[i]?.label ?? '')
-                    .filter(Boolean)
-                    .join('、') || t('sessionTimeline.ask.answered')}
-                </Box>
-              </Box>
-            ) : active && q.multiSelect ? (
-              <>
-                <Box sx={s.askOptions}>
-                  {q.options.map((o, i) => {
-                    const sel = pending.includes(i);
-                    return (
-                      <Box
-                        key={i}
-                        component="button"
-                        type="button"
-                        sx={sx(s.askOption, sel && s.askOptionSelected)}
-                        onClick={() => toggleMulti(i)}
-                      >
-                        {sel ? (
-                          <CheckBoxRoundedIcon fontSize="small" />
-                        ) : (
-                          <CheckBoxOutlineBlankRoundedIcon fontSize="small" />
-                        )}
-                        <Box sx={s.askOptionBody}>
-                          <Box sx={s.askOptionLabel}>{o.label}</Box>
-                          {o.description ? <Box sx={s.askOptionDesc}>{o.description}</Box> : null}
-                        </Box>
-                      </Box>
-                    );
-                  })}
-                </Box>
-                <Box sx={s.askConfirmRow}>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    startIcon={<CheckRoundedIcon />}
-                    disabled={pending.length === 0}
-                    onClick={() => answerMulti(qIdx, count)}
-                  >
-                    {t('sessionTimeline.ask.confirm')}
-                  </Button>
-                </Box>
-              </>
-            ) : active ? (
-              <Box sx={s.askOptions}>
-                {q.options.map((o, i) => (
+            <Box sx={s.askOptions}>
+              {q.options.map((o, i) => {
+                const sel = (selections[qIdx] ?? []).includes(i);
+                const SelIcon = multi
+                  ? sel
+                    ? CheckBoxRoundedIcon
+                    : CheckBoxOutlineBlankRoundedIcon
+                  : sel
+                    ? RadioButtonCheckedRoundedIcon
+                    : RadioButtonUncheckedRoundedIcon;
+                const body = (
+                  <>
+                    {/* 只读历史卡不含选中项（转录无），不显示选择控件，避免「空单选圈」误导 */}
+                    {interactive ? (
+                      <SelIcon fontSize="small" sx={sx(s.askOptionTick, sel && s.askOptionTickOn)} />
+                    ) : null}
+                    <Box sx={s.askOptionBody}>
+                      <Box sx={s.askOptionLabel}>{o.label}</Box>
+                      {o.description ? <Box sx={s.askOptionDesc}>{o.description}</Box> : null}
+                    </Box>
+                  </>
+                );
+                if (locked) {
+                  return (
+                    <Box key={i} sx={sx(s.askOption, s.askOptionReadonly, sel && s.askOptionSelected)}>
+                      {body}
+                    </Box>
+                  );
+                }
+                return (
                   <Box
                     key={i}
                     component="button"
                     type="button"
-                    sx={s.askOption}
-                    onClick={() => answerSingle(qIdx, i, count)}
+                    sx={sx(s.askOption, sel && s.askOptionSelected)}
+                    onClick={() => pick(qIdx, i, multi)}
                   >
-                    <Box sx={s.askOptionBody}>
-                      <Box sx={s.askOptionLabel}>{o.label}</Box>
-                      {o.description ? <Box sx={s.askOptionDesc}>{o.description}</Box> : null}
-                    </Box>
+                    {body}
                   </Box>
-                ))}
-              </Box>
-            ) : (
-              <Box sx={s.askOptions}>
-                {q.options.map((o, i) => (
-                  <Box key={i} sx={sx(s.askOption, s.askOptionReadonly)}>
-                    <Box sx={s.askOptionBody}>
-                      <Box sx={s.askOptionLabel}>{o.label}</Box>
-                      {o.description ? <Box sx={s.askOptionDesc}>{o.description}</Box> : null}
-                    </Box>
-                  </Box>
-                ))}
-                {interactive && qIdx > step ? (
-                  <Box sx={s.askWaitingHint}>{t('sessionTimeline.ask.waiting')}</Box>
-                ) : null}
-              </Box>
-            )}
+                );
+              })}
+            </Box>
           </Box>
         );
       })}
+
+      {interactive ? (
+        <Box sx={s.askConfirmRow}>
+          {submitted ? (
+            <Box sx={s.askWaitingHint}>
+              <HourglassEmptyRoundedIcon fontSize="inherit" />
+              {t('sessionTimeline.ask.submitted')}
+            </Box>
+          ) : (
+            <Button
+              size="small"
+              variant="contained"
+              startIcon={<SendRoundedIcon />}
+              disabled={!allAnswered}
+              onClick={submit}
+            >
+              {t('sessionTimeline.ask.submit')}
+            </Button>
+          )}
+        </Box>
+      ) : null}
     </Box>
   );
 };
