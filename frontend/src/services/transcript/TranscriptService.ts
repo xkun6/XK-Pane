@@ -13,6 +13,20 @@ import { Service as TranscriptBinding } from '@bindings/xkpane/internal/services
 
 export type TimelineKind = 'user' | 'assistant' | 'thinking' | 'tool_use' | 'tool_result';
 
+// AskUserQuestion 的结构化选项 / 问题（对齐后端 transcript.AskOption / AskQuestion）。
+// 仅 toolName==='AskUserQuestion' 的 tool_use 事件带 questions，供卡片渲染可点选项 + 作答。
+export interface TimelineOption {
+  label: string;
+  description?: string;
+}
+
+export interface TimelineQuestion {
+  header?: string;
+  question: string;
+  multiSelect?: boolean;
+  options: TimelineOption[];
+}
+
 export interface TimelineEvent {
   seq: number;
   uuid?: string;
@@ -23,6 +37,7 @@ export interface TimelineEvent {
   toolUseId?: string;
   isError?: boolean;
   timestamp?: string;
+  questions?: TimelineQuestion[];
 }
 
 export interface Timeline {

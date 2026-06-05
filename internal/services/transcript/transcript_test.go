@@ -84,6 +84,44 @@ func TestParseMissingFile(t *testing.T) {
 	}
 }
 
+func TestParseAskUserQuestion(t *testing.T) {
+	body := `{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_q","name":"AskUserQuestion","input":{"questions":[{"question":"选哪个方案？","header":"方案","multiSelect":false,"options":[{"label":"A 方案","description":"简单"},{"label":"B 方案","description":"灵活"}]},{"question":"附带哪些？","header":"附带","multiSelect":true,"options":[{"label":"测试"},{"label":"文档"}]}]}}]},"uuid":"aq"}`
+	res := Parse(writeSample(t, body), 0)
+	if len(res.Events) != 1 {
+		t.Fatalf("len(Events) = %d, want 1: %+v", len(res.Events), res.Events)
+	}
+	ev := res.Events[0]
+	if ev.Kind != KindToolUse || ev.ToolName != askToolName {
+		t.Fatalf("kind/name mismatch: %+v", ev)
+	}
+	if len(ev.Questions) != 2 {
+		t.Fatalf("Questions = %d, want 2: %+v", len(ev.Questions), ev.Questions)
+	}
+	q0 := ev.Questions[0]
+	if q0.Header != "方案" || q0.Question != "选哪个方案？" || q0.MultiSelect {
+		t.Fatalf("q0 fields mismatch: %+v", q0)
+	}
+	if len(q0.Options) != 2 || q0.Options[0].Label != "A 方案" || q0.Options[1].Description != "灵活" {
+		t.Fatalf("q0 options mismatch: %+v", q0.Options)
+	}
+	q1 := ev.Questions[1]
+	if !q1.MultiSelect || len(q1.Options) != 2 || q1.Options[0].Label != "测试" {
+		t.Fatalf("q1 (multiSelect) mismatch: %+v", q1)
+	}
+}
+
+// 非 AskUserQuestion 工具不应被结构化（Questions 为空，仍走裸 ToolInput）。
+func TestParseNonAskToolHasNoQuestions(t *testing.T) {
+	res := Parse(writeSample(t, sample), 0)
+	tu := res.Events[3] // Glob tool_use
+	if tu.ToolName != "Glob" {
+		t.Fatalf("expected Glob tool_use at index 3, got %+v", tu)
+	}
+	if len(tu.Questions) != 0 {
+		t.Fatalf("non-Ask tool should have no Questions, got %+v", tu.Questions)
+	}
+}
+
 func TestStripANSI(t *testing.T) {
 	in := "\x1b[31mred\x1b[0m plain"
 	if got := stripANSI(in); got != "red plain" {

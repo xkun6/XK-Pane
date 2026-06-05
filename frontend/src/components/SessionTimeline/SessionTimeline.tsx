@@ -16,11 +16,13 @@ import { copyText } from '@/shared/clipboard';
 import type { TimelineEvent } from '@/services';
 import { sessionTimelineStyles } from './SessionTimeline.styles';
 import { useSessionTimeline } from './useSessionTimeline';
+import { AskQuestionCard } from './AskQuestionCard';
 
 export interface SessionTimelineProps {
   sessionId: string;
   visible: boolean; // false=终端态：不渲染覆盖层、不轮询（保持挂载、状态不丢）
   onSend: (text: string) => void; // 把整句写进 PTY（父组件拼 '\r' 提交给 Agent）
+  onRawInput?: (data: string) => void; // 原样写入 PTY（不追加 '\r'）：AskUserQuestion 作答按键序列
 }
 
 // 工具输入摘要（折叠态一行预览）：挑最有信息量的字段。
@@ -127,7 +129,7 @@ function CollapsibleBlock(props: {
 
 // SessionTimeline：把活跃会话的 Claude 转录渲染成可重排的对话卡片（覆盖在 xterm 之上）。
 // supported!==true（加载中 / 非 claude）时不渲染 → 露出底层 xterm 镜像（零干扰）。
-export const SessionTimeline = ({ sessionId, visible, onSend }: SessionTimelineProps) => {
+export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: SessionTimelineProps) => {
   const theme = useTheme();
   const styles = sessionTimelineStyles(theme);
   const t = useT();
@@ -189,6 +191,18 @@ export const SessionTimeline = ({ sessionId, visible, onSend }: SessionTimelineP
           />
         );
       case 'tool_use':
+        // AskUserQuestion：渲染可点选项的交互卡，点选 → PTY 按键作答。
+        // 仅「时间线末尾」的该事件可作答（= 选择器正等待输入）；其余只读，防止给已结束的选择器注入杂键。
+        if (ev.toolName === 'AskUserQuestion' && ev.questions && ev.questions.length > 0) {
+          return (
+            <AskQuestionCard
+              key={key}
+              questions={ev.questions}
+              interactive={idx === events.length - 1 && !!onRawInput}
+              onRawInput={onRawInput ?? (() => {})}
+            />
+          );
+        }
         return (
           <CollapsibleBlock
             key={key}

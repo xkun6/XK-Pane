@@ -38,6 +38,9 @@ export const TerminalView = (props: TerminalViewProps) => {
         onSend={(text) => {
           void TerminalService.write(sid, `${text}\r`).catch(() => {});
         }}
+        onRawInput={(data) => {
+          void TerminalService.write(sid, data).catch(() => {});
+        }}
       />
     ) : null;
 

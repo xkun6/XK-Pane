@@ -122,6 +122,8 @@ export {
   type Timeline,
   type TimelineEvent,
   type TimelineKind,
+  type TimelineQuestion,
+  type TimelineOption,
 } from './transcript/TranscriptService';
 export {
   OrchestratorService,

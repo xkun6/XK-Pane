@@ -13,5 +13,14 @@ export const sessionTimelineEnUS: Messages = {
     send: 'Send',
     copy: 'Copy',
     copied: 'Copied',
+    ask: {
+      title: 'Your input is needed',
+      multiSelectHint: 'Multiple choice',
+      singleSelectHint: 'Single choice',
+      confirm: 'Confirm',
+      waiting: 'Waiting for the previous answer…',
+      answered: 'Answered',
+      readonly: 'Answer in the terminal',
+    },
   },
 };

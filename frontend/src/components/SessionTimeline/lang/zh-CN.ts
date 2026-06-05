@@ -13,5 +13,14 @@ export const sessionTimelineZhCN: Messages = {
     send: '发送',
     copy: '复制',
     copied: '已复制',
+    ask: {
+      title: '需要你的选择',
+      multiSelectHint: '可多选',
+      singleSelectHint: '单选',
+      confirm: '确认',
+      waiting: '等待上一题作答…',
+      answered: '已作答',
+      readonly: '请在终端中作答',
+    },
   },
 };

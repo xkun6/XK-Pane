@@ -46,7 +46,11 @@ const (
 	textCap       = 16000
 	toolResultCap = 4000
 	toolInputCap  = 4000
+	askFieldCap   = 2000 // AskUserQuestion 单字段（问题 / 选项标签 / 描述）文本上限（rune）
 )
+
+// askToolName 是触发「结构化问题」解析的工具名（卡片渲染可点选项 + 作答）。
+const askToolName = "AskUserQuestion"
 
 // Kind 是时间线事件的类别。
 const (
@@ -68,6 +72,23 @@ type Event struct {
 	ToolUseID string `json:"toolUseId,omitempty"`
 	IsError   bool   `json:"isError,omitempty"` // 仅 tool_result：工具调用失败（content 含 <tool_use_error>）
 	Timestamp string `json:"timestamp,omitempty"`
+	// Questions 仅 Kind==KindToolUse 且 ToolName=="AskUserQuestion" 时填充：结构化问题，供卡片渲染
+	// 可点选项并把点选翻译成 PTY 按键作答。其余工具此字段为空 → 前端回退裸 JSON（ToolInput）渲染。
+	Questions []AskQuestion `json:"questions,omitempty"`
+}
+
+// AskOption / AskQuestion 是 AskUserQuestion 工具 input 的结构化形态（字段对齐其 input schema：
+// questions[].{question, header, multiSelect, options[].{label, description}}）。
+type AskOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+}
+
+type AskQuestion struct {
+	Header      string      `json:"header,omitempty"`
+	Question    string      `json:"question"`
+	MultiSelect bool        `json:"multiSelect,omitempty"`
+	Options     []AskOption `json:"options"`
 }
 
 // Result 是一次解析结果。Total = 文件总行数（= 下次轮询的 after 游标）。
@@ -193,12 +214,59 @@ func parseAssistant(ln rawLine, idx int, res *Result) {
 				res.Events = append(res.Events, Event{Seq: idx, UUID: ln.UUID, Kind: KindThinking, Text: capRunes(t, textCap), Timestamp: ln.Timestamp})
 			}
 		case "tool_use":
-			res.Events = append(res.Events, Event{
+			ev := Event{
 				Seq: idx, UUID: ln.UUID, Kind: KindToolUse,
 				ToolName: it.Name, ToolInput: capRunes(string(it.Input), toolInputCap), ToolUseID: it.ID, Timestamp: ln.Timestamp,
-			})
+			}
+			// AskUserQuestion 额外结构化解析（从未截断的原始 input，避免长描述被 toolInputCap 砍掉）。
+			if it.Name == askToolName {
+				ev.Questions = parseAskQuestions(it.Input)
+			}
+			res.Events = append(res.Events, ev)
 		}
 	}
+}
+
+// parseAskQuestions 把 AskUserQuestion 的 input 解析为结构化问题。解析失败 / 无问题返回 nil
+// （前端据此回退到裸 JSON 渲染）。各文本字段按 askFieldCap 截断，防超大 payload 拖垮渲染。
+func parseAskQuestions(input json.RawMessage) []AskQuestion {
+	if len(input) == 0 {
+		return nil
+	}
+	var parsed struct {
+		Questions []struct {
+			Question    string `json:"question"`
+			Header      string `json:"header"`
+			MultiSelect bool   `json:"multiSelect"`
+			Options     []struct {
+				Label       string `json:"label"`
+				Description string `json:"description"`
+			} `json:"options"`
+		} `json:"questions"`
+	}
+	if json.Unmarshal(input, &parsed) != nil {
+		return nil
+	}
+	out := make([]AskQuestion, 0, len(parsed.Questions))
+	for _, q := range parsed.Questions {
+		opts := make([]AskOption, 0, len(q.Options))
+		for _, o := range q.Options {
+			opts = append(opts, AskOption{
+				Label:       capRunes(o.Label, askFieldCap),
+				Description: capRunes(o.Description, askFieldCap),
+			})
+		}
+		out = append(out, AskQuestion{
+			Header:      capRunes(q.Header, askFieldCap),
+			Question:    capRunes(q.Question, askFieldCap),
+			MultiSelect: q.MultiSelect,
+			Options:     opts,
+		})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // extractToolResult 把工具结果 content（字符串 / [{type:text,text}] 数组）抽成纯文本（去 ANSI、截断）。
