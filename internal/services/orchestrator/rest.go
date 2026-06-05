@@ -20,7 +20,7 @@ const (
 )
 
 // sessionStartedRequest 是 POST /api/terminal/session-started 的请求体（与 cli-hook
-// sessionStartedRequest 序列化形态对齐）。偏离 cc-pane：去掉 launch_id/wsl_distro（D6d-1）。
+// sessionStartedRequest 序列化形态对齐）。偏离 cc-pane：去掉 launch_id（D6d-1）。
 type sessionStartedRequest struct {
 	PtySessionID    string `json:"ptySessionId"`
 	ResumeSessionID string `json:"resumeSessionId"`

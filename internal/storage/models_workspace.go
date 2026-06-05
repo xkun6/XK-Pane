@@ -13,7 +13,7 @@ import "time"
 //   - 忠实保留完整 schema（含暂不接 UI 的列：ProviderID / LaunchProfileID / Hidden /
 //     DefaultEnvironment），这些是 AutoMigrate 友好的零成本映射；service / UI 只实现 P3a 真正
 //     消费的部分（避免无调用方的投机方法）。
-//   - WSL/SSH 嵌套配置（workspace.rs:67-69、WorkspaceProject.ssh:45）随对应启动环境子系统进入，
+//   - SSH 嵌套配置（WorkspaceProject.ssh:45）随对应启动环境子系统进入，
 //     此处不落地。
 
 func init() {
@@ -33,7 +33,7 @@ type Workspace struct {
 	Path               *string   `gorm:"type:text" json:"path,omitempty"` // 工作空间根目录；可空
 	ProviderID         *string   `gorm:"type:text;index" json:"providerId,omitempty"`
 	LaunchProfileID    *string   `gorm:"type:text" json:"launchProfileId,omitempty"`
-	DefaultEnvironment string    `gorm:"type:text;not null;default:'local'" json:"defaultEnvironment"` // local|wsl|ssh（P3a 仅 local）
+	DefaultEnvironment string    `gorm:"type:text;not null;default:'local'" json:"defaultEnvironment"` // local|ssh（P3a 仅 local）
 	Pinned             bool      `gorm:"not null;default:false;index" json:"pinned"`
 	Hidden             bool      `gorm:"not null;default:false" json:"hidden"`
 	SortOrder          *int      `gorm:"index" json:"sortOrder,omitempty"` // NULL 垫底

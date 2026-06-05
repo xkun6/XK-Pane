@@ -4,7 +4,7 @@
 // 这是 cc-pane `cc-panes-core/src/services/terminal_service.rs` 的**最小核心移植**
 // （Phase 2 MVP）。刻意延后到后续 Phase 的部分（均以 TODO 标注）：
 //   - 输出/回放/dead 缓冲区（会话恢复、attach-existing）→ Phase 3
-//   - SSH / WSL 运行时、launch profile、spec prompt 注入、Provider 选择 → Phase 3/4
+//   - SSH 运行时、launch profile、spec prompt 注入、Provider 选择 → Phase 3/4
 //   - MCP 注入、orchestrator HTTP 回调、launch_cwd 上报接收端 → Phase 5
 //   - ConPTY 光标伪影 sanitize、GBK 回退、chunked writer、状态推断(idle/waiting_input) → 后续
 //

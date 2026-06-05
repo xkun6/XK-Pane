@@ -11,7 +11,7 @@ export interface RecordSpec {
   projectName: string;
   projectPath: string;
   cliTool: string; // 'none' | 适配器 id
-  runtimeKind: string; // local | wsl | ssh
+  runtimeKind: string; // local | ssh
   workspaceName?: string | null;
   workspacePath?: string | null;
 }

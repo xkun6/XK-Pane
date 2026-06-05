@@ -64,7 +64,7 @@ type RecordSpec struct {
 	ProjectName   string  `json:"projectName"`
 	ProjectPath   string  `json:"projectPath"` // = PTY cwd（铁律 D7）
 	CliTool       string  `json:"cliTool"`     // 'none' | 适配器 id
-	RuntimeKind   string  `json:"runtimeKind"` // local | wsl | ssh；缺省 local
+	RuntimeKind   string  `json:"runtimeKind"` // local | ssh；缺省 local
 	WorkspaceName *string `json:"workspaceName,omitempty"`
 	WorkspacePath *string `json:"workspacePath,omitempty"` // 仅 --add-dir 用（铁律）
 }

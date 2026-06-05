@@ -7,7 +7,7 @@
 // 按持久化铁律落库前经 cryptox 加密、读出解密。sshConfig 是**后端重连数据**而非前端数据，仿
 // provider 的做法做**安全分层**：
 //   - 绑定方法 `LoadSessions`（前端可达）返回**脱敏**会话（SshConfig 置 nil，绝不把 SSH 配置
-//     跨 IPC 交给前端；前端据 RuntimeKind 区分 local/wsl/ssh，无需明文）；
+//     跨 IPC 交给前端；前端据 RuntimeKind 区分 local/ssh，无需明文）；
 //   - 包级函数 `LoadSessionsDecrypted`（**非绑定**，仿 provider.ResolveLaunchEnv）解密 SshConfig，
 //     仅供后端「SSH 重连」helper 使用——Wails 只绑定已注册 service 的方法，包级函数不会被绑定。
 // 当前 SSH 运行时尚未落地、sshConfig 恒为 nil，但安全边界先就位，故本 service 现已在 app.go 注册。
@@ -61,7 +61,7 @@ func (s *Service) SaveSessions(ctx context.Context, sessions []storage.TerminalS
 
 // LoadSessions（**前端绑定**）加载全部已保存会话用于重启恢复布局，按 saved_at 升序。
 // **脱敏**：返回的会话 SshConfig 一律置 nil —— SSH 配置是后端重连数据，绝不跨 IPC 给前端。
-// 前端据 RuntimeKind（local/wsl/ssh）即可还原布局，无需明文 SSH 配置。
+// 前端据 RuntimeKind（local/ssh）即可还原布局，无需明文 SSH 配置。
 func (s *Service) LoadSessions(ctx context.Context) ([]storage.TerminalSession, error) {
 	return loadSessions(ctx, s.db(), false)
 }

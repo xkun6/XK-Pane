@@ -17,7 +17,7 @@ type sessionStartInput struct {
 }
 
 // sessionStartedRequest 是回连 orchestrator 的上报体（camelCase，对齐 XK 前端/Wails 约定）。
-// 偏离 cc-pane：去掉 launch_id（XK 按 pty_session_id 关联，D6d-1）与 wsl_distro（本轮无 WSL）。
+// 偏离 cc-pane：去掉 launch_id（XK 按 pty_session_id 关联，D6d-1）。
 type sessionStartedRequest struct {
 	PtySessionID    string `json:"ptySessionId"`
 	ResumeSessionID string `json:"resumeSessionId"`
@@ -127,13 +127,10 @@ func detectCliTool() string {
 	return "claude"
 }
 
-// detectRuntimeKind 本轮恒为 local（无 WSL/SSH 支持），但仍据 env 探测以备未来。
+// detectRuntimeKind 本轮恒为 local（无 SSH 支持），但仍据 env 探测以备未来。
 func detectRuntimeKind() string {
 	if os.Getenv("SSH_CONNECTION") != "" || os.Getenv("SSH_CLIENT") != "" {
 		return "ssh"
-	}
-	if os.Getenv("WSL_DISTRO_NAME") != "" {
-		return "wsl"
 	}
 	return "local"
 }

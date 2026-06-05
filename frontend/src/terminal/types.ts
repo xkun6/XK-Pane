@@ -7,7 +7,7 @@
 // MVP 刻意裁剪的字段（依赖未落地子系统，落地时再补，勿现在硬塞——CLAUDE.md 简洁铁律）：
 //   - Provider / launch-profile：providerId / providerSelection / launchProfileId /
 //     workspaceSnapshotId（Phase 3 Provider 管理）
-//   - 运行时：ssh / wsl / machineName / disconnected / restoring / savedSessionId（Phase 4 WSL·SSH）
+//   - 运行时：ssh / machineName / disconnected / restoring / savedSessionId（Phase 4 SSH）
 //   - resume：resumeId（Phase 3 会话恢复）
 //   - 非终端 Tab：contentType 的 editor / mcp-config / skill-manager / ... 变体（Phase 4/5）
 //   - UI 细节：pinned / minimized / dirty / filePath / reclaimKey（后续）
@@ -32,7 +32,7 @@ export interface TerminalPaneLeaf {
   /** 恢复已有会话的 id（明文透传后端 → CLI resume）；undefined = 新会话。 */
   resumeId?: string;
   // TODO(phase3/4): providerId / providerSelection / launchProfileId /
-  //   workspaceSnapshotId / ssh / wsl / machineName / disconnected / restoring / savedSessionId
+  //   workspaceSnapshotId / ssh / machineName / disconnected / restoring / savedSessionId
 }
 
 export interface TerminalPaneSplit {
@@ -68,7 +68,7 @@ export interface Tab {
   /** 视图模式（缺省 = 'terminal'）：在 TabBar 切换；'card' 时该 Tab 渲染 SessionTimeline 覆盖层。 */
   viewMode?: TabViewMode;
   // TODO(phase3/4): provider* / launchProfileId / workspaceSnapshotId /
-  //   ssh / wsl / machineName / minimized / ... 见文件头
+  //   ssh / machineName / minimized / ... 见文件头
 }
 
 // ---- 外层：窗口布局面板树 ----

@@ -30,13 +30,12 @@ func TestDetectCliTool(t *testing.T) {
 func TestDetectRuntimeKind(t *testing.T) {
 	t.Setenv("SSH_CONNECTION", "")
 	t.Setenv("SSH_CLIENT", "")
-	t.Setenv("WSL_DISTRO_NAME", "")
 	if got := detectRuntimeKind(); got != "local" {
 		t.Errorf("got %q want local", got)
 	}
-	t.Setenv("WSL_DISTRO_NAME", "Ubuntu")
-	if got := detectRuntimeKind(); got != "wsl" {
-		t.Errorf("got %q want wsl", got)
+	t.Setenv("SSH_CONNECTION", "1.2.3.4 22 5.6.7.8 22")
+	if got := detectRuntimeKind(); got != "ssh" {
+		t.Errorf("got %q want ssh", got)
 	}
 }
 

@@ -78,9 +78,8 @@ type LaunchHistory struct {
 	ProviderID          *string `gorm:"type:text" json:"providerId,omitempty"`
 	ResumeSessionID     *string `gorm:"type:text" json:"resumeSessionId,omitempty"`
 	CliTool             string  `gorm:"type:text;not null;default:'none'" json:"cliTool"`
-	RuntimeKind         string  `gorm:"type:text;not null;default:'local'" json:"runtimeKind"` // local | wsl | ssh
+	RuntimeKind         string  `gorm:"type:text;not null;default:'local'" json:"runtimeKind"` // local | ssh
 	PtySessionID        *string `gorm:"type:text" json:"ptySessionId,omitempty"`
-	WslDistro           *string `gorm:"type:text" json:"wslDistro,omitempty"`
 	WorkspaceSnapshotID *string `gorm:"type:text" json:"workspaceSnapshotId,omitempty"`
 	LaunchProfileID     *string `gorm:"type:text" json:"launchProfileId,omitempty"`
 	ProviderSelection   *string `gorm:"type:text" json:"providerSelection,omitempty"` // manual | auto | last_used

@@ -2,7 +2,7 @@
 // 让在 pane 内运行的 Claude/Codex 经 MCP 反向调用宿主能力（开新会话编排别的 Agent、读写其它 PTY…）。
 //
 // P6a（本单元）只做地基：
-//   - net/http server 绑 127.0.0.1:随机端口（decision：本轮不做 WSL，收窄到 127.0.0.1）
+//   - net/http server 绑 127.0.0.1:随机端口（仅本机回环，不对外暴露）
 //   - 32-hex 随机 Bearer token；/mcp 走官方 modelcontextprotocol/go-sdk 的 Streamable HTTP transport
 //   - Bearer 鉴权中间件，复刻 cc-pane 两个 CLI 兼容补丁：?token= query 后备（Claude Issue #7290）、
 //     Accept: text/event-stream 注入（Codex 缺此头会被 406）

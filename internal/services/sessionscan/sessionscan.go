@@ -1,13 +1,13 @@
 // Package sessionscan 扫描本机 CLI Agent 的历史会话文件，供「会话恢复」UI 列举可 resume 的会话。
 //
-// 移植 cc-pane 的 claude_session_service / codex_session_service 的 **local（非 WSL）** 子集：
+// 移植 cc-pane 的 claude_session_service / codex_session_service 的 **local** 子集：
 //   - Claude：~/.claude/projects/<编码目录>/*.jsonl —— 目录名 = project_path 把 `: \ / _` 换 `-`
 //   - Codex： ~/.codex/sessions/**/*.jsonl（递归）—— id+cwd 从首 20 行 session_meta 取
 //
 // 两者都从文件前若干行解析「首条用户 prompt」作 description（截 80 字 + …）。
 //
-// **刻意裁剪**（Windows 桌面优先，WSL/SSH 子系统未落地）：cc-pane 的
-// collect_wsl_sessions / list_wsl_sessions / detect_wsl_session 全部不移植。
+// **刻意裁剪**（Windows 桌面优先，SSH 子系统未落地）：cc-pane 的
+// 远端会话扫描子集不移植，本期只扫本机 local 会话。
 //
 // **无 DB 依赖**：本 service 纯文件系统扫描、只读，不持 *storage.Holder。
 // cc-pane 的「扫盘 backfill 到 launch_history」属轮询增强（P3b 拍板点 9 留后续）；
