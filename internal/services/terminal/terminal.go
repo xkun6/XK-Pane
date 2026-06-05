@@ -353,6 +353,23 @@ func (s *Service) List(_ context.Context) ([]SessionInfo, error) {
 	return out, nil
 }
 
+// CleanupMCPConfigs 删除所有【当前活跃】会话的 per-session MCP 配置（<cwd>/.claude/mcp-<sid>.json）。
+// app 退出时兜底调用：正常退出的会话已在各自 waitLoop 清掉，此处补删退出那刻仍活着、来不及走
+// waitLoop 的会话残留。先在锁内快照再放锁做文件删除（避免持锁碰盘）；与单会话清理重复调用幂等
+// （文件不存在 no-op）。崩溃孤儿仍由 cliadapters.cleanupStaleMCPConfigs 的龄期兜底回收。
+func (s *Service) CleanupMCPConfigs() {
+	s.mu.Lock()
+	type sessRef struct{ cwd, id string }
+	refs := make([]sessRef, 0, len(s.sessions))
+	for _, sess := range s.sessions {
+		refs = append(refs, sessRef{cwd: sess.cwd, id: sess.id})
+	}
+	s.mu.Unlock()
+	for _, r := range refs {
+		cliadapters.CleanupSessionMCPConfig(r.cwd, r.id)
+	}
+}
+
 // SessionOutput 是 get_session_output 的返回：会话最近 N 行纯文本（ANSI 已剥离）。
 type SessionOutput struct {
 	SessionID string   `json:"sessionId"`
@@ -626,6 +643,9 @@ func (s *Service) waitLoop(sess *session) {
 
 	s.remove(sess.id)
 	s.retireBuffer(sess) // 输出缓冲转 dead-buffers，供退出后 deadRetention 内回看
+	// per-session MCP 配置（claude/reclaude 的 <cwd>/.claude/mcp-<sid>.json）退出即删：
+	// 只在子进程启动时被读一次，退出后无用。非 claude/reclaude 或没写过时 no-op。
+	cliadapters.CleanupSessionMCPConfig(sess.cwd, sess.id)
 
 	s.logger.Info("session exited", "session", sess.id, "exitCode", exitCode)
 	s.emitEvent(events.TerminalExit, events.TerminalExitPayload{

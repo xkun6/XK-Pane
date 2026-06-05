@@ -207,7 +207,7 @@ func generateClaudeMCPConfig(ctx *Context, callerTool string) string {
 		logx.For("cliadapters").Warn("mcp config: ensure .claude dir", "dir", dir, "err", err)
 		return ""
 	}
-	fileName := fmt.Sprintf("mcp-%s.json", ctx.SessionID)
+	fileName := mcpConfigFileName(ctx.SessionID)
 	configPath := filepath.Join(dir, fileName)
 	cleanupStaleMCPConfigs(dir, fileName)
 
@@ -261,7 +261,27 @@ func readUserGlobalMCPServers() map[string]json.RawMessage {
 	return parsed.MCPServers
 }
 
-// cleanupStaleMCPConfigs 删除 dir 里 >1h 的旧 mcp-*.json（保留 current），防 per-session 文件堆积。
+// mcpConfigFileName 是 per-session MCP 配置的文件名约定（生成与退出清理共用，避免命名两处漂移）。
+func mcpConfigFileName(sessionID string) string {
+	return fmt.Sprintf("mcp-%s.json", sessionID)
+}
+
+// CleanupSessionMCPConfig 在会话退出时删除其 per-session MCP 配置（claude/reclaude 写在
+// <proj>/.claude/mcp-<sid>.json）。这是主清理路径：配置只在子进程【启动时】被 --mcp-config 读一次，
+// 进程退出后即无用，故退出即删、不留垃圾。文件不存在（codex/none、或 orchestrator 未就绪没写过）
+// 时静默 no-op；sid 唯一保证只会删到本会话自己那份。
+func CleanupSessionMCPConfig(projectPath, sessionID string) {
+	if projectPath == "" || sessionID == "" {
+		return
+	}
+	path := filepath.Join(projectPath, ".claude", mcpConfigFileName(sessionID))
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		logx.For("cliadapters").Warn("mcp config: cleanup on exit", "path", path, "err", err)
+	}
+}
+
+// cleanupStaleMCPConfigs 删除 dir 里 >1h 的旧 mcp-*.json（保留 current）。主清理走 CleanupSessionMCPConfig
+// （会话退出即删）；此处仅作崩溃孤儿兜底——XK-Pane 被硬杀 / 会话没走到 waitLoop 时回收残留，避免堆积。
 func cleanupStaleMCPConfigs(dir, current string) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {

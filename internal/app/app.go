@@ -356,7 +356,8 @@ func Run(assets embed.FS, trayIcon []byte) error {
 		logx.For("app").Warn("mcdk bridge start failed (MC PE 调试桥不可用，fail-open)", "err", err)
 	}
 	defer func() { _ = mcdkBridge.Stop() }()
-	defer mcpeSvc.CleanupAll() // app 退出时杀所有 MC PE 子进程
+	defer mcpeSvc.CleanupAll()        // app 退出时杀所有 MC PE 子进程
+	defer termSvc.CleanupMCPConfigs() // app 退出时补删仍活着会话的 per-session MCP 配置（waitLoop 没赶上的）
 
 	go emitTimeLoop(app)
 
