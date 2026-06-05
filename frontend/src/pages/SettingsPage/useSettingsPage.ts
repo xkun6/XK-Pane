@@ -40,6 +40,11 @@ export const useSettingsPage = (): UseSettingsPageResult => {
         descriptionKey: 'settings.list.provider.description',
       },
       {
+        id: 'sshmachine',
+        labelKey: 'settings.list.sshmachine.label',
+        descriptionKey: 'settings.list.sshmachine.description',
+      },
+      {
         id: 'database',
         labelKey: 'settings.list.database.label',
         descriptionKey: 'settings.list.database.description',

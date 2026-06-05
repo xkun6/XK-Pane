@@ -19,6 +19,10 @@ export const settingsPageEnUS: Messages = {
         label: 'Providers',
         description: 'Manage API credentials and endpoints for launching CLIs',
       },
+      sshmachine: {
+        label: 'SSH remote',
+        description: 'Manage SSH remote hosts to launch terminals / CLIs remotely',
+      },
       database: {
         label: 'Data storage',
         description: 'Database location and disk usage',

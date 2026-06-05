@@ -22,6 +22,10 @@ export const settingsPageZhCN: Messages = {
         label: '接入 Provider',
         description: '管理 CLI 启动用的 API 凭据与端点',
       },
+      sshmachine: {
+        label: 'SSH 远程',
+        description: '管理 SSH 远程主机，在远端启动终端 / CLI',
+      },
       database: {
         label: '数据存储',
         description: '数据库位置与占用空间',

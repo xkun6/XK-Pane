@@ -7,6 +7,7 @@ import { Language } from './language';
 import { Database } from './database';
 import { Knowledge } from './knowledge';
 import { ProviderSettings } from './provider';
+import { SshMachineSettings } from './sshmachine';
 import { WebAccess } from './webaccess';
 
 // 设置页（两列）：
@@ -62,6 +63,7 @@ export const SettingsPage = () => {
         {vm.activeItem.id === 'personalization' && <Personalization />}
         {vm.activeItem.id === 'language' && <Language />}
         {vm.activeItem.id === 'provider' && <ProviderSettings />}
+        {vm.activeItem.id === 'sshmachine' && <SshMachineSettings />}
         {vm.activeItem.id === 'database' && <Database />}
         {vm.activeItem.id === 'knowledge' && <Knowledge />}
         {vm.activeItem.id === 'webaccess' && <WebAccess />}
