@@ -66,6 +66,13 @@ export {
   type Provider,
   type ProviderInput,
 } from './provider/ProviderService';
+export {
+  SshMachineService,
+  type SshMachine,
+  type SshMachineInput,
+  type SshConnectivityResult,
+  type SshAuthMethod,
+} from './sshmachine/SshMachineService';
 export { PreferencesService } from './preferences/PreferencesService';
 export {
   AppSettingsService,

@@ -18,6 +18,7 @@ import { RightPanelProvider } from '@/rightpanel';
 import { ProjectProvider } from '@/project';
 import { WorkspaceProvider } from '@/workspace';
 import { ProviderProvider } from '@/provider';
+import { SshMachineProvider } from '@/sshmachine';
 import { RouterProvider } from '@/router';
 import { routes } from '@/routes';
 import { FoundationThemeProvider, registerFoundationThemes } from '@/styles/themes';
@@ -53,9 +54,10 @@ registerSessionTimelineLocales();
 //  ⑤ ProjectProvider —— 项目登记表（全局，侧边栏项目树消费；mount 异步拉取）
 //  ⑥ WorkspaceProvider —— Workspace 两层树（全局，侧边栏 WorkspaceTree 消费；mount 异步拉取）
 //  ⑦ ProviderProvider —— 接入 Provider 登记表（全局，设置子页 + 启动选 Provider 消费）
-//  ⑧ CurrentDirProvider —— 「当前目录/文件」上下文（文件页 + Git/历史抽屉绑定它）
-//  ⑨ RightPanelProvider —— 右侧抽屉（Git/历史）开关；Sidebar 与 AppLayout 抽屉共享，须包住 RouterProvider
-//  ⑩ RouterProvider —— 路由切换时上面都已就绪
+//  ⑧ SshMachineProvider —— SSH 机器登记表（全局，设置子页 + 启动选机器消费）
+//  ⑨ CurrentDirProvider —— 「当前目录/文件」上下文（文件页 + Git/历史抽屉绑定它）
+//  ⑩ RightPanelProvider —— 右侧抽屉（Git/历史）开关；Sidebar 与 AppLayout 抽屉共享，须包住 RouterProvider
+//  ⑪ RouterProvider —— 路由切换时上面都已就绪
 export const App = () => {
   return (
     <I18nProvider>
@@ -65,13 +67,15 @@ export const App = () => {
             <ProjectProvider>
               <WorkspaceProvider>
                 <ProviderProvider>
-                  <CurrentDirProvider>
-                    <RightPanelProvider>
-                      <RouterProvider routes={routes}>
-                        <AppLayout />
-                      </RouterProvider>
-                    </RightPanelProvider>
-                  </CurrentDirProvider>
+                  <SshMachineProvider>
+                    <CurrentDirProvider>
+                      <RightPanelProvider>
+                        <RouterProvider routes={routes}>
+                          <AppLayout />
+                        </RouterProvider>
+                      </RightPanelProvider>
+                    </CurrentDirProvider>
+                  </SshMachineProvider>
                 </ProviderProvider>
               </WorkspaceProvider>
             </ProjectProvider>
