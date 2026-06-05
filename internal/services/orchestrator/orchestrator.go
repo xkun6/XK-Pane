@@ -200,6 +200,7 @@ func (s *Service) Start() error {
 	// REST 业务回调（cli-hook 回连）。各 handler 内联 verify_token + rate_limit（对齐 cc-pane，
 	// REST 不走 MCP 中间件）。P6d-3：session-started 回报（log + emit）。
 	mux.HandleFunc("POST /api/terminal/session-started", s.handleSessionStarted)
+	mux.HandleFunc("POST /api/terminal/ask-pending", s.handleAskPending)
 	mux.HandleFunc("POST /api/notifications/trigger", s.handleTriggerNotification)
 	// 同一个鉴权后的 MCP handler 实例同时挂精确路径与子树（容忍尾斜杠）。
 	mux.Handle("/mcp", mcpHandler)

@@ -12,6 +12,9 @@ export const AppEvents = {
   TerminalOutput: 'terminal:output',
   TerminalStatus: 'terminal:status',
   TerminalExit: 'terminal:exit',
+  // 待答 AskUserQuestion（被启动 CLI 的 PreToolUse hook → orchestrator → 卡片）。payload 按 sessionId 分发，
+  // 让卡片在该问题落盘转录前就能渲染可点选项并作答（待答态不在转录里）。
+  TerminalAskPending: 'terminal:ask-pending',
   // MC PE 运行事件（后端 launcher PTY reader/wait → 前端 MC PE 面板）。payload 按 runId 路由。P6e。
   MCPeOutput: 'mc_pe:output',
   MCPeLaunched: 'mc_pe:launched',

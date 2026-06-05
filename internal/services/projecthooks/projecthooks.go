@@ -43,6 +43,9 @@ type hookDef struct {
 // 以免阻塞 Write 工具完成。
 var claudeHookDefs = []hookDef{
 	{subcommand: "session-start", event: "SessionStart", matcher: "startup", timeout: 10, async: false},
+	// PreToolUse(AskUserQuestion)：把待答问题旁路推给卡片（待答态不落转录，卡片轮询看不到）。
+	// async=true：纯副作用（只需 POST），不阻塞工具弹出选择器，stdout 无需注入。
+	{subcommand: "ask-pending", event: "PreToolUse", matcher: "AskUserQuestion", timeout: 5, async: true},
 	{subcommand: "plan-archive", event: "PostToolUse", matcher: "", timeout: 5, async: true},
 }
 

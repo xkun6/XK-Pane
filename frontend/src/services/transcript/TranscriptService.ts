@@ -8,7 +8,8 @@
 // 桌面（owner）走 Wails binding transcriptsvc.GetTimeline；Web（viewer）走 /api/sessions/timeline。
 // 两路同源同语义（后端 transcriptsvc 与 webapi handler 复用同一套 sessionId→转录解析逻辑）。
 // after = 已消费行数游标，append-only 的 jsonl 保证增量轮询不漏不重。
-import { httpClient, isDesktop } from '@/services/transport';
+import { eventTransport, httpClient, isDesktop } from '@/services/transport';
+import { AppEvents } from '@/shared/events';
 import { Service as TranscriptBinding } from '@bindings/xkpane/internal/services/transcriptsvc';
 
 export type TimelineKind = 'user' | 'assistant' | 'thinking' | 'tool_use' | 'tool_result';
@@ -75,5 +76,17 @@ export const TranscriptService = {
       total: Number(res.total ?? 0),
       title: res.title,
     };
+  },
+
+  // 订阅「待答 AskUserQuestion」事件（被启动 CLI 的 PreToolUse hook 旁路推送，落盘转录之前即到）。
+  // 按 sessionId 过滤，handler 收到该会话当前待答的问题列表；返回取消订阅函数。桌面走 Wails 总线、
+  // Web viewer 走 /ws 镜像（事件已入 webapi mirroredEvents 白名单），同一套代码。
+  onAskPending(sessionId: string, handler: (questions: TimelineQuestion[]) => void): () => void {
+    return eventTransport.on<{ sessionId: string; questions?: TimelineQuestion[] }>(
+      AppEvents.TerminalAskPending,
+      (d) => {
+        if (d && d.sessionId === sessionId) handler(d.questions ?? []);
+      },
+    );
   },
 } as const;

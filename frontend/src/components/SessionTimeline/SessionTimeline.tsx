@@ -133,15 +133,15 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: Sess
   const theme = useTheme();
   const styles = sessionTimelineStyles(theme);
   const t = useT();
-  const { events, title, supported } = useSessionTimeline({ sessionId, active: visible });
+  const { events, title, supported, pending } = useSessionTimeline({ sessionId, active: visible });
   const scrollRef = useRef<HTMLDivElement>(null);
   const [text, setText] = useState('');
 
-  // 新事件到达 / 重新可见 → 贴底（监控场景默认看最新）。
+  // 新事件到达 / 待答卡出现 / 重新可见 → 贴底（监控场景默认看最新）。
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [events.length, visible]);
+  }, [events.length, visible, pending]);
 
   // 终端态（!visible）或无结构化转录（非 claude）→ 不渲染覆盖层、露出底层 xterm；但保持挂载，
   // hook 已累积的事件 / supported 不丢，切回卡片即时复现（无需从头重拉）。
@@ -191,16 +191,11 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: Sess
           />
         );
       case 'tool_use':
-        // AskUserQuestion：渲染可点选项的交互卡，点选 → PTY 按键作答。
-        // 仅「时间线末尾」的该事件可作答（= 选择器正等待输入）；其余只读，防止给已结束的选择器注入杂键。
+        // AskUserQuestion：转录里的是【已答】记录 → 渲染成只读历史卡。待答态不在转录里，走 pending
+        // （PreToolUse hook 旁路事件，见 scroll 末尾的交互卡），故转录这条恒只读、不接 onRawInput。
         if (ev.toolName === 'AskUserQuestion' && ev.questions && ev.questions.length > 0) {
           return (
-            <AskQuestionCard
-              key={key}
-              questions={ev.questions}
-              interactive={idx === events.length - 1 && !!onRawInput}
-              onRawInput={onRawInput ?? (() => {})}
-            />
+            <AskQuestionCard key={key} questions={ev.questions} interactive={false} onRawInput={() => {}} />
           );
         }
         return (
@@ -243,11 +238,15 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: Sess
         </Typography>
       </Box>
 
-      {events.length === 0 ? (
+      {events.length === 0 && !pending ? (
         <Box sx={styles.empty}>{t('sessionTimeline.empty')}</Box>
       ) : (
         <Box ref={scrollRef} sx={styles.scroll}>
           {events.map(renderEvent)}
+          {/* 待答 AskUserQuestion（hook 旁路推送、落盘前即到）→ 唯一可作答的交互卡，置于时间线末尾。 */}
+          {pending && pending.length > 0 ? (
+            <AskQuestionCard questions={pending} interactive onRawInput={onRawInput ?? (() => {})} />
+          ) : null}
         </Box>
       )}
 

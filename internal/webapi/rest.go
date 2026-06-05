@@ -28,6 +28,7 @@ var mirroredEvents = map[string]bool{
 	events.TerminalOutput:     true,
 	events.TerminalStatus:     true,
 	events.TerminalExit:       true,
+	events.TerminalAskPending: true,
 	events.OrchestratorLaunch: true,
 }
 

@@ -3,6 +3,7 @@
 //
 // 子命令（P6d-1，im-forward 已按 D6d-3 砍掉）：
 //   - session-start  SessionStart：stdout 注入项目上下文 + 回连 orchestrator 上报 cwd/resumeId
+//   - ask-pending    PreToolUse(AskUserQuestion)：把「待答问题」回连 orchestrator，供卡片在落盘前即时渲染作答
 //   - plan-archive   PostToolUse(Write)：把写入 ~/.claude/plans/ 的 plan 归档到项目本地（纯本地）
 //   - notify         显式触发桌面通知（读 mcp-orchestrator.json → POST /api/notifications/trigger）
 //
@@ -22,6 +23,8 @@ func main() {
 	switch os.Args[1] {
 	case "session-start":
 		runSessionStart()
+	case "ask-pending":
+		runAskPending()
 	case "plan-archive":
 		runPlanArchive()
 	case "notify":

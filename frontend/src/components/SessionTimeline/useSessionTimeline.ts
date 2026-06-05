@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { TranscriptService, type TimelineEvent } from '@/services';
+import { TranscriptService, type TimelineEvent, type TimelineQuestion } from '@/services';
 
 // 轮询间隔：转录是 append-only 文件，~1.5s 拉一次增量足够「准实时」，不压后端。
 const POLL_MS = 1500;
@@ -14,6 +14,9 @@ export interface UseSessionTimelineResult {
   title: string;
   supported: boolean | null; // null = 首拉前未知
   loading: boolean;
+  // 当前【待答】的 AskUserQuestion 问题（来自 PreToolUse hook 旁路事件，落盘转录之前即到）。
+  // null = 无待答。答完（转录增长）后自动清除。卡片据此渲染可作答的待答卡（与只读历史区分）。
+  pending: TimelineQuestion[] | null;
 }
 
 // useSessionTimeline：按游标增量轮询活跃会话的结构化时间线，累积事件。
@@ -23,16 +26,41 @@ export function useSessionTimeline({ sessionId, active }: UseSessionTimelineArgs
   const [title, setTitle] = useState('');
   const [supported, setSupported] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pending, setPending] = useState<TimelineQuestion[] | null>(null);
   const cursorRef = useRef(0);
+  const eventsLenRef = useRef(0); // 当前已累积事件数（供 ask-pending 回调即时读取设基线）
+  const pendingBaseLenRef = useRef(0); // 设 pending 时的事件数：转录超过它即视为已答 → 清 pending
 
-  // 会话切换：清空累积、重置游标。
+  // 会话切换：清空累积、重置游标 + 待答态。
   useEffect(() => {
     cursorRef.current = 0;
     setEvents([]);
     setTitle('');
     setSupported(null);
     setLoading(true);
+    setPending(null);
   }, [sessionId]);
+
+  // 维护事件数 ref（ask-pending 回调在另一闭包里，靠 ref 读最新长度）。
+  useEffect(() => {
+    eventsLenRef.current = events.length;
+  }, [events.length]);
+
+  // 订阅「待答 AskUserQuestion」：始终监听（不漏 —— 事件 fire-and-forget 无重放），按会话过滤。
+  useEffect(() => {
+    if (!sessionId) return;
+    const off = TranscriptService.onAskPending(sessionId, (questions) => {
+      setPending(questions.length ? questions : null);
+      pendingBaseLenRef.current = eventsLenRef.current; // 记录设 pending 时的事件数
+    });
+    return off;
+  }, [sessionId]);
+
+  // 答完自动清除：待答期间 Claude 阻塞、转录不增长；一旦答完（终端或卡片），转录落 tool_use+tool_result
+  // → 事件数超过设 pending 时的基线 → 清 pending（之后由转录的只读历史卡接管展示，无缝交接、不重叠）。
+  useEffect(() => {
+    if (pending && events.length > pendingBaseLenRef.current) setPending(null);
+  }, [events.length, pending]);
 
   useEffect(() => {
     if (!sessionId || !active) return;
@@ -69,5 +97,5 @@ export function useSessionTimeline({ sessionId, active }: UseSessionTimelineArgs
     };
   }, [sessionId, active]);
 
-  return { events, title, supported, loading };
+  return { events, title, supported, loading, pending };
 }

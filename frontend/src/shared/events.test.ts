@@ -10,6 +10,7 @@ const EXPECTED_BACKEND_EVENT_NAMES = {
   TerminalOutput: 'terminal:output',
   TerminalStatus: 'terminal:status',
   TerminalExit: 'terminal:exit',
+  TerminalAskPending: 'terminal:ask-pending',
   MCPeOutput: 'mc_pe:output',
   MCPeLaunched: 'mc_pe:launched',
   MCPeExited: 'mc_pe:exited',

@@ -12,6 +12,11 @@ const (
 	TerminalStatus = "terminal:status" // 会话状态变更（active/idle/...）
 	TerminalExit   = "terminal:exit"   // 子进程退出
 
+	// TerminalAskPending：被启动 CLI 的 PreToolUse(AskUserQuestion) hook 经 REST 上报「待答问题」，
+	// orchestrator 转发给前端卡片，使其在该问题落盘转录之前就能渲染可点选项并作答（点选→写 PTY 按键）。
+	// payload 见 TerminalAskPendingPayload；前端按 sessionId 分发。仅 XK 启动的 claude/reclaude 会话有此事件。
+	TerminalAskPending = "terminal:ask-pending"
+
 	// Local History 自动捕获事件（后端 lhwatcher 保存版本成功 → 前端历史页 live 刷新）。
 	// payload 见 LocalHistoryChangedPayload；前端按 projectPath 过滤后重拉当前列表。
 	LocalHistoryChanged = "localhistory:changed"
@@ -62,6 +67,27 @@ type TerminalStatusPayload struct {
 type TerminalExitPayload struct {
 	SessionID string `json:"sessionId"`
 	ExitCode  int    `json:"exitCode"`
+}
+
+// AskOption / AskQuestion 是 AskUserQuestion 工具 input 的结构化形态（字段对齐其 input schema；
+// 与 transcript.AskOption/AskQuestion 同形，但作为前后端事件契约的独立 wire 类型，不跨层耦合 transcript 包）。
+type AskOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+}
+
+type AskQuestion struct {
+	Header      string      `json:"header,omitempty"`
+	Question    string      `json:"question"`
+	MultiSelect bool        `json:"multiSelect,omitempty"`
+	Options     []AskOption `json:"options"`
+}
+
+// TerminalAskPendingPayload 是 TerminalAskPending 事件载荷。SessionID = PTY 会话 id（前端据此分发）；
+// Questions = 待答问题（PreToolUse hook 从 tool_input 透传、orchestrator 反序列化）。
+type TerminalAskPendingPayload struct {
+	SessionID string        `json:"sessionId"`
+	Questions []AskQuestion `json:"questions"`
 }
 
 // LocalHistoryChangedPayload 是 LocalHistoryChanged 事件载荷。
@@ -148,6 +174,7 @@ func Register() {
 	application.RegisterEvent[TerminalOutputPayload](TerminalOutput)
 	application.RegisterEvent[TerminalStatusPayload](TerminalStatus)
 	application.RegisterEvent[TerminalExitPayload](TerminalExit)
+	application.RegisterEvent[TerminalAskPendingPayload](TerminalAskPending)
 	application.RegisterEvent[LocalHistoryChangedPayload](LocalHistoryChanged)
 	application.RegisterEvent[OrchestratorLaunchPayload](OrchestratorLaunch)
 	application.RegisterEvent[OrchestratorSessionStartedPayload](OrchestratorSessionStarted)

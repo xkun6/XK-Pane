@@ -94,6 +94,44 @@ func (s *Service) handleSessionStarted(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
+// askPendingRequest 是 POST /api/terminal/ask-pending 的请求体（cli-hook 的 PreToolUse(AskUserQuestion)
+// 上报）。ToolInput 透传工具 input（{questions:[...]}），后端只取 questions 转发给前端卡片。
+type askPendingRequest struct {
+	PtySessionID string `json:"ptySessionId"`
+	ToolInput    struct {
+		Questions []events.AskQuestion `json:"questions"`
+	} `json:"toolInput"`
+}
+
+// handleAskPending 接收 PreToolUse(AskUserQuestion) 上报：校验 token + 限流 → emit TerminalAskPending。
+// 为什么需要旁路：待答的 AskUserQuestion 在终端答完前【不会落进 JSONL 转录】，卡片轮询转录永远看不到
+// 待答态、无从渲染/作答。本端点让 hook 在工具执行前把问题推给卡片，卡片即时渲染可点选项、点选写 PTY 按键作答。
+func (s *Service) handleAskPending(w http.ResponseWriter, r *http.Request) {
+	if !s.verifyToken(r) {
+		writeJSONError(w, http.StatusUnauthorized, "Invalid or missing Bearer token")
+		return
+	}
+	if !s.rl.allow() {
+		writeJSONError(w, http.StatusTooManyRequests, "Rate limit exceeded")
+		return
+	}
+	var req askPendingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if req.PtySessionID == "" {
+		writeJSONError(w, http.StatusBadRequest, "ptySessionId required")
+		return
+	}
+	s.emitEvent(events.TerminalAskPending, events.TerminalAskPendingPayload{
+		SessionID: req.PtySessionID,
+		Questions: req.ToolInput.Questions,
+	})
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
+
 // handleTriggerNotification 接收 cli-hook notify 的触发：校验 token + 限流 → notification.Trigger。
 func (s *Service) handleTriggerNotification(w http.ResponseWriter, r *http.Request) {
 	if !s.verifyToken(r) {
