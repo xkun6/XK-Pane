@@ -50,9 +50,7 @@ description: XK-Pane 编排原语：把已有 plan md 交 Codex 用 xkpane-spec-
 
 1. 从 `$ARGUMENTS` 取 plan 路径；为空则回顾对话上下文找最近提到的 plan md；都没有就问用户要哪份（推荐 `docs/plans/*.md` 或 `.xkpanes/plans/*.md`）。
 2. 用 Read 确认文件存在、非空。
-3. 备好两种路径形式（送审 prompt 用绝对路径优先）：
-   - Windows：`C:\...\docs\plans\foo.md`
-   - WSL：`/mnt/c/.../docs/plans/foo.md`（`C:\Users\xxx\...` → `/mnt/c/Users/xxx/...`）
+3. 备好 plan 的 Windows 绝对路径（送审 prompt 用，如 `C:\...\docs\plans\foo.md`）。
 4. 初始化 `iteration = 1`（仅在对话上下文维护，不强制落文件）。
 
 ---
@@ -61,7 +59,7 @@ description: XK-Pane 编排原语：把已有 plan md 交 Codex 用 xkpane-spec-
 
 ### 第一次（iteration = 1）
 
-先与用户确认用哪个 Codex 环境（本地 Codex 推荐 / WSL Codex），然后调用 launch_task：
+调用 launch_task：
 
 ```
 launch_task(
@@ -74,7 +72,7 @@ launch_task(
 
 **发前自检 3 件事**：
 1. prompt 是**一行**（无真换行、无 `\n` 字面量）。
-2. `<plan_path>` 已换成真实绝对路径（`J:\...\foo.md` 或 `/mnt/c/.../foo.md`），不是占位符、不是仅文件名。
+2. `<plan_path>` 已换成真实绝对路径（如 `J:\...\foo.md`），不是占位符、不是仅文件名。
 3. 第一个 token 是 `[SPEC-REVIEW ONLY ...]`。
 
 记下返回的 `sessionId` 为 `current_review_session`。

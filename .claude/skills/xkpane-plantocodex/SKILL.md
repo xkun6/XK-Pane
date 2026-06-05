@@ -59,8 +59,7 @@ plan 确认后，用 `AskUserQuestion` 询问交付去向：
 问题: 把 plan 交给哪个 codex？
 选项:
   1. 新建 codex 会话
-  2. 新建 WSL codex 会话
-  3. 发送到已有会话（我给你标签关键词）
+  2. 发送到已有会话（我给你标签关键词）
 ```
 
 若选「已有会话」：调用 `list_sessions`，在返回列表里按 `cliTool == "codex"` 且 `title` 含用户给的关键词匹配，取其 `sessionId`。
@@ -71,10 +70,9 @@ plan 确认后，用 `AskUserQuestion` 询问交付去向：
 
 ## 5. Phase 3 — 交付 plan
 
-### 5.1 路径处理
+### 5.1 路径
 
-- **本地 codex**：直接用 plan 文件的 Windows 绝对路径。
-- **WSL codex**：把 `C:\Users\xxx\.claude\plans\name.md` 转成 `/mnt/c/Users/xxx/.claude/plans/name.md`。
+- 用 plan 文件的 Windows 绝对路径（如 `C:\Users\xxx\.claude\plans\name.md`）。
 
 ### 5.2 交接 prompt（统一话术）
 
@@ -87,7 +85,7 @@ Plan 文件: <plan_path>
 
 > plan 较长时无需把正文塞进 prompt——plan 本就落盘在 `.claude/plans/`，codex 读文件即可。若另需附带临时上下文且内容长（>200 字），可写到 `.xkpanes/prompts/<name>.md`，prompt 里只放 `Read '<路径>' and follow it.`。
 
-### 5.3 三种下发方式
+### 5.3 两种下发方式
 
 **新建 codex 会话**：
 
@@ -97,17 +95,6 @@ launch_task(
   cliTool: "codex",
   prompt: "请阅读 plan 文件并严格按其中方案实施代码……\nPlan 文件: <plan_path>",
   title: "Codex: <简短描述>"
-)
-```
-
-**新建 WSL codex 会话**（项目路径用 WSL UNC，如 `\\wsl.localhost\Ubuntu\home\user\repo`，`launch_task` 自动以 WSL 模式启动）：
-
-```
-launch_task(
-  projectPath: <WSL 项目路径>,
-  cliTool: "codex",
-  prompt: "请阅读 plan 文件并严格按其中方案实施代码……\nPlan 文件: <wsl_plan_path>",
-  title: "Codex(WSL): <简短描述>"
 )
 ```
 
@@ -164,7 +151,6 @@ codex 进入 `idle` / `exited` 后：
 |------|------|
 | 不下场写码 | 实施全程归 codex；你只规划、轮询、验收、追加指令 |
 | plan 是交接物 | plan 不够细 → codex 现场猜 → 偏题；宁可在 Phase 1 多花时间 |
-| WSL 路径转换 | Windows `C:\...` → `/mnt/c/...`；WSL UNC 项目路径让 `launch_task` 自动走 WSL |
 | 超时处理 | codex 超 10 分钟仍 `active`，提醒用户检查该会话是否卡住 |
 | 迭代沿用同会话 | 续做用 `submit_to_session` 发同一 `sessionId`，保留 codex 的上下文连续性 |
 

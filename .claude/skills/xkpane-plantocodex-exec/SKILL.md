@@ -68,9 +68,7 @@ description: XK-Pane bundled skill：把 plan md 交 Codex 经 xkpane-spec-revie
      选项: 推荐若干 docs/plans/*.md 或让用户输入路径
    ```
 2. 用 Read 工具确认文件存在、非空。
-3. 准备好两种路径形式备用：
-   - Windows：`C:\...\docs\plans\foo.md`
-   - WSL：`/mnt/c/.../docs/plans/foo.md`
+3. 准备好 plan 的 Windows 绝对路径备用（如 `C:\...\docs\plans\foo.md`）。
 4. 初始化迭代计数器 `iteration = 1`（仅在对话上下文中维护，不强制写入文件）。
 
 ---
@@ -78,15 +76,6 @@ description: XK-Pane bundled skill：把 plan md 交 Codex 经 xkpane-spec-revie
 ## 5. Phase 2：起评审窗口送审
 
 ### 5.1 第一次（iteration = 1）
-
-用户选评审 Codex 环境：
-```
-AskUserQuestion:
-  问题: 用哪个 Codex 评审 plan？
-  选项:
-    1. 新建本地 Codex（推荐）
-    2. 新建 WSL Codex
-```
 
 调用 launch_task（**prompt 单行**，仅替换 `<plan_path>` / `<plan basename>` / `<项目路径>` 三个占位符为实际值，绝对路径优先）：
 
@@ -101,7 +90,7 @@ launch_task(
 
 **自检 3 件事**：
 1. prompt 是**一行**（无真换行符、无 `\n` 字面量）
-2. `<plan_path>` 已替换为真实绝对路径（`J:\...\foo.md` 或 `/mnt/c/.../foo.md`），不是占位符字面量也不是仅文件名
+2. `<plan_path>` 已替换为真实绝对路径（如 `J:\...\foo.md`），不是占位符字面量也不是仅文件名
 3. 第一个 token 是 `[SPEC-REVIEW ONLY ...]` 标记
 
 记录返回的 `sessionId` 为 `current_review_session`。
@@ -211,15 +200,7 @@ AskUserQuestion:
 评审通过后：
 
 1. 通报用户：「评审通过（第 N 轮，Total: XX/100），起 Codex 实施窗口」。
-2. 用户选实施环境（默认与评审窗口同环境）：
-   ```
-   AskUserQuestion:
-     问题: 用哪个 Codex 实施？
-     选项:
-       1. 新建本地 Codex（推荐，与评审窗口隔离）
-       2. 新建 WSL Codex
-   ```
-3. 起独立 Codex 窗口（这里 prompt 不需要 `[SPEC-REVIEW ONLY]` 标记，因为是实施而非评审）：
+2. 起独立 Codex 窗口（这里 prompt 不需要 `[SPEC-REVIEW ONLY]` 标记，因为是实施而非评审）：
    ```
    launch_task(
      projectPath: <项目路径>,
@@ -229,7 +210,7 @@ AskUserQuestion:
    )
    ```
    记录 sessionId 为 `exec_session`。
-4. 启动监控：
+3. 启动监控：
    ```
    CronCreate:
      cron: "*/1 * * * *"
@@ -243,12 +224,12 @@ AskUserQuestion:
           - 删除本 cron
        3. active: 静默等待
    ```
-5. 实施完成后汇总给用户：
+4. 实施完成后汇总给用户：
    - Codex 输出摘要（关键决策、踩到的坑）
    - 代码变更摘要（`git diff --stat` + 主要修改点）
    - 是否有错误或未完成
    - 建议下一步（test / review / commit / 继续迭代）
-6. （可选）评审窗口用完即弃，可 `kill_session(sessionId: <current_review_session>)` 释放资源。
+5. （可选）评审窗口用完即弃，可 `kill_session(sessionId: <current_review_session>)` 释放资源。
 
 ---
 
@@ -270,7 +251,6 @@ AskUserQuestion:
 - **实施窗口与评审窗口隔离** —— Phase 6 必须 launch_task 新窗口，不能 `/new` 复用评审窗口。
 - **Claude 改 plan，Codex 评审 / 实施** —— 三个角色边界清楚。
 - **iteration 号必须通过 prompt 显式传给 spec-review** —— `/new` 清掉了上轮对话，全靠 prompt 告知。
-- **WSL 路径转换** —— `C:\Users\xxx\docs\plans\foo.md` → `/mnt/c/Users/xxx/docs/plans/foo.md`。
 - **超时处理** —— Codex 评审一般 1-3 分钟；实施时间不定，超过 30 分钟仍 active 提醒用户检查 Exec 窗口。
 - **评审窗本就用完即弃，不要 resume** —— 多次 `/new` 后窗口内部最新对话已不在 launch 时那条 session 记录里，resume 可能拿到旧对话；要继续评审就走 submit_to_session 复用同 sessionId，不要 resume。
 - **想跳过评审直接派发** —— 用 `xkpane-plantocodex` skill（无评审版），不是这个。

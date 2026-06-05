@@ -77,8 +77,6 @@ description: 用 XK-Pane 的 panes MCP 在已注册项目里启动 Claude/Codex 
 
 可选验证：用上一步的 `sessionId` 调 `get_session_status`，看 `status` 是否 `active`、`lastOutputAt` 是否在更新；若手里没有 `sessionId`，先 `list_sessions` 定位。
 
-> **关于 WSL**：当前 XK-Pane 编排面只绑 `127.0.0.1`，不解析 WSL 远端路径——`project_path` 按本机 Windows 路径填即可，无需 WSL 特判参数。
-
 ---
 
 ## 4. 示例
