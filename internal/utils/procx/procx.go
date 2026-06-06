@@ -48,6 +48,12 @@ type Spec struct {
 	// 默认（零值）即 false —— 业务方按需打开。
 	CaptureOutput bool
 
+	// ShowWindow=true 时不隐藏子进程窗口（仅 Windows 有意义，Unix 忽略）。
+	// 默认 false：保持 HideWindow（控制台子进程不闪窗，铁律）。
+	// 仅在启动 GUI 程序时设为 true —— 典型如 explorer.exe 定位文件，
+	// SW_HIDE 会连带把弹出的文件管理器窗口一起隐藏，导致"看不到窗口"。
+	ShowWindow bool
+
 	// KillGracePeriod 在 Stop / context 取消后给子进程的"优雅退出"时间，
 	// 超时仍未退出则强杀。<=0 取默认 5s。
 	KillGracePeriod time.Duration
@@ -102,7 +108,7 @@ func StartCtx(ctx context.Context, spec Spec) (*Process, error) {
 	}
 
 	// 平台相关 SysProcAttr / Job 准备
-	applyPlatformAttrs(cmd)
+	applyPlatformAttrs(cmd, spec.ShowWindow)
 
 	p := &Process{
 		cmd:    cmd,

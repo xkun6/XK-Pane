@@ -15,7 +15,8 @@ type platformState struct {
 
 // applyPlatformAttrs：让 fork 后的 child 调用 setsid 形成新会话 + 进程组。
 // 这样我们 kill -PGID 整组都死，子孙进程不会逃逸。
-func applyPlatformAttrs(cmd *exec.Cmd) {
+// showWindow 仅 Windows 有意义（Unix 无"隐藏窗口"概念），此处忽略。
+func applyPlatformAttrs(cmd *exec.Cmd, _ bool) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}

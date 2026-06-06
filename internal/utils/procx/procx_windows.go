@@ -20,12 +20,14 @@ type platformState struct {
 // applyPlatformAttrs 让 cmd 起来后挂到我们的 Job 之前先"挂起"。
 // CREATE_SUSPENDED 让进程主线程暂停，便于我们 AssignProcessToJobObject 后再恢复，
 // 避免子进程在被绑到 Job 之前就 fork 出新进程逃逸。
-func applyPlatformAttrs(cmd *exec.Cmd) {
+func applyPlatformAttrs(cmd *exec.Cmd, showWindow bool) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
 	cmd.SysProcAttr.CreationFlags |= windows.CREATE_SUSPENDED | windows.CREATE_NEW_PROCESS_GROUP
-	cmd.SysProcAttr.HideWindow = true
+	// HideWindow → STARTF_USESHOWWINDOW + SW_HIDE。对控制台子进程是"不闪窗"，
+	// 但对 explorer.exe 这类 GUI 启动器会把弹出的窗口一并隐藏，故 ShowWindow 时不设。
+	cmd.SysProcAttr.HideWindow = !showWindow
 }
 
 // bindToGroup 在 Start 之后立刻调用：建 Job → 设 KILL_ON_JOB_CLOSE → 把子进程加入。
