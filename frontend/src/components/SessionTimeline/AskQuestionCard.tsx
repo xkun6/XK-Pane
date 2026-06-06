@@ -11,7 +11,7 @@ import CheckBoxOutlineBlankRoundedIcon from '@mui/icons-material/CheckBoxOutline
 import { useT } from '@/i18n';
 import type { TimelineQuestion } from '@/services';
 import { sessionTimelineStyles } from './SessionTimeline.styles';
-import { buildAllAnswersKeys } from './answerKeys';
+import { buildAnswerChunks } from './answerKeys';
 
 export interface AskQuestionCardProps {
   questions: TimelineQuestion[];
@@ -24,6 +24,9 @@ export interface AskQuestionCardProps {
 // 合并若干 sx（落选项过滤）。styles 工厂返回的是纯对象，数组形态由 MUI 运行时支持，这里断言以过类型。
 const sx = (...parts: Array<SxProps<Theme> | false | undefined>): SxProps<Theme> =>
   parts.filter(Boolean) as SxProps<Theme>;
+
+// 段间延时(ms)：选择器每题 tab 独立挂载，发完一段（含切到下一 tab）后等其挂载，再发下一段，防丢键。
+const CHUNK_DELAY_MS = 120;
 
 // AskQuestionCard：把 AskUserQuestion 渲染成「表单式」问题卡 —— 所有问题同屏可选（单选=单选钮、多选=复选框），
 // 全部答完后点底部「提交」一次性把所有选择翻译成 PTY 按键序列驱动选择器作答（对齐选择器逐题推进、末题 Enter 提交）。
@@ -49,10 +52,17 @@ export const AskQuestionCard = ({ questions, interactive, onRawInput }: AskQuest
   // 每题至少选一项才允许提交（单选必有 1；多选要求 ≥1）。
   const allAnswered = questions.every((_, qIdx) => (selections[qIdx]?.length ?? 0) > 0);
 
-  const submit = (): void => {
+  const submit = async (): Promise<void> => {
     if (!allAnswered || submitted) return;
-    onRawInput(buildAllAnswersKeys(questions, selections));
     setSubmitted(true);
+    // 逐段写入、段间延时：选择器多题是 tab 式（→ 切题、单选 Enter 自动前进、多选 Space 切换），
+    // 每题 tab 独立挂载，一次性猛灌会在切 tab 瞬间丢键（详见 answerKeys.ts）。
+    const chunks = buildAnswerChunks(questions, selections);
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      if (chunk) onRawInput(chunk);
+      if (i < chunks.length - 1) await new Promise<void>((r) => setTimeout(r, CHUNK_DELAY_MS));
+    }
   };
 
   return (
@@ -147,7 +157,7 @@ export const AskQuestionCard = ({ questions, interactive, onRawInput }: AskQuest
               variant="contained"
               startIcon={<SendRoundedIcon />}
               disabled={!allAnswered}
-              onClick={submit}
+              onClick={() => void submit()}
             >
               {t('sessionTimeline.ask.submit')}
             </Button>
