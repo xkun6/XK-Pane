@@ -9,13 +9,13 @@
 //   - 写入流控（Windows 高吞吐防卡）
 //   - agent CLI 输出剥离 alternate-buffer 切屏序列（输出留 normal buffer，滚轮滚历史）
 //   - Ctrl/Cmd+V 粘贴（拦掉 xterm 默认 ^V，交浏览器原生 paste 写一份）/ 有选区时 Ctrl/Cmd+C 复制（无选区透传 SIGINT）
-// 仍刻意延后：WebGL 渲染器、运行时切主题热更、内层分屏、reconnect/restore、wheel→方向键、
+// 仍刻意延后：内层分屏、reconnect/restore、wheel→方向键、
 //   剪贴板文件路径/图片粘贴（Tauri 专有，依赖未移植能力）。
 //
 // MVVM：本 hook 不返回 JSX，只创建并返回 hostRef + 管理副作用；经 services/TerminalService
 //   与后端通信，绝不直接 import @bindings（xterm 为第三方库，允许直接 import）。
 import { useEffect, useRef } from 'react';
-import { useTheme } from '@mui/material';
+import { useTheme, type Theme } from '@mui/material';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
@@ -35,7 +35,7 @@ import {
   buildKittyKeyboardProtocolReport,
 } from './compat/terminalCapabilityReports';
 import { buildOscColorReply } from './compat/terminalOscColor';
-import { buildTerminalPalette } from './compat/terminalTheme';
+import { buildTerminalPalette, type TerminalThemePalette } from './compat/terminalTheme';
 import {
   shouldKeepCliOutputInNormalBuffer,
   stripAlternateBufferSequences,
@@ -56,6 +56,40 @@ const RESIZE_DEBOUNCE_MS = 150;
 const MIN_CONTAINER_DELTA = 5;
 
 const noopLogger = (): void => {};
+
+// 把当前 MUI 主题映射成 xterm 主题 + 配套调色板（OSC 颜色应答与渲染共用同一组色）。
+// 前景/背景/光标/选区取 foundation 语义槽位，ANSI 16 色按主题明暗选表（见 terminalTheme.ts）。
+function buildXtermTheme(theme: Theme): { xtermTheme: ITheme; palette: TerminalThemePalette } {
+  const palette = buildTerminalPalette(
+    theme.palette.foundation.text.primary,
+    theme.palette.foundation.bg.content,
+    theme.palette.mode,
+  );
+  const xtermTheme: ITheme = {
+    background: palette.background,
+    foreground: palette.foreground,
+    cursor: theme.palette.foundation.accent,
+    cursorAccent: palette.background,
+    selectionBackground: theme.palette.foundation.bg.active,
+    black: palette.black,
+    red: palette.red,
+    green: palette.green,
+    yellow: palette.yellow,
+    blue: palette.blue,
+    magenta: palette.magenta,
+    cyan: palette.cyan,
+    white: palette.white,
+    brightBlack: palette.brightBlack,
+    brightRed: palette.brightRed,
+    brightGreen: palette.brightGreen,
+    brightYellow: palette.brightYellow,
+    brightBlue: palette.brightBlue,
+    brightMagenta: palette.brightMagenta,
+    brightCyan: palette.brightCyan,
+    brightWhite: palette.brightWhite,
+  };
+  return { xtermTheme, palette };
+}
 
 export interface UseTerminalViewArgs {
   /** 已绑定的后端 PTY 会话 id；null = 尚未启动（仅渲染空终端，等待回填）。 */
@@ -84,6 +118,10 @@ export function useTerminalView({
   const fitRef = useRef<FitAddon | null>(null);
   const schedulerRef = useRef<TerminalLayoutScheduler | null>(null);
   const flowRef = useRef<TerminalWriteFlowControl | null>(null);
+  // 当前终端调色板：OSC 颜色应答读它（运行时切主题后由热更新 effect 刷新），保证应答的 fg/bg/ANSI 是最新色。
+  const paletteRef = useRef<TerminalThemePalette | null>(null);
+  // 主题热更新是否已越过首帧：挂载 effect 已用初始 theme 设过 xterm 主题，热更新 effect 首跑应跳过（见下）。
+  const themeHotSyncReadyRef = useRef(false);
 
   // 让 scheduler getter / 异步回调读到最新值（避免过期闭包）。
   const sessionIdRef = useRef<string | null>(sessionId);
@@ -102,34 +140,10 @@ export function useTerminalView({
     const host = hostRef.current;
     if (!host) return;
 
-    // 终端调色板：前景/背景取 foundation 主题，ANSI 16 色取终端域常量（见 terminalTheme.ts）。
-    const palette = buildTerminalPalette(
-      theme.palette.foundation.text.primary,
-      theme.palette.foundation.bg.content,
-    );
-    const xtermTheme: ITheme = {
-      background: palette.background,
-      foreground: palette.foreground,
-      cursor: theme.palette.foundation.accent,
-      cursorAccent: palette.background,
-      selectionBackground: theme.palette.foundation.bg.active,
-      black: palette.black,
-      red: palette.red,
-      green: palette.green,
-      yellow: palette.yellow,
-      blue: palette.blue,
-      magenta: palette.magenta,
-      cyan: palette.cyan,
-      white: palette.white,
-      brightBlack: palette.brightBlack,
-      brightRed: palette.brightRed,
-      brightGreen: palette.brightGreen,
-      brightYellow: palette.brightYellow,
-      brightBlue: palette.brightBlue,
-      brightMagenta: palette.brightMagenta,
-      brightCyan: palette.brightCyan,
-      brightWhite: palette.brightWhite,
-    };
+    // 终端调色板 + xterm 主题：取自当前 foundation 主题（前景/背景/ANSI 随明暗切换）。palette 存入 ref
+    // 供 OSC 颜色应答读取；运行时切主题由下方独立 effect 热更新（挂载时这里捕获的只是初始值）。
+    const { xtermTheme, palette: initialPalette } = buildXtermTheme(theme);
+    paletteRef.current = initialPalette;
 
     const term = new Terminal({
       allowProposedApi: true,
@@ -194,6 +208,11 @@ export function useTerminalView({
       if (sid) void TerminalService.write(sid, payload).catch(() => {});
       return true;
     };
+    // OSC 颜色应答：读 paletteRef（运行时切主题后是最新色）；palette 未就绪时放行不应答。
+    const oscReply = (ident: 4 | 10 | 11, data: string): boolean => {
+      const p = paletteRef.current;
+      return p ? reply(buildOscColorReply(ident, data, p)) : false;
+    };
     const disposables = [
       term.parser.registerCsiHandler({ final: 'n' }, (params) =>
         reply(
@@ -221,9 +240,9 @@ export function useTerminalView({
       term.parser.registerCsiHandler({ prefix: '?', final: 'u' }, (params) =>
         reply(buildKittyKeyboardProtocolReport(params, '?')),
       ),
-      term.parser.registerOscHandler(4, (data) => reply(buildOscColorReply(4, data, palette))),
-      term.parser.registerOscHandler(10, (data) => reply(buildOscColorReply(10, data, palette))),
-      term.parser.registerOscHandler(11, (data) => reply(buildOscColorReply(11, data, palette))),
+      term.parser.registerOscHandler(4, (data) => oscReply(4, data)),
+      term.parser.registerOscHandler(10, (data) => oscReply(10, data)),
+      term.parser.registerOscHandler(11, (data) => oscReply(11, data)),
     ];
 
     // 写入流控：Windows 上启用 watermark（高吞吐输出防卡 webview 主线程）。
@@ -335,7 +354,7 @@ export function useTerminalView({
       schedulerRef.current = null;
       flowRef.current = null;
     };
-    // 只在 mount 接线一次；theme 于此捕获（运行时切主题热更属 TODO）。
+    // 只在 mount 接线一次；theme 仅用于构造初始 xterm 主题，运行时切主题由下方独立 effect 热更新。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -374,6 +393,30 @@ export function useTerminalView({
       schedulerRef.current?.flush('active', { focusIfSafe: true });
     }
   }, [active]);
+
+  // 运行时切主题热更新：foundation 主题变化（显式切预设、或「跟随系统」明暗翻转）时，重建 xterm 主题 +
+  // 调色板并应用到已挂载终端。term.options.theme 经 xterm onSpecificOptionChange('theme') → onChangeColors
+  // 通知渲染器（含 WebGL addon 的 _refreshCharAtlas）整屏重新着色。没有这步，xterm 主题会停在挂载时捕获的
+  // 值，切到暗色后终端仍是亮色、且亮底 ANSI 调色板不跟随明暗 —— 即本次修复的两个症状。
+  useEffect(() => {
+    // 跳过首帧：挂载 effect 已用同一 theme 经 new Terminal({theme}) 设过初始主题，首帧再赋值只会触发一次
+    // 同色的图集重建（无害但白费）。只有主题真正变化（首帧之后）才热更新。
+    if (!themeHotSyncReadyRef.current) {
+      themeHotSyncReadyRef.current = true;
+      return;
+    }
+    const term = termRef.current;
+    if (!term) return;
+    const { xtermTheme, palette } = buildXtermTheme(theme);
+    paletteRef.current = palette;
+    term.options.theme = xtermTheme;
+  }, [
+    theme.palette.mode,
+    theme.palette.foundation.text.primary,
+    theme.palette.foundation.bg.content,
+    theme.palette.foundation.accent,
+    theme.palette.foundation.bg.active,
+  ]);
 
   return { hostRef };
 }
