@@ -36,6 +36,7 @@ func assertRoundTrip(t *testing.T, p Packet) {
 func TestRoundTripVariants(t *testing.T) {
 	assertRoundTrip(t, ExecuteServerCode("print('hi')"))
 	assertRoundTrip(t, ExecuteClientCode("print('你好，世界')"))
+	assertRoundTrip(t, ReloadMod())
 	assertRoundTrip(t, ReloadGame())
 	assertRoundTrip(t, ReloadAllShaders())
 	assertRoundTrip(t, ReloadSingleShader("着色器_test.fsh"))

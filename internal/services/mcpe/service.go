@@ -235,6 +235,30 @@ func (s *Service) GetMcdkBridgeStatus() storage.McdkBridgeStatus {
 	return out
 }
 
+// ─────────────────────── 调试桥热重载（Wails 方法） ───────────────────────
+
+// ReloadScript 经 MCDK 桥触发游戏内脚本热重载（typeID=1 AUTO_RELOAD → 游戏内 RELOAD_MOD，
+// 等价于游戏内按「重载脚本」热键，但无需窗口聚焦）。fire-and-forget。
+func (s *Service) ReloadScript() error {
+	return s.sendBridgeReload(mcdkbridge.ReloadMod())
+}
+
+// ReloadWorld 经 MCDK 桥触发重启本地世界（typeID=5 → 游戏内 RELOAD_WORLD，等价于游戏内
+// 按「重载世界」热键，不退游戏）。fire-and-forget。
+func (s *Service) ReloadWorld() error {
+	return s.sendBridgeReload(mcdkbridge.ReloadGame())
+}
+
+func (s *Service) sendBridgeReload(pkt mcdkbridge.Packet) error {
+	if s.bridge == nil {
+		return fmt.Errorf("MCDK 调试桥不可用")
+	}
+	if err := s.bridge.SendPacket(pkt); err != nil {
+		return fmt.Errorf("发送热重载失败（调试桥未连入？）: %w", err)
+	}
+	return nil
+}
+
 // ─────────────────────── 启动主流程（12 步） ───────────────────────
 
 // Launch 复刻 ConfigRunTask.run 的 12 步主流程。include_test_mod=true 且桥可用时注入

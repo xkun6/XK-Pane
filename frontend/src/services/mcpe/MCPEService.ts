@@ -82,6 +82,15 @@ export const MCPEService = {
     if (!isDesktop) return desktopOnly();
     return Binding.GetMcdkBridgeStatus();
   },
+  // 经 MCDK 桥触发游戏内热重载（fire-and-forget）；桥未连入时后端返回错误。
+  async reloadScript(): Promise<void> {
+    if (!isDesktop) return desktopOnly();
+    await Binding.ReloadScript();
+  },
+  async reloadWorld(): Promise<void> {
+    if (!isDesktop) return desktopOnly();
+    await Binding.ReloadWorld();
+  },
 
   // 事件订阅（全局，按 runId 在调用方路由）。返回取消函数，务必在 useEffect 里 return。
   onOutput(handler: (p: MCOutputPayload) => void): () => void {

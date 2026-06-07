@@ -28,12 +28,14 @@ import (
 // HeaderLen 帧头长度（u16 type_id + u32 length）。
 const HeaderLen = 6
 
-// PacketType 数据帧类型。type id 3..8（0/1/2 未在 C 端使用：1=AUTO_RELOAD 仅游戏内
-// Python 侧存在，C 端永不发；2 保留空位）。Go 用 uint16 承载，未知值原样透传（对齐
+// PacketType 数据帧类型。type id 1、3..8（0/2 未使用，2 为保留空位）。1=AUTO_RELOAD
+// 触发游戏内 RELOAD_MOD 脚本热重载——cc-pane 原版 C 端不发此型（仅游戏内保存时自触发），
+// XK 额外用它支撑运行面板「热重载脚本」按钮。Go 用 uint16 承载，未知值原样透传（对齐
 // cc-pane PacketType::Unknown 的无损往返语义）。
 type PacketType uint16
 
 const (
+	PacketReloadMod          PacketType = 1
 	PacketExecuteServerCode  PacketType = 3
 	PacketExecuteClientCode  PacketType = 4
 	PacketReloadGame         PacketType = 5
@@ -55,6 +57,7 @@ func NewPacket(t PacketType, payload []byte) Packet { return Packet{Type: t, Pay
 
 func ExecuteServerCode(code string) Packet { return NewPacket(PacketExecuteServerCode, []byte(code)) }
 func ExecuteClientCode(code string) Packet { return NewPacket(PacketExecuteClientCode, []byte(code)) }
+func ReloadMod() Packet                    { return NewPacket(PacketReloadMod, nil) }
 func ReloadGame() Packet                   { return NewPacket(PacketReloadGame, nil) }
 func ReloadAllShaders() Packet             { return NewPacket(PacketReloadAllShaders, nil) }
 func ReloadSingleShader(fileName string) Packet {

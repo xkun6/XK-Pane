@@ -3,6 +3,8 @@ import { Box, Button, Link, Tooltip, Typography, useTheme } from '@mui/material'
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import StopRoundedIcon from '@mui/icons-material/StopRounded';
 import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
+import BoltRoundedIcon from '@mui/icons-material/BoltRounded';
+import PublicRoundedIcon from '@mui/icons-material/PublicRounded';
 import { useT } from '@/i18n';
 import { MCPEService, NativeDialogs, type MCPackage } from '@/services';
 import { copyText } from '@/shared/clipboard';
@@ -13,34 +15,12 @@ import { resolvePath, shortTs, tokenize, type Segment } from './launchPanelForma
 
 const BRIDGE_POLL_MS = 2000;
 
-// 桥状态徽章：2s 轮询（桥状态是全局单例，runId 仅占位）。定义在模块顶层（避免内联换组件类型）。
-const BridgeStatusBadge = () => {
+// 桥状态徽章（presentational）：轮询由 LaunchPanel 统一持有，与「热重载」按钮共享 connected 态。
+// 定义在模块顶层（避免内联换组件类型）。
+const BridgeStatusBadge = ({ port, connected }: { port: number; connected: boolean }) => {
   const theme = useTheme();
   const styles = mcpeStyles(theme);
   const t = useT();
-  const [port, setPort] = useState<number | null>(null);
-  const [connected, setConnected] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    const fetchStatus = () => {
-      MCPEService.getBridgeStatus()
-        .then((s) => {
-          if (!alive) return;
-          setPort(s.port);
-          setConnected(s.connected);
-        })
-        .catch(() => {});
-    };
-    fetchStatus();
-    const timer = setInterval(fetchStatus, BRIDGE_POLL_MS);
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
-  }, []);
-
-  if (port === null) return null;
   return (
     <Box sx={styles.bridgeBadge}>
       <Box
@@ -66,6 +46,11 @@ export const LaunchPanel = ({ pkg, runtime }: { pkg: MCPackage; runtime?: MCRunR
   const { launch, stop, restart } = useMcpe();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [restarting, setRestarting] = useState(false);
+  const [bridge, setBridge] = useState<{ port: number | null; connected: boolean }>({ port: null, connected: false });
+
+  const running = !!runtime && !runtime.exited;
+  // 桥仅在「运行中 + 启用调试桥」时有意义；据此驱动徽章 + 热重载按钮的可用态。
+  const bridgeEnabled = running && pkg.debugOptions.includeTestMod;
 
   const fail = async (e: unknown) => {
     await NativeDialogs.error(t('mcpe.error.title'), messageOf(e));
@@ -119,7 +104,44 @@ export const LaunchPanel = ({ pkg, runtime }: { pkg: MCPackage; runtime?: MCRunR
     if (containerRef.current) containerRef.current.scrollTop = containerRef.current.scrollHeight;
   }, [output?.length]);
 
-  const running = !!runtime && !runtime.exited;
+  // 桥状态 2s 轮询（桥是全局单例）；仅在 bridgeEnabled 时拉，否则复位，避免空转。
+  useEffect(() => {
+    if (!bridgeEnabled) {
+      setBridge({ port: null, connected: false });
+      return;
+    }
+    let alive = true;
+    const fetchStatus = () => {
+      MCPEService.getBridgeStatus()
+        .then((s) => {
+          if (alive) setBridge({ port: s.port, connected: s.connected });
+        })
+        .catch(() => {});
+    };
+    fetchStatus();
+    const timer = setInterval(fetchStatus, BRIDGE_POLL_MS);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [bridgeEnabled]);
+
+  // 经桥热重载（fire-and-forget）；桥未连入时按钮已禁用，仅极端竞态下才会抛错 → 弹原生错误框。
+  const handleReloadScript = async () => {
+    try {
+      await MCPEService.reloadScript();
+    } catch (e) {
+      await fail(e);
+    }
+  };
+  const handleReloadWorld = async () => {
+    try {
+      await MCPEService.reloadWorld();
+    } catch (e) {
+      await fail(e);
+    }
+  };
+
   const pidText = runtime?.info.pid != null ? String(runtime.info.pid) : '?';
 
   return (
@@ -158,6 +180,39 @@ export const LaunchPanel = ({ pkg, runtime }: { pkg: MCPackage; runtime?: MCRunR
             >
               {restarting ? t('mcpe.action.restarting') : t('mcpe.action.restart')}
             </Button>
+            {pkg.debugOptions.includeTestMod && (
+              <>
+                <Tooltip title={bridge.connected ? t('mcpe.action.reloadScriptHint') : t('mcpe.action.bridgeRequired')}>
+                  {/* span 包裹：disabled 按钮自身不触发 Tooltip */}
+                  <Box component="span" sx={{ flexShrink: 0 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<BoltRoundedIcon />}
+                      disabled={!bridge.connected || restarting}
+                      onClick={() => void handleReloadScript()}
+                      sx={{ textTransform: 'none', flexShrink: 0 }}
+                    >
+                      {t('mcpe.action.reloadScript')}
+                    </Button>
+                  </Box>
+                </Tooltip>
+                <Tooltip title={bridge.connected ? t('mcpe.action.reloadWorldHint') : t('mcpe.action.bridgeRequired')}>
+                  <Box component="span" sx={{ flexShrink: 0 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<PublicRoundedIcon />}
+                      disabled={!bridge.connected || restarting}
+                      onClick={() => void handleReloadWorld()}
+                      sx={{ textTransform: 'none', flexShrink: 0 }}
+                    >
+                      {t('mcpe.action.reloadWorld')}
+                    </Button>
+                  </Box>
+                </Tooltip>
+              </>
+            )}
           </>
         )}
 
@@ -169,7 +224,9 @@ export const LaunchPanel = ({ pkg, runtime }: { pkg: MCPackage; runtime?: MCRunR
           </Typography>
         )}
 
-        {running && pkg.debugOptions.includeTestMod && <BridgeStatusBadge />}
+        {bridgeEnabled && bridge.port !== null && (
+          <BridgeStatusBadge port={bridge.port} connected={bridge.connected} />
+        )}
       </Box>
 
       <Box ref={containerRef} sx={styles.logArea}>
