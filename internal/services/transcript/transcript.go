@@ -43,10 +43,12 @@ const scanLineCap = 16 * 1024 * 1024
 
 // 文本上限（rune）：防超大 payload 拖垮手机渲染。工具结果/输入更短。
 const (
-	textCap       = 16000
-	toolResultCap = 4000
-	toolInputCap  = 4000
-	askFieldCap   = 2000 // AskUserQuestion 单字段（问题 / 选项标签 / 描述）文本上限（rune）
+	textCap         = 16000
+	toolResultCap   = 4000
+	toolInputCap    = 4000
+	askFieldCap     = 2000 // AskUserQuestion 单字段（问题 / 选项标签 / 描述）文本上限（rune）
+	diffLineCap     = 600  // Edit 结构化差异最多保留行数（超出截断、Truncated 标记）
+	diffLineRuneCap = 500  // Edit 差异单行最多 rune 数
 )
 
 // askToolName 是触发「结构化问题」解析的工具名（卡片渲染可点选项 + 作答）。
@@ -75,6 +77,23 @@ type Event struct {
 	// Questions 仅 Kind==KindToolUse 且 ToolName=="AskUserQuestion" 时填充：结构化问题，供卡片渲染
 	// 可点选项并把点选翻译成 PTY 按键作答。其余工具此字段为空 → 前端回退裸 JSON（ToolInput）渲染。
 	Questions []AskQuestion `json:"questions,omitempty"`
+	// Detail 仅 Kind==KindToolResult 可能填充：从 jsonl 行顶层 toolUseResult 解析的结构化细节
+	// （Edit 差异 / Bash 输出）。nil 表示无结构化细节，前端回退到 Text 纯文本渲染。
+	Detail *ToolResultDetail `json:"detail,omitempty"`
+}
+
+// ToolResultDetail 携带工具结果的结构化细节，供卡片做「差异 / 输出分离」渲染（数据源自 jsonl 行顶层 toolUseResult）。
+// 按形状判别工具类别（不依赖 toolName —— tool_result content 块不带工具名），对齐 claude-code-webui 的
+// isEditToolUseResult / isBashToolUseResult。
+type ToolResultDetail struct {
+	Kind      string   `json:"kind"`                // "edit" | "bash"
+	FilePath  string   `json:"filePath,omitempty"`  // edit：被修改文件路径
+	Diff      []string `json:"diff,omitempty"`      // edit：structuredPatch 合并后的差异行（每行带前导 +/-/空格）
+	Added     int      `json:"added,omitempty"`     // edit：新增行数（全量统计，不受 Diff 截断影响）
+	Removed   int      `json:"removed,omitempty"`   // edit：删除行数
+	Truncated bool     `json:"truncated,omitempty"` // edit：差异行超 diffLineCap 被截断（Diff 只含前段）
+	Stdout    string   `json:"stdout,omitempty"`    // bash：标准输出
+	Stderr    string   `json:"stderr,omitempty"`    // bash：标准错误（前端以 danger 色显示）
 }
 
 // AskOption / AskQuestion 是 AskUserQuestion 工具 input 的结构化形态（字段对齐其 input schema：
@@ -107,6 +126,9 @@ type rawLine struct {
 		Role    string          `json:"role"`
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
+	// ToolUseResult 是 user 行顶层（与 message 平级）的工具结果结构化元数据：Edit 带 structuredPatch、
+	// Bash 带 stdout/stderr 等。仅在该行含单个 tool_result 时用于解析 Event.Detail。
+	ToolUseResult json.RawMessage `json:"toolUseResult"`
 }
 
 type contentItem struct {
@@ -183,6 +205,14 @@ func parseUser(ln rawLine, idx int, res *Result) {
 	if json.Unmarshal(ln.Message.Content, &arr) != nil {
 		return
 	}
+	// 顶层 toolUseResult 是「整行级」元数据，无 tool_use_id 归属。仅当本行恰好含单个 tool_result 时
+	// 才能确定它属于哪个结果 → 只在此情形解析 Detail（多 tool_result 混排时回退纯文本，不误挂）。
+	toolResultCount := 0
+	for _, it := range arr {
+		if it.Type == "tool_result" {
+			toolResultCount++
+		}
+	}
 	for _, it := range arr {
 		switch it.Type {
 		case "text":
@@ -190,12 +220,69 @@ func parseUser(ln rawLine, idx int, res *Result) {
 				res.Events = append(res.Events, Event{Seq: idx, UUID: ln.UUID, Kind: KindUser, Text: t, Timestamp: ln.Timestamp})
 			}
 		case "tool_result":
-			res.Events = append(res.Events, Event{
+			ev := Event{
 				Seq: idx, UUID: ln.UUID, Kind: KindToolResult,
 				ToolUseID: it.ToolUseID, Text: extractToolResult(it), IsError: it.IsError, Timestamp: ln.Timestamp,
-			})
+			}
+			if toolResultCount == 1 {
+				ev.Detail = parseToolResultDetail(ln.ToolUseResult)
+			}
+			res.Events = append(res.Events, ev)
 		}
 	}
+}
+
+// parseToolResultDetail 从 jsonl 行顶层 toolUseResult 解析工具结果的结构化细节，供卡片做差异 / 输出渲染。
+// 按形状判别（不依赖 toolName）：含非空 structuredPatch → Edit 类（差异行 + 增删计数 + filePath）；
+// 含 stdout/stderr 字符串 → Bash 类。其余 / toolUseResult 是字符串 / 解析失败 → nil（前端回退 Text）。
+func parseToolResultDetail(raw json.RawMessage) *ToolResultDetail {
+	if len(raw) == 0 {
+		return nil
+	}
+	var probe struct {
+		FilePath        string `json:"filePath"`
+		StructuredPatch []struct {
+			Lines []string `json:"lines"`
+		} `json:"structuredPatch"`
+		Stdout *string `json:"stdout"`
+		Stderr *string `json:"stderr"`
+	}
+	if json.Unmarshal(raw, &probe) != nil {
+		return nil // toolUseResult 是字符串 / 非对象 → 无结构化细节
+	}
+	// Edit 类：合并所有 hunk 的差异行（带前导 +/-/空格），全量统计增删、按 cap 截断保留前段。
+	if len(probe.StructuredPatch) > 0 {
+		d := &ToolResultDetail{Kind: "edit", FilePath: probe.FilePath}
+		total := 0
+		for _, h := range probe.StructuredPatch {
+			for _, line := range h.Lines {
+				total++
+				switch {
+				case strings.HasPrefix(line, "+"):
+					d.Added++
+				case strings.HasPrefix(line, "-"):
+					d.Removed++
+				}
+				if len(d.Diff) < diffLineCap {
+					d.Diff = append(d.Diff, capRunes(line, diffLineRuneCap))
+				}
+			}
+		}
+		if len(d.Diff) == 0 {
+			return nil
+		}
+		d.Truncated = total > len(d.Diff)
+		return d
+	}
+	// Bash 类：stdout/stderr 均为字符串（区分正常输出与错误输出，前端给 stderr 上 danger 色）。
+	if probe.Stdout != nil && probe.Stderr != nil {
+		return &ToolResultDetail{
+			Kind:   "bash",
+			Stdout: capRunes(stripANSI(*probe.Stdout), toolResultCap),
+			Stderr: capRunes(stripANSI(*probe.Stderr), toolResultCap),
+		}
+	}
+	return nil
 }
 
 func parseAssistant(ln rawLine, idx int, res *Result) {

@@ -122,6 +122,67 @@ func TestParseNonAskToolHasNoQuestions(t *testing.T) {
 	}
 }
 
+// Edit 工具结果：行顶层 toolUseResult.structuredPatch → Detail（差异行 + 增删计数 + filePath）。
+func TestParseEditToolResultDetail(t *testing.T) {
+	body := `{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_e","type":"tool_result","content":"ok"}]},"toolUseResult":{"filePath":"/repo/a.go","structuredPatch":[{"oldStart":1,"oldLines":3,"newStart":1,"newLines":3,"lines":[" ctx"," before","-old line","+new line","+extra line"]}]},"uuid":"ue"}`
+	res := Parse(writeSample(t, body), 0)
+	if len(res.Events) != 1 {
+		t.Fatalf("len(Events) = %d, want 1: %+v", len(res.Events), res.Events)
+	}
+	d := res.Events[0].Detail
+	if d == nil || d.Kind != "edit" {
+		t.Fatalf("Detail mismatch: %+v", d)
+	}
+	if d.FilePath != "/repo/a.go" {
+		t.Fatalf("FilePath = %q", d.FilePath)
+	}
+	if d.Added != 2 || d.Removed != 1 {
+		t.Fatalf("Added/Removed = %d/%d, want 2/1", d.Added, d.Removed)
+	}
+	if len(d.Diff) != 5 || d.Diff[2] != "-old line" || d.Truncated {
+		t.Fatalf("Diff mismatch: %+v truncated=%v", d.Diff, d.Truncated)
+	}
+}
+
+// Bash 工具结果：行顶层 toolUseResult.{stdout,stderr} → Detail（输出分离，stderr 供 danger 渲染）。
+func TestParseBashToolResultDetail(t *testing.T) {
+	body := `{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_b","type":"tool_result","content":"merged"}]},"toolUseResult":{"stdout":"hello\nworld","stderr":"warn: x","interrupted":false,"isImage":false},"uuid":"ub"}`
+	res := Parse(writeSample(t, body), 0)
+	if len(res.Events) != 1 {
+		t.Fatalf("len(Events) = %d, want 1", len(res.Events))
+	}
+	d := res.Events[0].Detail
+	if d == nil || d.Kind != "bash" {
+		t.Fatalf("Detail mismatch: %+v", d)
+	}
+	if d.Stdout != "hello\nworld" || d.Stderr != "warn: x" {
+		t.Fatalf("stdout/stderr mismatch: %q / %q", d.Stdout, d.Stderr)
+	}
+}
+
+// 一行含多个 tool_result 时不能误挂顶层 toolUseResult（无法确定归属）→ Detail 为 nil，回退 Text。
+func TestParseMultiToolResultNoDetail(t *testing.T) {
+	body := `{"type":"user","message":{"role":"user","content":[{"tool_use_id":"t1","type":"tool_result","content":"a"},{"tool_use_id":"t2","type":"tool_result","content":"b"}]},"toolUseResult":{"stdout":"x","stderr":""},"uuid":"um"}`
+	res := Parse(writeSample(t, body), 0)
+	if len(res.Events) != 2 {
+		t.Fatalf("len(Events) = %d, want 2", len(res.Events))
+	}
+	for i, ev := range res.Events {
+		if ev.Detail != nil {
+			t.Fatalf("Events[%d].Detail should be nil for multi tool_result line, got %+v", i, ev.Detail)
+		}
+	}
+}
+
+// 非 Edit/Bash 的 toolUseResult（无 structuredPatch / stdout）→ Detail 为 nil，前端回退 Text。
+func TestParseOtherToolResultNoDetail(t *testing.T) {
+	body := `{"type":"user","message":{"role":"user","content":[{"tool_use_id":"tr","type":"tool_result","content":"file body"}]},"toolUseResult":{"type":"text","file":{"filePath":"/x","numLines":10}},"uuid":"ur"}`
+	res := Parse(writeSample(t, body), 0)
+	if len(res.Events) != 1 || res.Events[0].Detail != nil {
+		t.Fatalf("expected single tool_result with nil Detail, got %+v", res.Events)
+	}
+}
+
 func TestStripANSI(t *testing.T) {
 	in := "\x1b[31mred\x1b[0m plain"
 	if got := stripANSI(in); got != "red plain" {
