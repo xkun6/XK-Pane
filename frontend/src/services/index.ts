@@ -125,6 +125,9 @@ export {
   type TimelineQuestion,
   type TimelineOption,
   type TimelineToolDetail,
+  type TimelineMetrics,
+  type TimelineContextMetric,
+  type TimelineUsageWindow,
 } from './transcript/TranscriptService';
 export {
   OrchestratorService,

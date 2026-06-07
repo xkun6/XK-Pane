@@ -56,11 +56,30 @@ export interface TimelineEvent {
   detail?: TimelineToolDetail;
 }
 
+// 卡片底部状态行指标（对齐后端 hudstats.Metrics，复用 claude-hud 落盘产物）。各项可缺省。
+export interface TimelineContextMetric {
+  usedPercentage: number; // 原生 used%（取色阈值）
+  usedTokens: number; // input+cache_creation+cache_read（不含 output，对齐 claude-hud）
+  windowSize: number; // 上下文窗口大小（200000 / 1000000）
+}
+
+export interface TimelineUsageWindow {
+  usedPercentage: number;
+  resetsAtMs?: number; // 重置时刻 unix ms；缺省 = 未知/已过（不显示剩余时间）
+}
+
+export interface TimelineMetrics {
+  context?: TimelineContextMetric;
+  fiveHour?: TimelineUsageWindow;
+  sevenDay?: TimelineUsageWindow;
+}
+
 export interface Timeline {
   supported: boolean;
   events: TimelineEvent[];
   total: number; // 文件总行数 = 下次轮询的 after 游标
   title?: string;
+  metrics?: TimelineMetrics;
 }
 
 interface TimelineDTO {
@@ -68,6 +87,7 @@ interface TimelineDTO {
   events?: TimelineEvent[];
   total?: number;
   title?: string;
+  metrics?: TimelineMetrics;
 }
 
 export const TranscriptService = {
@@ -75,11 +95,14 @@ export const TranscriptService = {
   async getTimeline(sessionId: string, after = 0): Promise<Timeline> {
     if (isDesktop) {
       const res = await TranscriptBinding.GetTimeline(sessionId, after);
+      // metrics 是后端新增的嵌套标量字段，经 bindings Object.assign 透传到实例（生成类型未声明），手动 cast 取出。
+      const dto = res as unknown as TimelineDTO;
       return {
         supported: res.supported === true,
         events: (res.events ?? []) as TimelineEvent[],
         total: Number(res.total ?? 0),
         ...(res.title ? { title: res.title } : {}),
+        ...(dto.metrics ? { metrics: dto.metrics } : {}),
       };
     }
     const res = await httpClient.get<TimelineDTO>(
@@ -90,6 +113,7 @@ export const TranscriptService = {
       events: res.events ?? [],
       total: Number(res.total ?? 0),
       title: res.title,
+      ...(res.metrics ? { metrics: res.metrics } : {}),
     };
   },
 

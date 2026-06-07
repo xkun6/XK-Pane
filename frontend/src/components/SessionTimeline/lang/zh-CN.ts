@@ -41,5 +41,10 @@ export const sessionTimelineZhCN: Messages = {
       submitted: '已提交，等待 Agent…',
       readonly: '请在终端中作答',
     },
+    status: {
+      context: '上下文',
+      usage5h: '用量',
+      weekly: '本周',
+    },
   },
 };

@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { TranscriptService, TerminalService, type TimelineEvent, type TimelineQuestion } from '@/services';
+import {
+  TranscriptService,
+  TerminalService,
+  type TimelineEvent,
+  type TimelineQuestion,
+  type TimelineMetrics,
+} from '@/services';
 
 // 轮询间隔：转录是 append-only 文件，~1.5s 拉一次增量足够「准实时」，不压后端。
 const POLL_MS = 1500;
@@ -23,6 +29,8 @@ export interface UseSessionTimelineResult {
   // 会话「工作中」liveness：基于 PTY 输出活跃度推断（工作时 TUI 自旋持续吐字节；空闲于提示符则静默）。
   // 供卡片底部渲染「思考中…」指示器，让用户确信 Agent 仍在跑、未因意外中断。
   busy: boolean;
+  // 状态行指标（上下文/5h/周限，复用 claude-hud 产物）。null = 暂不可用。每轮轮询刷新（含剩余时间倒计）。
+  metrics: TimelineMetrics | null;
 }
 
 // useSessionTimeline：按游标增量轮询活跃会话的结构化时间线，累积事件。
@@ -34,6 +42,7 @@ export function useSessionTimeline({ sessionId, active }: UseSessionTimelineArgs
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<TimelineQuestion[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [metrics, setMetrics] = useState<TimelineMetrics | null>(null);
   const busyRef = useRef(false); // 仅在 idle↔busy 跳变时 setState，避免每个输出批次都重渲
   const cursorRef = useRef(0);
   const eventsLenRef = useRef(0); // 当前已累积事件数（供 ask-pending 回调即时读取设基线）
@@ -47,6 +56,7 @@ export function useSessionTimeline({ sessionId, active }: UseSessionTimelineArgs
     setSupported(null);
     setLoading(true);
     setPending(null);
+    setMetrics(null);
     busyRef.current = false;
     setBusy(false);
   }, [sessionId]);
@@ -117,6 +127,7 @@ export function useSessionTimeline({ sessionId, active }: UseSessionTimelineArgs
           return;
         }
         if (tl.title) setTitle(tl.title);
+        setMetrics(tl.metrics ?? null); // 每轮刷新（剩余时间倒计 / 用量变化）
         if (tl.total > cursorRef.current) {
           cursorRef.current = tl.total;
           if (tl.events.length > 0) setEvents((prev) => [...prev, ...tl.events]);
@@ -135,5 +146,5 @@ export function useSessionTimeline({ sessionId, active }: UseSessionTimelineArgs
     };
   }, [sessionId, active]);
 
-  return { events, title, supported, loading, pending, busy };
+  return { events, title, supported, loading, pending, busy, metrics };
 }

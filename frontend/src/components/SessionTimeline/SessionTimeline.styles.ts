@@ -452,6 +452,7 @@ export const sessionTimelineStyles = (theme: Theme): Record<string, SxProps<Them
       color: fp.text.muted,
     },
     // —— 输入条 ——
+    // 安全区垫高已下移到其下方的状态行 statusBar（覆盖层最底元素），此处不再补 safe-area。
     composeBar: {
       flexShrink: 0,
       display: 'flex',
@@ -460,8 +461,6 @@ export const sessionTimelineStyles = (theme: Theme): Record<string, SxProps<Them
       p: 1,
       borderTop: `1px solid ${fp.divider}`,
       backgroundColor: fp.bg.base,
-      // 安全区：底部 home indicator 不遮输入条（mindfs 同款）。
-      paddingBottom: 'calc(8px + env(safe-area-inset-bottom, 0px))',
     },
     composeField: {
       flex: 1,
@@ -470,6 +469,39 @@ export const sessionTimelineStyles = (theme: Theme): Record<string, SxProps<Them
         backgroundColor: fp.bg.content,
         fontSize: 14,
       },
+    },
+    // —— 底部状态行（claude-hud 风格：上下文 / 用量(5h) / 本周，纯文字无进度块）——
+    // statusBar 始终渲染（承载移动端安全区垫高，即覆盖层最底元素）；无指标时内层 statusRow 不渲染，
+    // 桌面下 env(safe-area)=0 → 整条零高度不可见。
+    statusBar: {
+      flexShrink: 0,
+      backgroundColor: fp.bg.base,
+      paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+    },
+    statusRow: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      columnGap: 1.5,
+      rowGap: 0.25,
+      px: 1.25,
+      py: 0.5,
+      borderTop: `1px solid ${fp.divider}`,
+    },
+    statusItem: {
+      display: 'inline-flex',
+      alignItems: 'baseline',
+      gap: 0.5,
+    },
+    statusLabel: {
+      fontSize: 11,
+      color: fp.text.muted,
+    },
+    statusValue: {
+      fontSize: 11.5,
+      fontWeight: 600,
+      fontVariantNumeric: 'tabular-nums',
+      userSelect: 'text',
     },
     // —— 复制按钮（hover 显示；touch 设备无 hover → opacity 常驻 1）——
     // 折叠卡：贴在 header 内（展开图标左侧），跟随 flex 布局。

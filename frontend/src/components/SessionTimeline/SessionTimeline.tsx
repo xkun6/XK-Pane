@@ -10,6 +10,7 @@ import type { TimelineEvent } from '@/services';
 import { sessionTimelineStyles } from './SessionTimeline.styles';
 import { useSessionTimeline } from './useSessionTimeline';
 import { AskQuestionCard } from './AskQuestionCard';
+import { StatusLine } from './StatusLine';
 import { CopyButton } from './messages/CopyButton';
 import { CollapsibleBlock } from './messages/CollapsibleBlock';
 import { DiffCard } from './messages/DiffCard';
@@ -35,7 +36,7 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: Sess
   const theme = useTheme();
   const styles = sessionTimelineStyles(theme);
   const t = useT();
-  const { events, title, supported, pending, busy } = useSessionTimeline({ sessionId, active: visible });
+  const { events, title, supported, pending, busy, metrics } = useSessionTimeline({ sessionId, active: visible });
   const scrollRef = useRef<HTMLDivElement>(null);
   const [text, setText] = useState('');
 
@@ -236,6 +237,9 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: Sess
           </span>
         </Tooltip>
       </Box>
+
+      {/* 输入框下方的状态行：上下文 / 用量(5h) / 本周（复用 claude-hud 产物，纯文字）。 */}
+      <StatusLine metrics={metrics} />
     </Box>
   );
 };

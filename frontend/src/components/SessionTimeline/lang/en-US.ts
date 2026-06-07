@@ -41,5 +41,10 @@ export const sessionTimelineEnUS: Messages = {
       submitted: 'Submitted — waiting for the agent…',
       readonly: 'Answer in the terminal',
     },
+    status: {
+      context: 'Context',
+      usage5h: 'Usage',
+      weekly: 'Weekly',
+    },
   },
 };
