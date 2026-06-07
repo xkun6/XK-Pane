@@ -13,6 +13,24 @@ export const sessionTimelineZhCN: Messages = {
     send: '发送',
     copy: '复制',
     copied: '已复制',
+    moreLines: '还有 {{n}} 行',
+    todo: {
+      title: '待办清单',
+      done: '已完成 {{done}}/{{total}}',
+      pending: '待办',
+      inProgress: '进行中',
+      completed: '已完成',
+    },
+    plan: {
+      title: '实施计划',
+    },
+    diff: {
+      truncated: '差异过长，已截断',
+    },
+    bash: {
+      stderr: '错误输出',
+      empty: '（无输出）',
+    },
     ask: {
       title: '需要你的选择',
       multiSelectHint: '可多选',

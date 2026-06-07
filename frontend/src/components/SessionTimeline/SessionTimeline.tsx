@@ -1,22 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
-import { Box, Collapse, IconButton, TextField, Tooltip, Typography, useTheme } from '@mui/material';
-import type { SxProps, Theme } from '@mui/material';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Box, IconButton, TextField, Tooltip, Typography, useTheme } from '@mui/material';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import PsychologyRoundedIcon from '@mui/icons-material/PsychologyRounded';
-import BuildRoundedIcon from '@mui/icons-material/BuildRounded';
 import SubdirectoryArrowRightRoundedIcon from '@mui/icons-material/SubdirectoryArrowRightRounded';
 import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
-import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
-import ExpandLessRoundedIcon from '@mui/icons-material/ExpandLessRounded';
-import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
-import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import { useT } from '@/i18n';
-import { copyText } from '@/shared/clipboard';
 import type { TimelineEvent } from '@/services';
 import { sessionTimelineStyles } from './SessionTimeline.styles';
 import { useSessionTimeline } from './useSessionTimeline';
 import { AskQuestionCard } from './AskQuestionCard';
+import { CopyButton } from './messages/CopyButton';
+import { CollapsibleBlock } from './messages/CollapsibleBlock';
+import { DiffCard } from './messages/DiffCard';
+import { BashCard } from './messages/BashCard';
+import { TodoCard } from './messages/TodoCard';
+import { PlanCard } from './messages/PlanCard';
+import { getToolMeta, parseToolInput, summarizeToolInput } from './messages/toolMeta';
 
 export interface SessionTimelineProps {
   sessionId: string;
@@ -25,26 +25,7 @@ export interface SessionTimelineProps {
   onRawInput?: (data: string) => void; // 原样写入 PTY（不追加 '\r'）：AskUserQuestion 作答按键序列
 }
 
-// 工具输入摘要（折叠态一行预览）：挑最有信息量的字段。
-function summarize(ev: TimelineEvent): string {
-  if (!ev.toolInput) return '';
-  try {
-    const o = JSON.parse(ev.toolInput) as Record<string, unknown>;
-    const pick = (k: string): string => (typeof o[k] === 'string' ? (o[k] as string) : '');
-    return (
-      pick('command') ||
-      pick('file_path') ||
-      pick('path') ||
-      pick('pattern') ||
-      pick('url') ||
-      pick('description') ||
-      pick('prompt')
-    );
-  } catch {
-    return '';
-  }
-}
-
+// 工具调用正文（折叠展开后的完整输入）：缩进 JSON，解析失败回退原串。
 function prettyInput(ev: TimelineEvent): string {
   if (!ev.toolInput) return '';
   try {
@@ -52,79 +33,6 @@ function prettyInput(ev: TimelineEvent): string {
   } catch {
     return ev.toolInput;
   }
-}
-
-// 复制按钮：把传入文本写进剪贴板（走 shared/clipboard，兼容 Web 镜像非安全上下文），
-// 成功后图标短暂变勾反馈。显隐由父卡片样式经 .xk-copy-btn 控制（hover 显示 / touch 常驻）。
-function CopyButton({ text, sx }: { text: string; sx?: SxProps<Theme> }) {
-  const t = useT();
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) return;
-    const id = setTimeout(() => setCopied(false), 1500);
-    return () => clearTimeout(id);
-  }, [copied]);
-  if (!text) return null; // 空内容不给复制入口（hooks 已全部调用，安全 return）
-  const onCopy = async (e: React.MouseEvent): Promise<void> => {
-    e.stopPropagation(); // 折叠卡 header 上点复制不触发展开 / 折叠
-    if (await copyText(text)) setCopied(true);
-  };
-  return (
-    <Tooltip title={copied ? t('sessionTimeline.copied') : t('sessionTimeline.copy')}>
-      <IconButton
-        className="xk-copy-btn"
-        size="small"
-        onClick={(e) => void onCopy(e)}
-        aria-label={t('sessionTimeline.copy')}
-        sx={sx}
-      >
-        {copied ? <CheckRoundedIcon fontSize="inherit" /> : <ContentCopyRoundedIcon fontSize="inherit" />}
-      </IconButton>
-    </Tooltip>
-  );
-}
-
-// 可折叠卡片（思考 / 工具调用 / 工具结果共用）。自带展开态，是纯展示子组件。
-// tone 给图标上强调色：工具调用=accent、失败结果=danger，否则继承标题灰（避免一排卡片成"无差别横杠"）。
-function CollapsibleBlock(props: {
-  icon: React.ReactNode;
-  label: string;
-  summary?: string;
-  bodyText: string;
-  italic?: boolean;
-  defaultOpen?: boolean;
-  tone?: 'accent' | 'danger';
-}) {
-  const theme = useTheme();
-  const styles = sessionTimelineStyles(theme);
-  const fp = theme.palette.foundation;
-  const [open, setOpen] = useState(props.defaultOpen ?? false);
-  const toneColor =
-    props.tone === 'danger' ? fp.status.danger : props.tone === 'accent' ? fp.accent : undefined;
-  return (
-    <Box sx={styles.block}>
-      <Box sx={styles.blockHeader} onClick={() => setOpen((o) => !o)}>
-        <Box component="span" sx={{ display: 'inline-flex', flexShrink: 0, color: toneColor }}>
-          {props.icon}
-        </Box>
-        <Typography component="span" sx={styles.blockHeaderLabel}>
-          {props.label}
-        </Typography>
-        {!open && props.summary ? (
-          <Typography component="span" sx={styles.blockSummary}>
-            {props.summary}
-          </Typography>
-        ) : null}
-        <CopyButton text={props.bodyText} sx={styles.copyBtnInline} />
-        {open ? <ExpandLessRoundedIcon fontSize="small" /> : <ExpandMoreRoundedIcon fontSize="small" />}
-      </Box>
-      <Collapse in={open} unmountOnExit>
-        <Box component="pre" sx={props.italic ? styles.thinkingText : styles.pre}>
-          {props.bodyText}
-        </Box>
-      </Collapse>
-    </Box>
-  );
 }
 
 // SessionTimeline：把活跃会话的 Claude 转录渲染成可重排的对话卡片（覆盖在 xterm 之上）。
@@ -136,6 +44,15 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: Sess
   const { events, title, supported, pending } = useSessionTimeline({ sessionId, active: visible });
   const scrollRef = useRef<HTMLDivElement>(null);
   const [text, setText] = useState('');
+
+  // toolUseId → toolName：给工具结果卡补上来源工具名（结果块本身不带工具名，靠对应 tool_use 关联）。
+  const toolNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const ev of events) {
+      if (ev.kind === 'tool_use' && ev.toolUseId && ev.toolName) m.set(ev.toolUseId, ev.toolName);
+    }
+    return m;
+  }, [events]);
 
   // 新事件到达 / 待答卡出现 / 重新可见 → 贴底（监控场景默认看最新）。
   useEffect(() => {
@@ -159,6 +76,64 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: Sess
       e.preventDefault();
       send();
     }
+  };
+
+  // 工具调用卡：AskUserQuestion → 只读问题卡；TodoWrite → 清单卡；ExitPlanMode → 计划卡；
+  // 其余 → 带工具图标/色调的折叠卡（header 摘要挑最有信息量字段，正文是完整输入 JSON）。
+  const renderToolUse = (ev: TimelineEvent, key: string): React.ReactNode => {
+    if (ev.toolName === 'AskUserQuestion' && ev.questions && ev.questions.length > 0) {
+      // 转录里的是【已答】记录 → 只读历史卡。待答态走 pending（hook 旁路，见末尾交互卡）。
+      return <AskQuestionCard key={key} questions={ev.questions} interactive={false} onRawInput={() => {}} />;
+    }
+    const input = parseToolInput(ev.toolInput);
+    const todos = input && Array.isArray(input.todos) ? input.todos : null;
+    if (ev.toolName === 'TodoWrite' && todos && todos.length > 0) {
+      return <TodoCard key={key} input={input} timestamp={ev.timestamp} />; // 有 todos 才用清单卡，否则回退折叠卡
+    }
+    if (ev.toolName === 'ExitPlanMode' && typeof input?.plan === 'string') {
+      return <PlanCard key={key} input={input} timestamp={ev.timestamp} />;
+    }
+    const { Icon, tone } = getToolMeta(ev.toolName);
+    return (
+      <CollapsibleBlock
+        key={key}
+        icon={<Icon fontSize="small" />}
+        label={ev.toolName || t('sessionTimeline.tool')}
+        summary={summarizeToolInput(ev.toolName, input)}
+        bodyText={prettyInput(ev)}
+        tone={tone}
+        timestamp={ev.timestamp}
+      />
+    );
+  };
+
+  // 工具结果卡：Edit 结构化差异 → diff 卡；Bash → 输出分离卡；其余 → 折叠卡（label 取来源工具名、
+  // 折叠态露前 6 行预览、失败标 danger）。
+  const renderToolResult = (ev: TimelineEvent, key: string): React.ReactNode => {
+    if (ev.detail?.kind === 'edit') {
+      return <DiffCard key={key} detail={ev.detail} timestamp={ev.timestamp} />;
+    }
+    const toolName = ev.toolUseId ? toolNameById.get(ev.toolUseId) : undefined;
+    if (ev.detail?.kind === 'bash') {
+      return <BashCard key={key} detail={ev.detail} label={toolName ?? 'Bash'} timestamp={ev.timestamp} />;
+    }
+    return (
+      <CollapsibleBlock
+        key={key}
+        icon={
+          ev.isError ? (
+            <ErrorOutlineRoundedIcon fontSize="small" />
+          ) : (
+            <SubdirectoryArrowRightRoundedIcon fontSize="small" />
+          )
+        }
+        label={toolName ?? t('sessionTimeline.result')}
+        bodyText={ev.text ?? ''}
+        tone={ev.isError ? 'danger' : undefined}
+        timestamp={ev.timestamp}
+        previewLines={6}
+      />
+    );
   };
 
   const renderEvent = (ev: TimelineEvent, idx: number): React.ReactNode => {
@@ -188,42 +163,14 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: Sess
             label={t('sessionTimeline.thinking')}
             bodyText={ev.text ?? ''}
             italic
+            previewLines={4}
+            timestamp={ev.timestamp}
           />
         );
       case 'tool_use':
-        // AskUserQuestion：转录里的是【已答】记录 → 渲染成只读历史卡。待答态不在转录里，走 pending
-        // （PreToolUse hook 旁路事件，见 scroll 末尾的交互卡），故转录这条恒只读、不接 onRawInput。
-        if (ev.toolName === 'AskUserQuestion' && ev.questions && ev.questions.length > 0) {
-          return (
-            <AskQuestionCard key={key} questions={ev.questions} interactive={false} onRawInput={() => {}} />
-          );
-        }
-        return (
-          <CollapsibleBlock
-            key={key}
-            icon={<BuildRoundedIcon fontSize="small" />}
-            label={ev.toolName || t('sessionTimeline.tool')}
-            summary={summarize(ev)}
-            bodyText={prettyInput(ev)}
-            tone="accent"
-          />
-        );
+        return renderToolUse(ev, key);
       case 'tool_result':
-        return (
-          <CollapsibleBlock
-            key={key}
-            icon={
-              ev.isError ? (
-                <ErrorOutlineRoundedIcon fontSize="small" />
-              ) : (
-                <SubdirectoryArrowRightRoundedIcon fontSize="small" />
-              )
-            }
-            label={t('sessionTimeline.result')}
-            bodyText={ev.text ?? ''}
-            tone={ev.isError ? 'danger' : undefined}
-          />
-        );
+        return renderToolResult(ev, key);
       default:
         return null;
     }

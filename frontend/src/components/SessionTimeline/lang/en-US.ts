@@ -13,6 +13,24 @@ export const sessionTimelineEnUS: Messages = {
     send: 'Send',
     copy: 'Copy',
     copied: 'Copied',
+    moreLines: '{{n}} more lines',
+    todo: {
+      title: 'To-dos',
+      done: '{{done}}/{{total}} done',
+      pending: 'Pending',
+      inProgress: 'In progress',
+      completed: 'Completed',
+    },
+    plan: {
+      title: "Claude's plan",
+    },
+    diff: {
+      truncated: 'Diff truncated',
+    },
+    bash: {
+      stderr: 'stderr',
+      empty: '(no output)',
+    },
     ask: {
       title: 'Your input is needed',
       multiSelectHint: 'Multiple choice',

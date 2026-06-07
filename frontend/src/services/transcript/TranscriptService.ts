@@ -28,6 +28,20 @@ export interface TimelineQuestion {
   options: TimelineOption[];
 }
 
+// 工具结果的结构化细节（对齐后端 transcript.ToolResultDetail）。仅 kind==='tool_result' 事件可能带 detail：
+// 'edit' = Edit/Write/MultiEdit 的 structuredPatch 差异；'bash' = Bash 的 stdout/stderr 分离。供卡片做
+// 差异 / 输出分离渲染；无 detail 时回退 text 纯文本。
+export interface TimelineToolDetail {
+  kind: 'edit' | 'bash' | string;
+  filePath?: string;
+  diff?: string[]; // edit：差异行（每行带前导 +/-/空格）
+  added?: number; // edit：新增行数
+  removed?: number; // edit：删除行数
+  truncated?: boolean; // edit：差异行被截断
+  stdout?: string; // bash：标准输出
+  stderr?: string; // bash：标准错误
+}
+
 export interface TimelineEvent {
   seq: number;
   uuid?: string;
@@ -39,6 +53,7 @@ export interface TimelineEvent {
   isError?: boolean;
   timestamp?: string;
   questions?: TimelineQuestion[];
+  detail?: TimelineToolDetail;
 }
 
 export interface Timeline {
