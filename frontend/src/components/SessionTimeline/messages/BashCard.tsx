@@ -6,18 +6,22 @@ import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
 import { useT } from '@/i18n';
 import type { TimelineToolDetail } from '@/services';
 import { sessionTimelineStyles } from '../SessionTimeline.styles';
-import { CopyButton, formatTime } from './CopyButton';
+import { CopyButton } from './CopyButton';
+import { formatTime } from './time';
 import { createContentPreview } from './contentPreview';
 
 // BashCard：把 Bash 结果的 stdout / stderr 分离渲染 —— stdout 走普通 pre，stderr 走 danger 调块。
-// 有 stderr 时默认展开（错误要让人看见），图标也转 danger 色。数据来自 ToolResultDetail（kind==='bash'）。
+// 「出错」以权威标志 isError（后端 <tool_use_error> 置位）判定，而非「stderr 非空」—— 大量命令把进度/告警
+// 写 stderr 仍成功，避免它们被染红 + 强制展开。真出错才默认展开并把图标转 danger。stderr 有内容即渲染（供查看）。
 export function BashCard({
   detail,
   label,
+  isError,
   timestamp,
 }: {
   detail: TimelineToolDetail;
   label: string;
+  isError?: boolean;
   timestamp?: string;
 }) {
   const theme = useTheme();
@@ -26,17 +30,18 @@ export function BashCard({
   const fp = theme.palette.foundation;
   const stdout = detail.stdout ?? '';
   const stderr = detail.stderr ?? '';
-  const hasErr = stderr.trim().length > 0;
-  const [open, setOpen] = useState(hasErr);
+  const showStderr = stderr.trim().length > 0;
+  const isErr = isError === true;
+  const [open, setOpen] = useState(isErr); // 真出错默认展开；含 stderr 但成功的命令不打扰
   const time = formatTime(timestamp);
-  const preview = createContentPreview(hasErr ? stderr : stdout, 5);
+  const preview = createContentPreview(isErr && showStderr ? stderr : stdout, 5);
   const showPreview = !open && preview.hasMore;
   return (
     <Box sx={s.block}>
       <Box sx={s.blockHeader} onClick={() => setOpen((o) => !o)}>
         <Box
           component="span"
-          sx={{ display: 'inline-flex', flexShrink: 0, color: hasErr ? fp.status.danger : fp.accent }}
+          sx={{ display: 'inline-flex', flexShrink: 0, color: isErr ? fp.status.danger : fp.accent }}
         >
           <TerminalRoundedIcon fontSize="small" />
         </Box>
@@ -48,7 +53,7 @@ export function BashCard({
             {time}
           </Box>
         ) : null}
-        <CopyButton text={stderr ? `${stdout}\n${stderr}` : stdout} sx={s.copyBtnInline} />
+        <CopyButton text={showStderr ? `${stdout}\n${stderr}` : stdout} sx={s.copyBtnInline} />
         {open ? <ExpandLessRoundedIcon fontSize="small" /> : <ExpandMoreRoundedIcon fontSize="small" />}
       </Box>
       {showPreview ? (
@@ -65,7 +70,7 @@ export function BashCard({
         <Box component="pre" sx={s.pre}>
           {stdout || t('sessionTimeline.bash.empty')}
         </Box>
-        {hasErr ? (
+        {showStderr ? (
           <Box component="pre" sx={s.bashStderr}>
             <Box component="span" sx={s.bashStderrLabel}>
               {t('sessionTimeline.bash.stderr')}

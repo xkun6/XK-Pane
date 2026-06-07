@@ -25,15 +25,8 @@ export interface SessionTimelineProps {
   onRawInput?: (data: string) => void; // 原样写入 PTY（不追加 '\r'）：AskUserQuestion 作答按键序列
 }
 
-// 工具调用正文（折叠展开后的完整输入）：缩进 JSON，解析失败回退原串。
-function prettyInput(ev: TimelineEvent): string {
-  if (!ev.toolInput) return '';
-  try {
-    return JSON.stringify(JSON.parse(ev.toolInput), null, 2);
-  } catch {
-    return ev.toolInput;
-  }
-}
+// 文件转储 / 网页类只读结果：折叠态不展开原文预览（噪声），只在 header 给行数摘要。
+const RESULT_NO_PREVIEW = new Set(['Read', 'WebFetch', 'NotebookRead']);
 
 // SessionTimeline：把活跃会话的 Claude 转录渲染成可重排的对话卡片（覆盖在 xterm 之上）。
 // supported!==true（加载中 / 非 claude）时不渲染 → 露出底层 xterm 镜像（零干扰）。
@@ -54,10 +47,19 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: Sess
     return m;
   }, [events]);
 
-  // 新事件到达 / 待答卡出现 / 重新可见 → 贴底（监控场景默认看最新）。
+  // 自动贴底：仅当用户已接近底部（或刚切到卡片视图 / 待答卡刚出现）才贴底，避免用户上滚翻看历史时
+  // 被 ~1.5s 轮询落的新事件强行拽回底部。
+  const prevVisibleRef = useRef(visible);
+  const prevPendingRef = useRef(pending != null);
   useEffect(() => {
+    const becameVisible = visible && !prevVisibleRef.current;
+    const pendingAppeared = pending != null && !prevPendingRef.current;
+    prevVisibleRef.current = visible;
+    prevPendingRef.current = pending != null;
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    if (nearBottom || becameVisible || pendingAppeared) el.scrollTop = el.scrollHeight;
   }, [events.length, visible, pending]);
 
   // 终端态（!visible）或无结构化转录（非 claude）→ 不渲染覆盖层、露出底层 xterm；但保持挂载，
@@ -100,7 +102,7 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: Sess
         icon={<Icon fontSize="small" />}
         label={ev.toolName || t('sessionTimeline.tool')}
         summary={summarizeToolInput(ev.toolName, input)}
-        bodyText={prettyInput(ev)}
+        bodyText={input ? JSON.stringify(input, null, 2) : (ev.toolInput ?? '')}
         tone={tone}
         timestamp={ev.timestamp}
       />
@@ -115,8 +117,21 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: Sess
     }
     const toolName = ev.toolUseId ? toolNameById.get(ev.toolUseId) : undefined;
     if (ev.detail?.kind === 'bash') {
-      return <BashCard key={key} detail={ev.detail} label={toolName ?? 'Bash'} timestamp={ev.timestamp} />;
+      return (
+        <BashCard
+          key={key}
+          detail={ev.detail}
+          label={toolName ?? t('sessionTimeline.tool')}
+          isError={ev.isError}
+          timestamp={ev.timestamp}
+        />
+      );
     }
+    const text = ev.text ?? '';
+    const lineCount = text ? text.split('\n').length : 0;
+    // 折叠态摘要：多行给行数（一眼知体量）、单行直接显示内容片段（CSS 省略）。
+    const summary = lineCount > 1 ? t('sessionTimeline.resultLines', { n: String(lineCount) }) : text.trim();
+    const noPreview = toolName ? RESULT_NO_PREVIEW.has(toolName) : false;
     return (
       <CollapsibleBlock
         key={key}
@@ -128,10 +143,11 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: Sess
           )
         }
         label={toolName ?? t('sessionTimeline.result')}
-        bodyText={ev.text ?? ''}
+        summary={summary}
+        bodyText={text}
         tone={ev.isError ? 'danger' : undefined}
         timestamp={ev.timestamp}
-        previewLines={6}
+        previewLines={noPreview ? undefined : 6}
       />
     );
   };

@@ -2,7 +2,8 @@ import { Box, Typography, useTheme } from '@mui/material';
 import FactCheckRoundedIcon from '@mui/icons-material/FactCheckRounded';
 import { useT } from '@/i18n';
 import { sessionTimelineStyles } from '../SessionTimeline.styles';
-import { CopyButton, formatTime } from './CopyButton';
+import { CopyButton } from './CopyButton';
+import { formatTime } from './time';
 
 // PlanCard：把 ExitPlanMode 的 input.plan 渲染成醒目的「实施计划」卡（accent 边框 + 计划正文）。
 // plan 缺失返回 null（调用方回退普通工具卡）。正文是 prose（非等宽），保留换行。

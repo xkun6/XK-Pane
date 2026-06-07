@@ -17,7 +17,7 @@ import FactCheckRounded from '@mui/icons-material/FactCheckRounded';
 import ExtensionRounded from '@mui/icons-material/ExtensionRounded';
 import BuildRounded from '@mui/icons-material/BuildRounded';
 
-// 色调（解析为 theme.palette.foundation.* 的语义色，见 SessionTimeline.styles toneColor）。
+// 色调（解析为 theme.palette.foundation.* 的语义色，见 SessionTimeline.styles 的 resolveTone）。
 // 只读类工具（Read/Grep/Glob/Web*）用 muted 低调，会改东西/执行类用 accent 强调。
 export type ToolTone = 'accent' | 'muted';
 

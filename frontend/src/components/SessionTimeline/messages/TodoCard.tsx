@@ -1,21 +1,18 @@
 import { Box, Typography, useTheme } from '@mui/material';
-import type { SxProps, Theme } from '@mui/material';
 import ChecklistRoundedIcon from '@mui/icons-material/ChecklistRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import AutorenewRoundedIcon from '@mui/icons-material/AutorenewRounded';
 import RadioButtonUncheckedRoundedIcon from '@mui/icons-material/RadioButtonUncheckedRounded';
 import { useT } from '@/i18n';
 import { sessionTimelineStyles } from '../SessionTimeline.styles';
-import { formatTime } from './CopyButton';
+import { formatTime } from './time';
+import { mergeSx } from './sx';
 
 interface TodoItem {
   content?: string;
   status?: string;
   activeForm?: string;
 }
-
-const merge = (...parts: Array<SxProps<Theme> | false | undefined>): SxProps<Theme> =>
-  parts.filter(Boolean) as SxProps<Theme>;
 
 // TodoCard：把 TodoWrite 的 input.todos 渲染成带状态图标的清单（completed 勾 / in_progress 转圈 / pending 空圈）
 // + 「已完成 x/y」。input 解析失败 / 无 todos 返回 null（调用方回退普通工具卡）。
@@ -60,9 +57,9 @@ export function TodoCard({
                 : { Icon: RadioButtonUncheckedRoundedIcon, iconSx: s.todoStatusPending, label: t('sessionTimeline.todo.pending') };
           return (
             <Box key={i} sx={s.todoRow}>
-              <Icon sx={merge(s.todoStatusIcon, iconSx)} titleAccess={label} />
+              <Icon sx={mergeSx(s.todoStatusIcon, iconSx)} titleAccess={label} />
               <Box sx={s.todoBody}>
-                <Box sx={merge(s.todoText, status === 'completed' && s.todoTextDone)}>{td.content}</Box>
+                <Box sx={mergeSx(s.todoText, status === 'completed' && s.todoTextDone)}>{td.content}</Box>
                 {status === 'in_progress' && td.activeForm ? (
                   <Box sx={s.todoActiveForm}>{td.activeForm}</Box>
                 ) : null}

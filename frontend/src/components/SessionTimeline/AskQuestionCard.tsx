@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Box, Button, Typography, useTheme } from '@mui/material';
-import type { SxProps, Theme } from '@mui/material';
 import HelpOutlineRoundedIcon from '@mui/icons-material/HelpOutlineRounded';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import HourglassEmptyRoundedIcon from '@mui/icons-material/HourglassEmptyRounded';
@@ -11,6 +10,7 @@ import CheckBoxOutlineBlankRoundedIcon from '@mui/icons-material/CheckBoxOutline
 import { useT } from '@/i18n';
 import type { TimelineQuestion } from '@/services';
 import { sessionTimelineStyles } from './SessionTimeline.styles';
+import { mergeSx as sx } from './messages/sx';
 import { buildAnswerKeys } from './answerKeys';
 
 export interface AskQuestionCardProps {
@@ -20,10 +20,6 @@ export interface AskQuestionCardProps {
   interactive: boolean;
   onRawInput: (data: string) => void;
 }
-
-// 合并若干 sx（落选项过滤）。styles 工厂返回的是纯对象，数组形态由 MUI 运行时支持，这里断言以过类型。
-const sx = (...parts: Array<SxProps<Theme> | false | undefined>): SxProps<Theme> =>
-  parts.filter(Boolean) as SxProps<Theme>;
 
 // 键间延时(ms)：每个键单独写入、留时间让选择器(Ink/React)重渲染刷新 focus 闭包，下一个键才读到最新焦点。
 // 若拼一串一次性写入，同一 stdin 块里的键会被同步逐个处理、全部读到陈旧 focus → ↓/Space 失效、永远选第 0 项。

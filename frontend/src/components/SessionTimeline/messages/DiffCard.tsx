@@ -1,17 +1,15 @@
 import { useState } from 'react';
 import { Box, Collapse, Typography, useTheme } from '@mui/material';
-import type { SxProps, Theme } from '@mui/material';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import ExpandLessRoundedIcon from '@mui/icons-material/ExpandLessRounded';
 import DriveFileRenameOutlineRoundedIcon from '@mui/icons-material/DriveFileRenameOutlineRounded';
 import { useT } from '@/i18n';
 import type { TimelineToolDetail } from '@/services';
 import { sessionTimelineStyles } from '../SessionTimeline.styles';
-import { CopyButton, formatTime } from './CopyButton';
+import { CopyButton } from './CopyButton';
+import { formatTime } from './time';
+import { mergeSx } from './sx';
 import { basename } from './toolMeta';
-
-const merge = (...parts: Array<SxProps<Theme> | false | undefined>): SxProps<Theme> =>
-  parts.filter(Boolean) as SxProps<Theme>;
 
 // DiffCard：把 Edit/Write 的 structuredPatch 渲染成带行级 +/- 着色的差异卡（header 显示文件名 + +N/-N）。
 // 短 diff（≤20 行）默认展开，长 diff 折叠。数据来自后端 transcript.ToolResultDetail（kind==='edit'）。
@@ -64,7 +62,7 @@ export function DiffCard({ detail, timestamp }: { detail: TimelineToolDetail; ti
                 ? s.diffLineDel
                 : undefined;
             return (
-              <Box component="span" key={i} sx={merge(s.diffLine, lineSx)}>
+              <Box component="span" key={i} sx={mergeSx(s.diffLine, lineSx)}>
                 {line || ' '}
               </Box>
             );

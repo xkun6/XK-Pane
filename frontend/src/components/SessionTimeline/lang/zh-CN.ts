@@ -7,6 +7,7 @@ export const sessionTimelineZhCN: Messages = {
     thinking: '思考',
     tool: '工具',
     result: '结果',
+    resultLines: '{{n}} 行',
     showTerminal: '切到终端',
     showChat: '切到对话',
     composePlaceholder: '输入发送给 Agent…',

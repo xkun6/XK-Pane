@@ -4,7 +4,8 @@ import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import ExpandLessRoundedIcon from '@mui/icons-material/ExpandLessRounded';
 import { useT } from '@/i18n';
 import { sessionTimelineStyles, resolveTone, type BlockTone } from '../SessionTimeline.styles';
-import { CopyButton, formatTime } from './CopyButton';
+import { CopyButton } from './CopyButton';
+import { formatTime } from './time';
 import { createContentPreview } from './contentPreview';
 
 export interface CollapsibleBlockProps {
