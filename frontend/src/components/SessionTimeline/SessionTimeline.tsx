@@ -16,6 +16,7 @@ import { DiffCard } from './messages/DiffCard';
 import { BashCard } from './messages/BashCard';
 import { TodoCard } from './messages/TodoCard';
 import { PlanCard } from './messages/PlanCard';
+import { ThinkingIndicator } from './messages/ThinkingIndicator';
 import { getToolMeta, parseToolInput, summarizeToolInput } from './messages/toolMeta';
 
 export interface SessionTimelineProps {
@@ -34,7 +35,7 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: Sess
   const theme = useTheme();
   const styles = sessionTimelineStyles(theme);
   const t = useT();
-  const { events, title, supported, pending } = useSessionTimeline({ sessionId, active: visible });
+  const { events, title, supported, pending, busy } = useSessionTimeline({ sessionId, active: visible });
   const scrollRef = useRef<HTMLDivElement>(null);
   const [text, setText] = useState('');
 
@@ -60,7 +61,7 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: Sess
     if (!el) return;
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     if (nearBottom || becameVisible || pendingAppeared) el.scrollTop = el.scrollHeight;
-  }, [events.length, visible, pending]);
+  }, [events.length, visible, pending, busy]);
 
   // 终端态（!visible）或无结构化转录（非 claude）→ 不渲染覆盖层、露出底层 xterm；但保持挂载，
   // hook 已累积的事件 / supported 不丢，切回卡片即时复现（无需从头重拉）。
@@ -201,14 +202,16 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: Sess
         </Typography>
       </Box>
 
-      {events.length === 0 && !pending ? (
+      {events.length === 0 && !pending && !busy ? (
         <Box sx={styles.empty}>{t('sessionTimeline.empty')}</Box>
       ) : (
         <Box ref={scrollRef} sx={styles.scroll}>
           {events.map(renderEvent)}
-          {/* 待答 AskUserQuestion（hook 旁路推送、落盘前即到）→ 唯一可作答的交互卡，置于时间线末尾。 */}
+          {/* 时间线末尾：待答优先（可作答交互卡），否则工作中显示「思考中…」liveness 指示器。 */}
           {pending && pending.length > 0 ? (
             <AskQuestionCard questions={pending} interactive onRawInput={onRawInput ?? (() => {})} />
+          ) : busy ? (
+            <ThinkingIndicator />
           ) : null}
         </Box>
       )}

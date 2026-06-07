@@ -5,6 +5,7 @@ export const sessionTimelineEnUS: Messages = {
     title: 'Conversation',
     empty: 'No conversation yet — send a message to start.',
     thinking: 'Thinking',
+    working: 'Thinking…',
     tool: 'Tool',
     result: 'Result',
     resultLines: '{{n}} lines',

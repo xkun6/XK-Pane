@@ -194,6 +194,19 @@ export const sessionTimelineStyles = (theme: Theme): Record<string, SxProps<Them
       fontVariantNumeric: 'tabular-nums',
       userSelect: 'none',
     },
+    // —— 「工作中」liveness 指示器（思考中…）——
+    workingBubble: {
+      alignSelf: 'flex-start',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 1,
+      backgroundColor: fp.bg.elevated,
+      color: fp.text.secondary,
+      borderRadius: 2,
+      px: 1.5,
+      py: 1,
+    },
+    workingText: { fontSize: 13.5, fontWeight: 500, color: fp.text.secondary },
     // —— 折叠态内容预览（首 N 行，让折叠卡不只剩标题）——
     previewWrap: {
       px: 1.25,

@@ -5,6 +5,7 @@ export const sessionTimelineZhCN: Messages = {
     title: '对话',
     empty: '暂无对话内容，发送一条消息开始。',
     thinking: '思考',
+    working: '思考中…',
     tool: '工具',
     result: '结果',
     resultLines: '{{n}} 行',
