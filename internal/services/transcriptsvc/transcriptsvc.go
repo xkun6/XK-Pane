@@ -13,6 +13,7 @@ package transcriptsvc
 import (
 	"context"
 
+	"xkpane/internal/services/hudstats"
 	"xkpane/internal/services/sessionscan"
 	"xkpane/internal/services/terminal"
 	"xkpane/internal/services/transcript"
@@ -46,6 +47,10 @@ type Timeline struct {
 	Events    []transcript.Event `json:"events"`
 	Total     int                `json:"total"`
 	Title     string             `json:"title"`
+	// Metrics 是卡片底部状态行的「上下文/5h/周限」指标（复用 claude-hud 落盘产物，见 hudstats）。
+	// nil = 暂不可用（claude-hud 未渲染过本会话 / 未开启 external-usage 快照）。前端经 bindings
+	// 的 Object.assign 透传，无需 regen（见 TranscriptService 的 metrics 手写接口）。
+	Metrics *hudstats.Metrics `json:"metrics,omitempty"`
 }
 
 // GetTimeline 解析活跃会话的 Claude 转录为结构化时间线（与 webapi handleSessionTimeline 同语义）。
@@ -101,5 +106,11 @@ func (s *Service) GetTimeline(ctx context.Context, sessionID string, after int) 
 		return emptySupported, nil
 	}
 	res := transcript.Parse(file, after)
-	return Timeline{Supported: true, Events: res.Events, Total: res.Total, Title: res.Title}, nil
+	return Timeline{
+		Supported: true,
+		Events:    res.Events,
+		Total:     res.Total,
+		Title:     res.Title,
+		Metrics:   hudstats.Collect(file), // file = 本会话转录原生路径，正是 claude-hud context 缓存的 sha256 入参
+	}, nil
 }

@@ -14,6 +14,7 @@ import (
 
 	"xkpane/internal/events"
 	"xkpane/internal/services/orchestrator"
+	"xkpane/internal/services/hudstats"
 	"xkpane/internal/services/sessionscan"
 	"xkpane/internal/services/terminal"
 	"xkpane/internal/services/transcript"
@@ -289,6 +290,7 @@ func (g *Gateway) handleSessionTimeline(w http.ResponseWriter, r *http.Request) 
 		"events":    res.Events,
 		"total":     res.Total,
 		"title":     res.Title,
+		"metrics":   hudstats.Collect(file), // 卡片底部状态行指标（与桌面 transcriptsvc 同源，见 hudstats）
 	})
 }
 
