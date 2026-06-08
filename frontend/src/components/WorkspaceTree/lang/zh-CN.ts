@@ -58,7 +58,7 @@ export const workspaceTreeZhCN: Messages = {
       pathPlaceholder: '留空则用机器默认路径',
       add: '添加',
       noMachines: '还没有 SSH 机器',
-      noMachinesHint: '先到「设置 → SSH 机器」添加一台，再回来登记远程项目。',
+      noMachinesHint: '先到左侧「SSH」页添加一台，再回来登记远程项目。',
     },
     error: {
       title: '工作空间操作失败',

@@ -57,7 +57,7 @@ export const workspaceTreeEnUS: Messages = {
       pathPlaceholder: "Leave empty to use the machine's default path",
       add: 'Add',
       noMachines: 'No SSH machines yet',
-      noMachinesHint: 'Add one under Settings → SSH machines first, then register a remote project here.',
+      noMachinesHint: 'Add one on the left SSH page first, then register a remote project here.',
     },
     error: {
       title: 'Workspace operation failed',
