@@ -34,6 +34,7 @@ export const zhCN: Locale = {
       files: '文件',
       git: 'Git',
       history: '本地历史',
+      ssh: 'SSH',
       mcpe: 'MC PE',
       todo: '待办',
       settings: '设置',

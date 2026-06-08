@@ -27,6 +27,7 @@ export const enUS: Locale = {
       files: 'Files',
       git: 'Git',
       history: 'Local History',
+      ssh: 'SSH',
       mcpe: 'MC PE',
       todo: 'Todo',
       settings: 'Settings',

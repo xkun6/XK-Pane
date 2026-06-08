@@ -4,6 +4,7 @@ import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
 import VideogameAssetRoundedIcon from '@mui/icons-material/VideogameAssetRounded';
 import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
 import ChecklistRoundedIcon from '@mui/icons-material/ChecklistRounded';
+import DnsRoundedIcon from '@mui/icons-material/DnsRounded';
 import { lazy } from 'react';
 import { HomePage } from '@/pages/HomePage/HomePage';
 import { McpePage } from '@/pages/McpePage';
@@ -11,6 +12,7 @@ import { HomePageSkeleton } from '@/pages/HomePage/HomePage.skeleton';
 import { SettingsPageSkeleton } from '@/pages/SettingsPage/SettingsPage.skeleton';
 import { TerminalPageSkeleton } from '@/pages/TerminalPage/TerminalPage.skeleton';
 import { FilesPageSkeleton } from '@/pages/FilesPage/FilesPage.skeleton';
+import { SshPageSkeleton } from '@/pages/SshPage/SshPage.skeleton';
 import type { RouteDefinition } from '@/router';
 
 // SettingsPage 走 React.lazy：调色板编辑器较重，首屏不进入 main bundle。
@@ -42,6 +44,13 @@ const FilesPage = lazy(async () => {
 const TodoPage = lazy(async () => {
   const mod = await import('@/pages/TodoPage/TodoPage');
   return { default: mod.TodoPage };
+});
+
+// SshPage 走 lazy：与机器表单 / CLI 检测一同拆出主 bundle；keepAlive 保留连通测试结果
+// 与表单输入（离开 SSH 页再回不重测 / 不丢草稿）。
+const SshPage = lazy(async () => {
+  const mod = await import('@/pages/SshPage/SshPage');
+  return { default: mod.SshPage };
 });
 
 // 路由表是唯一事实源：
@@ -83,6 +92,16 @@ export const routes: RouteDefinition[] = [
     slot: 'primary',
     keepAlive: true, // 保活：保留目录树展开态 / 打开的文件 / Monaco 实例
     desktopOnly: true, // 文件系统访问仅桌面端；Web(viewer) 端 Sidebar 隐藏入口
+  },
+  {
+    id: 'ssh',
+    labelKey: 'route.ssh',
+    label: 'SSH',
+    icon: DnsRoundedIcon,
+    element: <SshPage />,
+    fallback: <SshPageSkeleton />,
+    slot: 'primary',
+    keepAlive: true, // 保活：保留连通测试结果 / 表单草稿（离开 SSH 页再回不重测 / 不丢输入）
   },
   {
     id: 'mcpe',
