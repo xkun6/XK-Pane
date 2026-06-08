@@ -201,7 +201,7 @@ export const SshPage = () => {
                       size="small"
                       aria-label={t('ssh.actions.test')}
                       onClick={() => void vm.testConnectivity(m)}
-                      disabled={test?.testing}
+                      disabled={vm.checkingAll || test?.testing}
                     >
                       <NetworkCheckRoundedIcon fontSize="small" />
                     </IconButton>

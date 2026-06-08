@@ -88,15 +88,18 @@ export const useSshPage = (): UseSshPageResult => {
     useSshMachines();
   const { tools, loading: toolsLoading } = useCliTools();
   const { launchProject } = useTerminal();
-  const { navigate } = useRouter();
+  const { navigate, active } = useRouter();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<SshMachineInput>(emptyDraft);
   const [tests, setTests] = useState<Record<string, TestState>>({});
   const [checkingAll, setCheckingAll] = useState(false);
-  const abortRef = useRef(false);
   const autoCheckedRef = useRef(false);
+  // 当前激活路由 id：该页 keepAlive 常驻不卸载，靠它在离开 SSH 页时中止后台串行拨测
+  // （遵 frontend/CLAUDE.md keepAlive 铁律——不能依赖卸载 cleanup）。
+  const activeIdRef = useRef(active.id);
+  activeIdRef.current = active.id;
 
   const openAdd = useCallback(() => {
     setEditingId(null);
@@ -159,6 +162,13 @@ export const useSshPage = (): UseSshPageResult => {
       if (!ok) return;
       try {
         await removeMachine(m.id);
+        // 清理该机的连通测试残留（id 由后端 uuid 生成不复用，避免 keepAlive 页 tests map 只增不减）。
+        setTests((prev) => {
+          if (!(m.id in prev)) return prev;
+          const next = { ...prev };
+          delete next[m.id];
+          return next;
+        });
       } catch (e) {
         await NativeDialogs.error(s.errorTitle, messageOf(e));
       }
@@ -182,35 +192,28 @@ export const useSshPage = (): UseSshPageResult => {
     [checkConnectivity],
   );
 
-  // 串行逐机检测（避免并发 SSH 爆发）；checkingAll 期间禁重入。
+  // 串行逐机检测（避免并发 SSH 爆发）；checkingAll 期间禁重入；离开 SSH 页即中止。
   const testAll = useCallback(async (): Promise<void> => {
     if (checkingAll || machines.length === 0) return;
     setCheckingAll(true);
-    abortRef.current = false;
     for (const m of machines) {
-      if (abortRef.current) break;
+      if (activeIdRef.current !== 'ssh') break; // keepAlive 页：离开即停后台拨测
       await testConnectivity(m);
     }
     setCheckingAll(false);
   }, [checkingAll, machines, testConnectivity]);
 
-  // 首次机器列表加载后自动测一次在线状态（仅一次）。
+  // 首次机器列表加载后自动测一次在线状态（仅一次）。autoCheckedRef 在定时器真正开跑时才置位——
+  // 否则 machines 分批 / 引用抖动触发 effect 重跑时，cleanup 会清掉尚未触发的定时器而守卫已跳过，
+  // 导致首屏自动连通测试整体丢失。
   useEffect(() => {
-    if (machines.length > 0 && !autoCheckedRef.current && !checkingAll) {
+    if (autoCheckedRef.current || machines.length === 0 || checkingAll) return undefined;
+    const timer = setTimeout(() => {
       autoCheckedRef.current = true;
-      const timer = setTimeout(() => void testAll(), 400);
-      return () => clearTimeout(timer);
-    }
-    return undefined;
+      void testAll();
+    }, 400);
+    return () => clearTimeout(timer);
   }, [machines.length, checkingAll, testAll]);
-
-  // 卸载时中止串行检测。
-  useEffect(
-    () => () => {
-      abortRef.current = true;
-    },
-    [],
-  );
 
   // 连接：合成 SSHSpec + 合成项目键 → launchProject（runtimeKind='ssh'）→ 跳终端页。
   // cliTool='none' = 远端裸 shell；其余 = 远端起对应 CLI。
