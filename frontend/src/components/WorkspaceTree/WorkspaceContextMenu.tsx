@@ -33,6 +33,7 @@ export interface WorkspaceMenuStrings {
   setAlias: string;
   delete: string;
   copyPath: string;
+  copyName: string;
   removeProject: string;
   openInExplorer: string;
   openInFileBrowser: string;
@@ -52,6 +53,7 @@ export interface WorkspaceContextMenuProps {
   onSetAlias: () => void;
   onDelete: () => void;
   onCopyPath: () => void;
+  onCopyName: () => void;
   onRemoveProject: () => void;
   onOpenInExplorer: () => void;
   onOpenInFileBrowser: () => void;
@@ -73,6 +75,7 @@ export const WorkspaceContextMenu = ({
   onSetAlias,
   onDelete,
   onCopyPath,
+  onCopyName,
   onRemoveProject,
   onOpenInExplorer,
   onOpenInFileBrowser,
@@ -170,6 +173,12 @@ export const WorkspaceContextMenu = ({
             <ContentCopyRoundedIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText>{strings.copyPath}</ListItemText>
+        </MenuItem>,
+        <MenuItem key="copy-name" onClick={onCopyName}>
+          <ListItemIcon>
+            <ContentCopyRoundedIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>{strings.copyName}</ListItemText>
         </MenuItem>,
         <MenuItem key="alias" onClick={onSetAlias}>
           <ListItemIcon>

@@ -130,6 +130,7 @@ export const WorkspaceTree = () => {
     setAlias: t('workspaceTree.menu.setAlias'),
     delete: t('workspaceTree.delete'),
     copyPath: t('workspaceTree.menu.copyPath'),
+    copyName: t('workspaceTree.menu.copyName'),
     removeProject: t('workspaceTree.menu.removeProject'),
     openInExplorer: t('workspaceTree.menu.openInExplorer'),
     openInFileBrowser: t('workspaceTree.menu.openInFileBrowser'),
@@ -247,6 +248,12 @@ export const WorkspaceTree = () => {
     closeMenu();
   };
 
+  // 复制项目显示名（别名优先 → SSH user@host → 路径末段），复用 copyPath 的剪贴板写入。
+  const handleCopyName = (): void => {
+    if (menu?.kind === 'project') vm.copyPath(projectDisplayName(menu.project));
+    closeMenu();
+  };
+
   const handleOpenInExplorer = (): void => {
     if (menu?.kind === 'project') void vm.openInExplorer(menu.project.path, errTitle());
     closeMenu();
@@ -355,6 +362,7 @@ export const WorkspaceTree = () => {
         onSetAlias={handleSetAlias}
         onDelete={handleDelete}
         onCopyPath={handleCopyPath}
+        onCopyName={handleCopyName}
         onRemoveProject={handleRemoveProject}
         onOpenInExplorer={handleOpenInExplorer}
         onOpenInFileBrowser={handleOpenInFileBrowser}

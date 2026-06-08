@@ -41,6 +41,7 @@ export const workspaceTreeEnUS: Messages = {
       rename: 'Rename',
       setAlias: 'Set alias',
       copyPath: 'Copy path',
+      copyName: 'Copy project name',
       openInExplorer: 'Reveal in file manager',
       openInFileBrowser: 'Open in file browser',
       removeProject: 'Remove project',
