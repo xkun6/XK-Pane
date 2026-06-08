@@ -6,7 +6,6 @@ import { registerLanguageLocales } from '../language';
 import { registerDatabaseLocales } from '../database';
 import { registerKnowledgeLocales } from '../knowledge';
 import { registerProviderSettingsLocales } from '../provider';
-import { registerSshMachineSettingsLocales } from '../sshmachine';
 import { registerWebAccessLocales } from '../webaccess';
 
 let registered = false;
@@ -23,7 +22,6 @@ export const registerSettingsPageLocales = (): void => {
   registerDatabaseLocales();
   registerKnowledgeLocales();
   registerProviderSettingsLocales();
-  registerSshMachineSettingsLocales();
   registerWebAccessLocales();
   registered = true;
 };

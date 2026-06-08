@@ -7,7 +7,7 @@ import { registerGitPageLocales } from '@/pages/GitPage/lang';
 import { registerHistoryPageLocales } from '@/pages/HistoryPage/lang';
 import { registerMcpePageLocales } from '@/pages/McpePage';
 import { registerTodoPageLocales } from '@/pages/TodoPage/lang';
-import { registerSshPageLocales } from '@/pages/SshPage';
+import { registerSshPageLocales } from '@/pages/SshPage/lang';
 import { registerWorkspaceTreeLocales } from '@/components/WorkspaceTree';
 import { registerPaneTreeLocales } from '@/components/PaneTree';
 import { registerWebWorkspaceTreeLocales } from '@/components/WebWorkspaceTree';
