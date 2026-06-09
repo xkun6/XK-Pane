@@ -336,6 +336,9 @@ func Run(assets embed.FS, trayIcon []byte) error {
 		// create/update/query_task_binding MCP 工具（dispatch-todos skill 的「Todo 驱动」闭环据此跑通）。
 		Todos:        todoSvc,
 		TaskBindings: tbSvc,
+		// 结合 ccpane SSH：ssh_exec/ssh_upload 经独立非交互 ssh/scp 通道操作 ssh_machines 机器
+		// （另起通道，不复用用户交互式 SSH 会话）。Executor 普通结构体（不进 bindings），同 holder。
+		SSHExec: sshmachine.NewExecutor(holder),
 	})
 	orchSvc.SetEmitter(mirrorEmit) // 编排工具 Emit orchestrator:launch 经双路达桌面 + Web
 	// Web 网关远程端点的下游能力（fail-closed 白名单 §9）：launch（公共化 LaunchTask）+ 只读列表。

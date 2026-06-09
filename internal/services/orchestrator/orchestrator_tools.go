@@ -60,6 +60,7 @@ func (s *Service) registerTools(srv *mcp.Server) {
 	s.registerTodoTools(srv)    // 结合 ccpane：query/create/update_todo + create/update/query_task_binding
 	s.registerMCPETools(srv)    // P6e：MC PE 控制工具（execute/reload/日志，截图/点击在 Windows 单元补）
 	s.registerBedrockTools(srv) // P6f：Bedrock 只读知识库工具（API/事件/组件/分类查询，指南/审查/校验在后续单元补）
+	s.registerSSHTools(srv)     // 结合 ccpane SSH：ssh_exec/ssh_upload 经独立非交互通道操作远端机器
 }
 
 // ── 参数结构（json 名 + jsonschema 描述；omitempty = 可选）─────────────────

@@ -31,6 +31,7 @@ import (
 
 	"xkpane/internal/services/mcdkbridge"
 	"xkpane/internal/services/notification"
+	"xkpane/internal/services/sshmachine"
 	"xkpane/internal/services/taskbinding"
 	"xkpane/internal/services/terminal"
 	"xkpane/internal/services/todo"
@@ -94,6 +95,14 @@ type TaskBindings interface {
 	Query(ctx context.Context, q taskbinding.Query) (taskbinding.QueryResult, error)
 }
 
+// SSHExec 是经【独立非交互 ssh/scp 通道】对 ssh_machines 机器执行远端命令 / 上传文件的能力
+// （*sshmachine.Executor 满足）。区别于 write_to_session（向用户的交互式 PTY 会话写键）：这里另起
+// 一条干净通道，拿分离 stdout/stderr + 真实退出码、二进制传文件。nil = ssh_exec/ssh_upload 返回「错误: …」。
+type SSHExec interface {
+	Exec(ctx context.Context, machineID, command string, timeoutSecs int) (sshmachine.ExecResult, error)
+	Upload(ctx context.Context, machineID, localPath, remotePath string, timeoutSecs int) (sshmachine.UploadResult, error)
+}
+
 // Deps 是 orchestrator 编排工具的下游依赖（app 装配阶段注入既有 service）。
 type Deps struct {
 	Terminal   Terminal
@@ -106,6 +115,7 @@ type Deps struct {
 
 	Todos        Todos        // 结合 ccpane：query_todos/create_todo/update_todo（dispatch-todos skill 依赖）
 	TaskBindings TaskBindings // 结合 ccpane：create/update/query_task_binding（分派落库追踪）
+	SSHExec      SSHExec      // 结合 ccpane SSH：ssh_exec/ssh_upload 经非交互通道操作远端机器（nil = 工具报错）
 }
 
 // orchestratorVersion 报给 MCP 客户端的 server 版本（与应用版本解耦，独立演进）。
