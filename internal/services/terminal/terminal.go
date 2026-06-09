@@ -168,6 +168,15 @@ type session struct {
 	// sshAuth 是 ssh+password 会话的密码自动应答运行时；nil = 不武装（本地/key/agent）。
 	// 仅 readLoop goroutine 读写，无需同步。
 	sshAuth *sshAuthRuntime
+
+	// runtimeKind/sshHost/sshUser/machineID 是会话来源标识，供 orchestrator list_sessions /
+	// get_session_status 透出——让 MCP 侧 Agent 认出哪条是 SSH 会话、连的哪台机/远端用户，
+	// machineID 还供 ssh_exec / ssh_upload 复用（按机器另起非交互通道）。CreateSession 时一次性
+	// 填入、之后不变（只读，无需同步）。非 ssh 会话 runtimeKind="local"，其余三项为空。
+	runtimeKind string
+	sshHost     string
+	sshUser     string
+	machineID   string
 }
 
 // New 构造终端服务。registry 提供 CLI 工具命令拼装（Phase 1 cliadapters）。
@@ -285,6 +294,15 @@ func spawnCwd(spec CreateSpec) string {
 	return spec.ProjectPath
 }
 
+// runtimeMetaOf 抽取会话来源标识：ssh 运行时 → ("ssh", host, user, machineID)；其余 → ("local","","","")。
+// 供 list_sessions / get_session_status 让 MCP 侧识别 SSH 会话，machineID 供 ssh_exec/ssh_upload 复用。
+func runtimeMetaOf(spec CreateSpec) (runtimeKind, host, user, machineID string) {
+	if spec.RuntimeKind == "ssh" && spec.SSH != nil {
+		return "ssh", spec.SSH.Host, spec.SSH.User, spec.SSH.MachineID
+	}
+	return "local", "", "", ""
+}
+
 // CreateSession 在 ProjectPath 下用 CliTool（或裸 shell）启动 PTY 会话，返回 sessionId。
 // 启动后输出经 terminal:output 事件流式推送，退出经 terminal:exit 通知。
 func (s *Service) CreateSession(ctx context.Context, spec CreateSpec) (string, error) {
@@ -327,6 +345,7 @@ func (s *Service) CreateSession(ctx context.Context, spec CreateSpec) (string, e
 		return "", fmt.Errorf("terminal: spawn %s: %w", command, err)
 	}
 
+	rk, sshHost, sshUser, machineID := runtimeMetaOf(spec)
 	sess := &session{
 		id:              id,
 		pty:             pt,
@@ -341,7 +360,11 @@ func (s *Service) CreateSession(ctx context.Context, spec CreateSpec) (string, e
 		outBuf:          newOutputBuffer(liveOutputMaxLines, liveOutputMaxBytes),
 		rawBuf:          newRawRingBuffer(rawReplayMaxBytes),
 		// ssh+password 会话武装密码自动应答（解密一次缓存于会话内存）；其余为 nil（readLoop no-op）。
-		sshAuth: s.armSSHPassword(ctx, spec),
+		sshAuth:     s.armSSHPassword(ctx, spec),
+		runtimeKind: rk,
+		sshHost:     sshHost,
+		sshUser:     sshUser,
+		machineID:   machineID,
 	}
 
 	s.mu.Lock()
@@ -437,6 +460,10 @@ type SessionSnapshot struct {
 	ClaudeSessionID string `json:"claudeSessionId"` // claude/reclaude 转录文件 id（结构化时间线精确定位用）；其余为空
 	Status          string `json:"status"`          // 活跃会话恒 "active"（XK 暂不推断 idle/waiting）
 	LastOutputAt    int64  `json:"lastOutputAt"`    // 最近输出时刻 unix ms；无输出则为创建后的 0
+	RuntimeKind     string `json:"runtimeKind"`     // 会话来源："local"（本地 PTY）| "ssh"（远端会话）；供 MCP 侧识别
+	SSHHost         string `json:"sshHost"`         // ssh 会话的远端主机；local 为空
+	SSHUser         string `json:"sshUser"`         // ssh 会话的远端用户；local 为空
+	MachineID       string `json:"machineId"`       // ssh 会话对应的 ssh_machines.id；供 ssh_exec/ssh_upload 复用；local 为空
 }
 
 // SessionSnapshots 返回当前活跃会话快照（含 status + 最近输出时刻），供 orchestrator
@@ -454,6 +481,10 @@ func (s *Service) SessionSnapshots() []SessionSnapshot {
 			ClaudeSessionID: sess.claudeSessionID,
 			Status:          "active",
 			LastOutputAt:    sess.lastOutputMs.Load(),
+			RuntimeKind:     sess.runtimeKind,
+			SSHHost:         sess.sshHost,
+			SSHUser:         sess.sshUser,
+			MachineID:       sess.machineID,
 		})
 	}
 	return out

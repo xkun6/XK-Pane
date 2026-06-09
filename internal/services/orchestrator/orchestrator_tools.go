@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"xkpane/internal/services/terminal"
+
 	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -33,11 +35,11 @@ func (s *Service) registerTools(srv *mcp.Server) {
 	}, s.toolListWorkspaces)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "list_sessions",
-		Description: "列出所有活跃的终端会话及其状态，返回 sessionId、status、lastOutputAt。",
+		Description: "列出所有活跃的终端会话及其状态，返回 sessionId、status、lastOutputAt，以及来源标识 runtimeKind（local/ssh）、cliTool；SSH 会话另带 sshHost/sshUser/machineId。用 runtimeKind=='ssh' 即可认出用户在 SSH 页连接的远端会话——随后可用 submit_to_session 向其发指令、get_session_output 读屏；machineId 供 ssh_exec/ssh_upload 复用。",
 	}, s.toolListSessions)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "get_session_status",
-		Description: "查询指定终端会话的当前状态（active/exited）及最近输出时间。",
+		Description: "查询指定终端会话的当前状态（active/exited）、最近输出时间及来源标识（runtimeKind/cliTool，SSH 会话另带 sshHost/sshUser/machineId）。",
 	}, s.toolGetSessionStatus)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "get_session_output",
@@ -158,9 +160,7 @@ func (s *Service) toolListWorkspaces(ctx context.Context, _ *mcp.CallToolRequest
 func (s *Service) toolListSessions(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
 	sessions := []map[string]any{}
 	for _, sn := range s.deps.Terminal.SessionSnapshots() {
-		sessions = append(sessions, map[string]any{
-			"sessionId": sn.ID, "status": sn.Status, "lastOutputAt": sn.LastOutputAt,
-		})
+		sessions = append(sessions, sessionView(sn))
 	}
 	return jsonResult(map[string]any{"sessions": sessions}), nil, nil
 }
@@ -168,9 +168,7 @@ func (s *Service) toolListSessions(_ context.Context, _ *mcp.CallToolRequest, _ 
 func (s *Service) toolGetSessionStatus(_ context.Context, _ *mcp.CallToolRequest, in sessionIDParams) (*mcp.CallToolResult, any, error) {
 	for _, sn := range s.deps.Terminal.SessionSnapshots() {
 		if sn.ID == in.SessionID {
-			return jsonResult(map[string]any{
-				"sessionId": sn.ID, "status": sn.Status, "lastOutputAt": sn.LastOutputAt,
-			}), nil, nil
+			return jsonResult(sessionView(sn)), nil, nil
 		}
 	}
 	return textResult(fmt.Sprintf("错误: 会话 '%s' 不存在", in.SessionID)), nil, nil
@@ -217,6 +215,24 @@ func (s *Service) toolKillSession(ctx context.Context, _ *mcp.CallToolRequest, i
 }
 
 // ── 辅助 ────────────────────────────────────────────────────────────────
+
+// sessionView 把会话快照投影成 MCP 工具返回字段集（list_sessions / get_session_status 共用）。
+// 始终带 runtimeKind/cliTool；仅 SSH 会话附 sshHost/sshUser/machineId（local 省略，免噪声）。
+func sessionView(sn terminal.SessionSnapshot) map[string]any {
+	m := map[string]any{
+		"sessionId":    sn.ID,
+		"status":       sn.Status,
+		"lastOutputAt": sn.LastOutputAt,
+		"runtimeKind":  sn.RuntimeKind,
+		"cliTool":      sn.CliTool,
+	}
+	if sn.RuntimeKind == "ssh" {
+		m["sshHost"] = sn.SSHHost
+		m["sshUser"] = sn.SSHUser
+		m["machineId"] = sn.MachineID
+	}
+	return m
+}
 
 // textResult 把字符串包成 MCP TextContent 结果。
 func textResult(text string) *mcp.CallToolResult {
