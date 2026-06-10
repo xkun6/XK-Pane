@@ -32,6 +32,7 @@ var allowedSubcmds = map[string]bool{
 	"restore":      true,
 	"commit":       true,
 	"check-ignore": true, // worktreesvc：判定工具目录是否已被忽略（退出码即答案）
+	"ls-files":     true, // worktreesvc：判定目录下有无被跟踪文件（有则不自动 ignore）
 }
 
 // runGit 经 procx 同步执行 git 子命令（go-git 无对应/弱项时的 CLI 回退）。

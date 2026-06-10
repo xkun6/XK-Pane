@@ -41,3 +41,41 @@ func (r *Repo) TopLevel(ctx context.Context) (string, error) {
 	}
 	return strings.TrimSpace(stdout), nil
 }
+
+// HasTrackedFiles 判定 relPath（目录或文件）下是否存在被 git 跟踪的文件
+// （git ls-files 有输出即有）。供 worktreesvc 守门：目录内容已入库的仓库
+// 不自动追加 ignore（gitignore 不影响已跟踪文件，但会让后续新增文件被静默漏收）。
+func (r *Repo) HasTrackedFiles(ctx context.Context, relPath string) (bool, error) {
+	stdout, _, err := runGit(ctx, r.path, "ls-files", "--", relPath)
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(stdout) != "", nil
+}
+
+// PathHasChanges 判定指定路径相对 HEAD 是否有未提交改动（工作树或暂存区，含未跟踪；
+// git status --porcelain -- <path> 非空即有）。
+func (r *Repo) PathHasChanges(ctx context.Context, relPath string) (bool, error) {
+	stdout, _, err := runGit(ctx, r.path, "status", "--porcelain", "--", relPath)
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(stdout) != "", nil
+}
+
+// BranchNamesCLI 经 CLI（for-each-ref refs/heads）列本地分支名。与 go-git 版 Branches()
+// 的差别：在 linked worktree 内打开仓库时 go-git（未开 EnableDotGitCommonDir）看不到
+// 共享 refs 而返回空；CLI 始终读 commondir，结果正确——分支占用判定必须用本方法。
+func (r *Repo) BranchNamesCLI(ctx context.Context) ([]string, error) {
+	stdout, _, err := runGit(ctx, r.path, "for-each-ref", "--format=%(refname:short)", "refs/heads")
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, line := range strings.Split(stdout, "\n") {
+		if name := strings.TrimSpace(line); name != "" {
+			out = append(out, name)
+		}
+	}
+	return out, nil
+}

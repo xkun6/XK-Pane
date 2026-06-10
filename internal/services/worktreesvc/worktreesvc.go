@@ -30,6 +30,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 
 	"xkpane/internal/storage"
 	"xkpane/internal/utils/filex"
@@ -57,7 +58,8 @@ type WorkspaceRegistry interface {
 // 缺省 <UserDataDir>/worktrees。
 type Service struct {
 	workspaces    WorkspaceRegistry
-	worktreesRoot string // ""=惰性解析 UserDataDir
+	worktreesRoot string     // ""=惰性解析 UserDataDir
+	mu            sync.Mutex // 串行化 CreateForProject：slug 占用检查与建树之间无原子性，靠锁闭并发窗口
 }
 
 // New 创建 worktreesvc。workspaces 可为 nil（仅跳过登记，创建仍可用）。
@@ -81,6 +83,8 @@ type CreateResult struct {
 // CreateForProject 为 projectPath 所在仓库自动创建一个隔离 worktree（完整三步：
 // .gitignore 守门 → 建树 → workspace 登记）。projectPath 非 git 仓库时报错。
 func (s *Service) CreateForProject(ctx context.Context, projectPath string) (CreateResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if strings.TrimSpace(projectPath) == "" {
 		return CreateResult{}, errors.New("worktreesvc: project path required")
 	}
@@ -91,6 +95,14 @@ func (s *Service) CreateForProject(ctx context.Context, projectPath string) (Cre
 	root, err := repo.TopLevel(ctx)
 	if err != nil {
 		return CreateResult{}, err
+	}
+	// projectPath 可能是仓库子目录（workspace 登记任意目录）：后续所有 git 操作的
+	// pathspec（.gitignore / check-ignore 探针）都必须以仓库根为 cwd 解析，否则会
+	// 提交错文件 / 误判 ignore —— 拿到根后立即重开句柄。
+	if root != "" && normalizePath(root) != normalizePath(projectPath) {
+		if repo, err = gitx.Open(root); err != nil {
+			return CreateResult{}, err
+		}
 	}
 
 	// ① .gitignore 守门（已忽略则跳过——用户拍板的"如果在 .gitignore 就正常创建"）。
@@ -104,7 +116,7 @@ func (s *Service) CreateForProject(ctx context.Context, projectPath string) (Cre
 	if err != nil {
 		return CreateResult{}, err
 	}
-	slug, wtPath, err := s.pickSlug(repo, groupDir)
+	slug, wtPath, err := s.pickSlug(ctx, repo, groupDir)
 	if err != nil {
 		return CreateResult{}, err
 	}
@@ -116,8 +128,9 @@ func (s *Service) CreateForProject(ctx context.Context, projectPath string) (Cre
 	}
 
 	// ③ 登记进主仓所属 workspace（找不到归属 / 登记失败仅降级：worktree 已可用，
-	// 缺的只是编排面闸门 + 兄弟注入，不应让整次创建报错回滚）。
-	wsID := s.registerInWorkspace(ctx, root, wtPath, slug)
+	// 缺的只是编排面闸门 + 兄弟注入，不应让整次创建报错回滚）。归属匹配兼容两个口径：
+	// workspace 里登记的可能是仓库根，也可能是用户实际选的子目录（projectPath）。
+	wsID := s.registerInWorkspace(ctx, []string{root, projectPath}, wtPath, slug)
 
 	logx.For("worktreesvc").Info("worktree created",
 		"repo", root, "worktree", wtPath, "branch", slug,
@@ -134,6 +147,12 @@ func (s *Service) CreateForProject(ctx context.Context, projectPath string) (Cre
 // ensureToolDirsIgnored 确保三个工具目录被 git 忽略：逐个 check-ignore（综合所有
 // ignore 来源），全部已忽略 → 直接返回；有缺失 → 追加进 <root>/.gitignore 并以
 // pathspec 限定提交一次。返回"本次是否发生了提交"。
+//
+// 两道守门（对抗审查实证过的边界）：
+//   - 目录下已有**被跟踪文件**（如本仓自己的 .claude/skills/**）→ 跳过该目录：
+//     gitignore 不影响已跟踪文件，追加只会让用户后续新增文件被 git add 静默漏收；
+//   - 用户对 .gitignore 自身有未提交/已暂存改动 → 明确报错（而非把 WIP 静默卷进
+//     自动提交 / 覆盖暂存版）。
 func (s *Service) ensureToolDirsIgnored(ctx context.Context, repo *gitx.Repo, root string) (bool, error) {
 	var missing []string
 	for _, dir := range toolDirs {
@@ -144,12 +163,32 @@ func (s *Service) ensureToolDirsIgnored(ctx context.Context, repo *gitx.Repo, ro
 		if err != nil {
 			return false, err
 		}
-		if !ignored {
-			missing = append(missing, dir)
+		if ignored {
+			continue
 		}
+		tracked, err := repo.HasTrackedFiles(ctx, dir)
+		if err != nil {
+			return false, err
+		}
+		if tracked {
+			// 该目录内容是仓库有意入库的资产 → 不自动 ignore（创建 worktree 照常）。
+			logx.For("worktreesvc").Info("skip auto-ignore: dir has tracked files", "repo", root, "dir", dir)
+			continue
+		}
+		missing = append(missing, dir)
 	}
 	if len(missing) == 0 {
 		return false, nil
+	}
+
+	// .gitignore 自身有未提交改动（工作树或暂存区）→ 拒绝自动提交：避免把用户 WIP
+	// 卷进 "chore:" 提交、或用工作树版覆盖暂存版。文案英文（人类可见错误归前端 i18n）。
+	dirty, err := repo.PathHasChanges(ctx, ".gitignore")
+	if err != nil {
+		return false, err
+	}
+	if dirty {
+		return false, errors.New("worktreesvc: .gitignore has uncommitted changes; commit or stash it before creating an isolated worktree")
 	}
 
 	giPath := filepath.Join(root, ".gitignore")
@@ -205,14 +244,16 @@ func (s *Service) groupDirFor(repoRoot string) (string, error) {
 }
 
 // pickSlug 选一个目录与本地分支都未占用的 slug；8 次随机碰壁后退化为「slug-4hex」。
-func (s *Service) pickSlug(repo *gitx.Repo, groupDir string) (slug, wtPath string, err error) {
-	branches, err := repo.Branches()
+// 分支表走 CLI（BranchNamesCLI）：go-git 版 Branches() 在 linked worktree 内打开时
+// 看不到共享 refs（恒空表），会让占用检测失效、撞已有分支名。
+func (s *Service) pickSlug(ctx context.Context, repo *gitx.Repo, groupDir string) (slug, wtPath string, err error) {
+	branches, err := repo.BranchNamesCLI(ctx)
 	if err != nil {
 		return "", "", err
 	}
 	taken := make(map[string]bool, len(branches))
-	for _, br := range branches {
-		taken[br.Name] = true
+	for _, name := range branches {
+		taken[name] = true
 	}
 	candidate := func(name string) (string, bool) {
 		p := filepath.Join(groupDir, name)
@@ -238,10 +279,10 @@ func (s *Service) pickSlug(repo *gitx.Repo, groupDir string) (slug, wtPath strin
 	return name, p, nil
 }
 
-// registerInWorkspace 把 worktree 登记进「包含主仓根」的第一个 workspace（项目路径
-// 精确匹配，归一化口径对齐 workspace service 的去重比较）。alias = slug，便于侧栏
-// 一眼区分。任何失败仅记日志返回 ""（降级不阻断）。
-func (s *Service) registerInWorkspace(ctx context.Context, repoRoot, wtPath, slug string) string {
+// registerInWorkspace 把 worktree 登记进「包含任一候选路径（仓库根 / 用户登记的
+// 子目录）」的第一个 workspace（归一化精确匹配，口径对齐 workspace service 的去重
+// 比较）。alias = slug，便于侧栏一眼区分。任何失败仅记日志返回 ""（降级不阻断）。
+func (s *Service) registerInWorkspace(ctx context.Context, candidates []string, wtPath, slug string) string {
 	if s.workspaces == nil {
 		return ""
 	}
@@ -250,10 +291,15 @@ func (s *Service) registerInWorkspace(ctx context.Context, repoRoot, wtPath, slu
 		logx.For("worktreesvc").Warn("list workspaces failed; skip register", "err", err)
 		return ""
 	}
-	norm := normalizePath(repoRoot)
+	norms := make(map[string]bool, len(candidates))
+	for _, c := range candidates {
+		if c != "" {
+			norms[normalizePath(c)] = true
+		}
+	}
 	for _, ws := range wss {
 		for _, p := range ws.Projects {
-			if normalizePath(p.Path) != norm {
+			if !norms[normalizePath(p.Path)] {
 				continue
 			}
 			wp, err := s.workspaces.AddProject(ctx, ws.ID, wtPath)

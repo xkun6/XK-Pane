@@ -34,8 +34,12 @@ func gitDo(t *testing.T, dir string, args ...string) {
 }
 
 // initRepo：git init + 首提交（worktree add 需要已生 HEAD）。
+// t.Setenv 隔离全局/系统 git 配置：被测 service 内部 runGit 用 os.Environ()，开发机若
+// 全局开了 commit.gpgsign / core.hooksPath，自动提交会调 gpg/hook 导致测试失败或挂死。
 func initRepo(t *testing.T) string {
 	t.Helper()
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	dir := t.TempDir()
 	gitDo(t, dir, "init")
 	gitDo(t, dir, "config", "user.email", "t@t.test")
@@ -161,6 +165,121 @@ func TestCreateSkipsCommitWhenAlreadyIgnored(t *testing.T) {
 	}
 	if _, err := os.Stat(res.WorktreePath); err != nil {
 		t.Fatalf("worktree missing: %v", err)
+	}
+}
+
+func TestSkipsIgnoreForTrackedToolDirs(t *testing.T) {
+	requireGit(t)
+	repoDir := initRepo(t)
+	// .claude 下有被跟踪文件（如本仓自己的 bundled skills）→ 不得把 .claude/ 写进
+	// .gitignore（否则用户后续新增文件被 git add 静默漏收）；其余两个目录照常补。
+	if err := os.MkdirAll(filepath.Join(repoDir, ".claude", "skills"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repoDir, ".claude", "skills", "a.md"), []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitDo(t, repoDir, "add", ".claude")
+	gitDo(t, repoDir, "commit", "-m", "track claude assets")
+
+	svc := New(nil)
+	svc.setWorktreesRoot(t.TempDir())
+	res, err := svc.CreateForProject(context.Background(), repoDir)
+	if err != nil {
+		t.Fatalf("CreateForProject: %v", err)
+	}
+	if !res.IgnoreCommitted {
+		t.Fatal("should still commit ignore for .codex/.xkpanes")
+	}
+	gi, err := os.ReadFile(filepath.Join(repoDir, ".gitignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(gi), ".claude/") {
+		t.Errorf(".claude/ must NOT be ignored (has tracked files); got:\n%s", gi)
+	}
+	for _, want := range []string{".codex/", ".xkpanes/"} {
+		if !strings.Contains(string(gi), want) {
+			t.Errorf(".gitignore missing %q; got:\n%s", want, gi)
+		}
+	}
+	if _, err := os.Stat(res.WorktreePath); err != nil {
+		t.Fatalf("worktree missing: %v", err)
+	}
+}
+
+func TestDirtyGitignoreBlocksAutoCommit(t *testing.T) {
+	requireGit(t)
+	repoDir := initRepo(t)
+	// 用户对 .gitignore 自身有未提交 WIP → 必须明确报错，绝不把 WIP 卷进自动提交。
+	if err := os.WriteFile(filepath.Join(repoDir, ".gitignore"), []byte("*.log\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	svc := New(nil)
+	svc.setWorktreesRoot(t.TempDir())
+	_, err := svc.CreateForProject(context.Background(), repoDir)
+	if err == nil || !strings.Contains(err.Error(), ".gitignore has uncommitted changes") {
+		t.Fatalf("expected dirty-gitignore error, got: %v", err)
+	}
+	// .gitignore 原样未动、未产生任何提交。
+	gi, _ := os.ReadFile(filepath.Join(repoDir, ".gitignore"))
+	if string(gi) != "*.log\n" {
+		t.Errorf(".gitignore should be untouched, got:\n%s", gi)
+	}
+}
+
+func TestSubdirProjectPathAnchorsToRoot(t *testing.T) {
+	requireGit(t)
+	repoDir := initRepo(t)
+	// workspace 登记的可以是 monorepo 子目录：.gitignore 必须写到仓库根并在根提交，
+	// 子目录自己的 .gitignore 绝不能被卷进自动提交。
+	sub := filepath.Join(repoDir, "packages", "app")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, ".gitignore"), []byte("dist/\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitDo(t, repoDir, "add", ".")
+	gitDo(t, repoDir, "commit", "-m", "sub gitignore")
+	// 子目录 .gitignore 再加未提交改动（审查实证场景：曾被错误卷进自动提交）。
+	if err := os.WriteFile(filepath.Join(sub, ".gitignore"), []byte("dist/\nwip-edit/\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := New(nil)
+	svc.setWorktreesRoot(t.TempDir())
+	res, err := svc.CreateForProject(context.Background(), sub)
+	if err != nil {
+		t.Fatalf("CreateForProject(subdir): %v", err)
+	}
+	if !res.IgnoreCommitted {
+		t.Fatal("expected ignore commit at repo root")
+	}
+	if res.RepoRoot == sub {
+		t.Errorf("RepoRoot should be repo root, got subdir %q", res.RepoRoot)
+	}
+	// 根 .gitignore 已建且含三目录；子目录 .gitignore 的 WIP 原样保留未被提交。
+	gi, err := os.ReadFile(filepath.Join(repoDir, ".gitignore"))
+	if err != nil {
+		t.Fatalf("root .gitignore missing: %v", err)
+	}
+	for _, want := range []string{".claude/", ".codex/", ".xkpanes/"} {
+		if !strings.Contains(string(gi), want) {
+			t.Errorf("root .gitignore missing %q", want)
+		}
+	}
+	var status strings.Builder
+	if err := procx.Run(context.Background(), procx.Spec{
+		Name: "git", Args: []string{"status", "--porcelain"}, Dir: repoDir,
+		Env:           append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1"),
+		CaptureOutput: true,
+		OnStdout:      func(line string) { status.WriteString(line + "\n") },
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(status.String(), "packages/app/.gitignore") {
+		t.Errorf("subdir .gitignore WIP should survive uncommitted; status:\n%s", status.String())
 	}
 }
 
