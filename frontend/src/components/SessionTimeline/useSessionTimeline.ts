@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   TranscriptService,
   TerminalService,
@@ -45,8 +45,8 @@ export function useSessionTimeline({ sessionId, active }: UseSessionTimelineArgs
   const [metrics, setMetrics] = useState<TimelineMetrics | null>(null);
   const busyRef = useRef(false); // 仅在 idle↔busy 跳变时 setState，避免每个输出批次都重渲
   const cursorRef = useRef(0);
-  const eventsLenRef = useRef(0); // 当前已累积事件数（供 ask-pending 回调即时读取设基线）
-  const pendingBaseLenRef = useRef(0); // 设 pending 时的事件数：转录超过它即视为已答 → 清 pending
+  const answeredAskCountRef = useRef(0); // 「已答 AskUserQuestion」数（供 ask-pending 回调即时读取设基线）
+  const pendingAnsweredBaseRef = useRef(0); // 设 pending 时的已答数：之后超过它 = 该问题已答 → 清 pending
 
   // 会话切换：清空累积、重置游标 + 待答态 + 工作态。
   useEffect(() => {
@@ -89,26 +89,40 @@ export function useSessionTimeline({ sessionId, active }: UseSessionTimelineArgs
     };
   }, [sessionId, active]);
 
-  // 维护事件数 ref（ask-pending 回调在另一闭包里，靠 ref 读最新长度）。
+  // 「已答 AskUserQuestion」数：tool_use(AskUserQuestion) 且其 toolUseId 存在匹配的 tool_result。
+  // ★ 命门：待答期间转录会先落该问题【自己】的 assistant tool_use 行（无 result —— 实测 jsonl 里 tool_use 与
+  //   tool_result 分属相邻两行、tool_use 在前并于作答前即写入）。若按「事件总数增长」判定已答，会把这条
+  //   tool_use 误当成已答而提前清掉底部可点的交互卡 → 退化成中间那张只读卡（不可点）。故只认 tool_result 落地。
+  const answeredAskCount = useMemo(() => {
+    const resultIds = new Set<string>();
+    for (const ev of events) if (ev.kind === 'tool_result' && ev.toolUseId) resultIds.add(ev.toolUseId);
+    let n = 0;
+    for (const ev of events)
+      if (ev.kind === 'tool_use' && ev.toolName === 'AskUserQuestion' && ev.toolUseId && resultIds.has(ev.toolUseId)) n++;
+    return n;
+  }, [events]);
+
+  // 维护已答数 ref（ask-pending 回调在另一闭包里，靠 ref 读最新值）。
   useEffect(() => {
-    eventsLenRef.current = events.length;
-  }, [events.length]);
+    answeredAskCountRef.current = answeredAskCount;
+  }, [answeredAskCount]);
 
   // 订阅「待答 AskUserQuestion」：始终监听（不漏 —— 事件 fire-and-forget 无重放），按会话过滤。
   useEffect(() => {
     if (!sessionId) return;
     const off = TranscriptService.onAskPending(sessionId, (questions) => {
       setPending(questions.length ? questions : null);
-      pendingBaseLenRef.current = eventsLenRef.current; // 记录设 pending 时的事件数
+      pendingAnsweredBaseRef.current = answeredAskCountRef.current; // 记录设 pending 时的已答数
     });
     return off;
   }, [sessionId]);
 
-  // 答完自动清除：待答期间 Claude 阻塞、转录不增长；一旦答完（终端或卡片），转录落 tool_use+tool_result
-  // → 事件数超过设 pending 时的基线 → 清 pending（之后由转录的只读历史卡接管展示，无缝交接、不重叠）。
+  // 答完自动清除：待答期间 Claude 阻塞，唯一新增是该问题自己的 assistant tool_use（无 result，不计入
+  // answeredAskCount）；一旦答完（终端或卡片）落 tool_result → answeredAskCount 增长 → 清 pending
+  //（之后由转录的只读历史卡接管展示，无缝交接、不重叠）。
   useEffect(() => {
-    if (pending && events.length > pendingBaseLenRef.current) setPending(null);
-  }, [events.length, pending]);
+    if (pending && answeredAskCount > pendingAnsweredBaseRef.current) setPending(null);
+  }, [answeredAskCount, pending]);
 
   useEffect(() => {
     if (!sessionId || !active) return;

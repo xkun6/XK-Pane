@@ -49,6 +49,13 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput, onInte
     return m;
   }, [events]);
 
+  // 已有 tool_result 的工具调用 id 集合（用于判定 AskUserQuestion 是否已作答 → 未答的只读卡在 pending 时抑制）。
+  const answeredToolUseIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const ev of events) if (ev.kind === 'tool_result' && ev.toolUseId) s.add(ev.toolUseId);
+    return s;
+  }, [events]);
+
   // 自动贴底：仅当用户已接近底部（或刚切到卡片视图 / 待答卡刚出现）才贴底，避免用户上滚翻看历史时
   // 被 ~1.5s 轮询落的新事件强行拽回底部。
   const prevVisibleRef = useRef(visible);
@@ -72,7 +79,11 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput, onInte
   // 其余 → 带工具图标/色调的折叠卡（header 摘要挑最有信息量字段，正文是完整输入 JSON）。
   const renderToolUse = (ev: TimelineEvent, key: string): React.ReactNode => {
     if (ev.toolName === 'AskUserQuestion' && ev.questions && ev.questions.length > 0) {
-      // 转录里的是【已答】记录 → 只读历史卡。待答态走 pending（hook 旁路，见末尾交互卡）。
+      // 未作答的 AskUserQuestion（无匹配 tool_result）= 当前待答问题，由末尾可点的交互卡（pending）承载。
+      // 此处【不渲染只读卡】——否则与交互卡重复，且用户去点这张不可点的只读卡 → 「点不动」。仅在 pending
+      // 在场时抑制；已作答的（有 result）才作为只读历史卡展示。
+      const answered = !ev.toolUseId || answeredToolUseIds.has(ev.toolUseId);
+      if (!answered && pending) return null;
       return <AskQuestionCard key={key} questions={ev.questions} interactive={false} onRawInput={() => {}} />;
     }
     const input = parseToolInput(ev.toolInput);
