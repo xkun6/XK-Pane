@@ -143,3 +143,15 @@ func (r *Repo) Commit(ctx context.Context, message string) (string, error) {
 	stdout, _, err := runGit(ctx, r.path, "commit", "-m", message)
 	return stdout, err
 }
+
+// CommitPaths 仅提交指定路径的当前工作树内容（git commit -m <msg> -- <paths...>），
+// 不携带暂存区里的其它内容——供自动化提交（如 worktreesvc 补 .gitignore）使用，
+// 绝不把用户已暂存的无关改动一并带走。空列表 no-op。
+func (r *Repo) CommitPaths(ctx context.Context, message string, paths []string) (string, error) {
+	if len(paths) == 0 {
+		return "", nil
+	}
+	args := append([]string{"commit", "-m", message, "--"}, paths...)
+	stdout, _, err := runGit(ctx, r.path, args...)
+	return stdout, err
+}

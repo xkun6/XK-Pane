@@ -31,6 +31,7 @@ var allowedSubcmds = map[string]bool{
 	"add":          true,
 	"restore":      true,
 	"commit":       true,
+	"check-ignore": true, // worktreesvc：判定工具目录是否已被忽略（退出码即答案）
 }
 
 // runGit 经 procx 同步执行 git 子命令（go-git 无对应/弱项时的 CLI 回退）。
@@ -89,4 +90,45 @@ func runGitEnv(ctx context.Context, dir string, extraEnv []string, args ...strin
 		return stdout, stderr, runErr // spawn 失败（如 git 不在 PATH）
 	}
 	return stdout, stderr, nil
+}
+
+// runGitCode 同 runGit，但把「命令以非零码退出」翻译为 exitCode 返回（err 保持 nil），
+// 仅 spawn 级失败（git 不在 PATH 等）才返回 err。供 check-ignore 这类「退出码即答案」
+// （0=命中、1=未命中、其余=出错）的查询使用——runGit 会把退出码 1 误报成错误。
+func runGitCode(ctx context.Context, dir string, args ...string) (exitCode int, stdout, stderr string, err error) {
+	if len(args) == 0 || !allowedSubcmds[args[0]] {
+		sub := ""
+		if len(args) > 0 {
+			sub = args[0]
+		}
+		return 0, "", "", errors.New("gitx: git subcommand not allowed: " + sub)
+	}
+
+	var sb, eb strings.Builder
+	spec := procx.Spec{
+		Name:          "git",
+		Args:          args,
+		Dir:           dir,
+		Env:           append(os.Environ(), "GIT_TERMINAL_PROMPT=0"),
+		CaptureOutput: true,
+		OnStdout: func(line string) {
+			sb.WriteString(line)
+			sb.WriteByte('\n')
+		},
+		OnStderr: func(line string) {
+			eb.WriteString(line)
+			eb.WriteByte('\n')
+		},
+	}
+
+	runErr := procx.Run(ctx, spec)
+	stdout, stderr = sb.String(), eb.String()
+	if runErr != nil {
+		var ee *exec.ExitError
+		if errors.As(runErr, &ee) {
+			return ee.ExitCode(), stdout, stderr, nil
+		}
+		return 0, stdout, stderr, runErr // spawn 失败
+	}
+	return 0, stdout, stderr, nil
 }

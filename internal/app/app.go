@@ -43,6 +43,7 @@ import (
 	"xkpane/internal/services/todo"
 	"xkpane/internal/services/transcriptsvc"
 	"xkpane/internal/services/workspace"
+	"xkpane/internal/services/worktreesvc"
 	"xkpane/internal/storage"
 	"xkpane/internal/utils/httpx"
 	"xkpane/internal/utils/logx"
@@ -104,6 +105,9 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	// project / workspace service 提为变量：既注册给前端，又供 watcher 启动扫描「已登记项目」。
 	projSvc := project.New(holder)
 	wsSvc := workspace.New(holder)
+	// 自动 worktree（paseo 式会话隔离）：.gitignore 守门 → 集中根建树 → 登记进主仓所属
+	// workspace（兄弟注入 + 编排闸门都查 workspace_projects，登记是两者生效的前提）。
+	wtSvc := worktreesvc.New(wsSvc)
 	// 扫盘历史会话 service（无状态、纯文件系统只读）。提为变量：既注册给前端 bindings，
 	// 又注入 Web 网关供 GET /api/sessions/scan（手机「按项目恢复会话」）。
 	scanSvc := sessionscan.New()
@@ -201,6 +205,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(termSvc),
 			application.NewService(clitools.New(cliRegistry)),
 			application.NewService(wsSvc),
+			application.NewService(wtSvc), // 自动 worktree（在隔离 worktree 中启动会话）
 			application.NewService(scanSvc),
 			application.NewService(transcriptSvc), // 结构化时间线（桌面卡片视图取数）
 			application.NewService(wailsNotifier),     // Wails 通知 service（跑 ServiceStartup 注册 toast）
