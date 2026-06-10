@@ -451,25 +451,7 @@ export const sessionTimelineStyles = (theme: Theme): Record<string, SxProps<Them
       fontStyle: 'italic',
       color: fp.text.muted,
     },
-    // —— 输入条 ——
-    // 安全区垫高已下移到其下方的状态行 statusBar（覆盖层最底元素），此处不再补 safe-area。
-    composeBar: {
-      flexShrink: 0,
-      display: 'flex',
-      alignItems: 'flex-end',
-      gap: 1,
-      p: 1,
-      borderTop: `1px solid ${fp.divider}`,
-      backgroundColor: fp.bg.base,
-    },
-    composeField: {
-      flex: 1,
-      '& .MuiOutlinedInput-root': {
-        borderRadius: 2,
-        backgroundColor: fp.bg.content,
-        fontSize: 14,
-      },
-    },
+    // —— 输入条已抽成独立 Composer 组件（components/Composer，样式随迁）——
     // —— 底部状态行（claude-hud 风格：上下文 / 用量(5h) / 本周，纯文字无进度块）——
     // statusBar 始终渲染（承载移动端安全区垫高，即覆盖层最底元素）；无指标时内层 statusRow 不渲染，
     // 桌面下 env(safe-area)=0 → 整条零高度不可见。

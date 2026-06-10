@@ -35,11 +35,15 @@ export const TerminalView = (props: TerminalViewProps) => {
       <SessionTimeline
         sessionId={sid}
         visible={cardVisible}
-        onSend={(text) => {
-          void TerminalService.write(sid, `${text}\r`).catch(() => {});
-        }}
+        // 两段式提交（文本 → 延时 → 单独 '\r'）：codex paste-burst / Ink 消化时序都吃这一套；
+        // 失败让 Composer 回填草稿（透传 reject，不在此吞错）。
+        onSend={(text) => TerminalService.submit(sid, text)}
         onRawInput={(data) => {
           void TerminalService.write(sid, data).catch(() => {});
+        }}
+        // 打断 = 写 Esc（claude/reclaude TUI 的打断键；卡片仅这两类会话挂载）。
+        onInterrupt={() => {
+          void TerminalService.write(sid, '\x1b').catch(() => {});
         }}
       />
     ) : null;

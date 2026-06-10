@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, IconButton, TextField, Tooltip, Typography, useTheme } from '@mui/material';
+import { useEffect, useMemo, useRef } from 'react';
+import { Box, Typography, useTheme } from '@mui/material';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import PsychologyRoundedIcon from '@mui/icons-material/PsychologyRounded';
 import SubdirectoryArrowRightRoundedIcon from '@mui/icons-material/SubdirectoryArrowRightRounded';
 import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
-import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import { useT } from '@/i18n';
+import { Composer } from '@/components/Composer';
 import type { TimelineEvent } from '@/services';
 import { sessionTimelineStyles } from './SessionTimeline.styles';
 import { useSessionTimeline } from './useSessionTimeline';
@@ -23,8 +23,9 @@ import { getToolMeta, parseToolInput, summarizeToolInput } from './messages/tool
 export interface SessionTimelineProps {
   sessionId: string;
   visible: boolean; // false=终端态：不渲染覆盖层、不轮询（保持挂载、状态不丢）
-  onSend: (text: string) => void; // 把整句写进 PTY（父组件拼 '\r' 提交给 Agent）
+  onSend: (text: string) => Promise<void> | void; // 提交整句（父组件两段式写 PTY：文本→延时→'\r'）
   onRawInput?: (data: string) => void; // 原样写入 PTY（不追加 '\r'）：AskUserQuestion 作答按键序列
+  onInterrupt?: () => void; // 打断当前运行（父组件写 Esc）；缺省不显示打断按钮
 }
 
 // 文件转储 / 网页类只读结果：折叠态不展开原文预览（噪声），只在 header 给行数摘要。
@@ -32,13 +33,12 @@ const RESULT_NO_PREVIEW = new Set(['Read', 'WebFetch', 'NotebookRead']);
 
 // SessionTimeline：把活跃会话的 Claude 转录渲染成可重排的对话卡片（覆盖在 xterm 之上）。
 // supported!==true（加载中 / 非 claude）时不渲染 → 露出底层 xterm 镜像（零干扰）。
-export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: SessionTimelineProps) => {
+export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput, onInterrupt }: SessionTimelineProps) => {
   const theme = useTheme();
   const styles = sessionTimelineStyles(theme);
   const t = useT();
   const { events, title, supported, pending, busy, metrics } = useSessionTimeline({ sessionId, active: visible });
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [text, setText] = useState('');
 
   // toolUseId → toolName：给工具结果卡补上来源工具名（结果块本身不带工具名，靠对应 tool_use 关联）。
   const toolNameById = useMemo(() => {
@@ -67,20 +67,6 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: Sess
   // 终端态（!visible）或无结构化转录（非 claude）→ 不渲染覆盖层、露出底层 xterm；但保持挂载，
   // hook 已累积的事件 / supported 不丢，切回卡片即时复现（无需从头重拉）。
   if (supported !== true || !visible) return null;
-
-  const send = (): void => {
-    const v = text.trim();
-    if (!v) return;
-    onSend(v);
-    setText('');
-  };
-  const onKeyDown = (e: React.KeyboardEvent): void => {
-    // 回车发送，Shift+Enter 换行；输入法合成中（中文/日文）不抢回车。
-    if (e.key === 'Enter' && !e.shiftKey && !(e.nativeEvent as { isComposing?: boolean }).isComposing) {
-      e.preventDefault();
-      send();
-    }
-  };
 
   // 工具调用卡：AskUserQuestion → 只读问题卡；TodoWrite → 清单卡；ExitPlanMode → 计划卡；
   // 其余 → 带工具图标/色调的折叠卡（header 摘要挑最有信息量字段，正文是完整输入 JSON）。
@@ -217,26 +203,8 @@ export const SessionTimeline = ({ sessionId, visible, onSend, onRawInput }: Sess
         </Box>
       )}
 
-      <Box sx={styles.composeBar}>
-        <TextField
-          sx={styles.composeField}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder={t('sessionTimeline.composePlaceholder')}
-          multiline
-          maxRows={4}
-          size="small"
-          slotProps={{ htmlInput: { 'aria-label': t('sessionTimeline.composePlaceholder'), enterKeyHint: 'send' } }}
-        />
-        <Tooltip title={t('sessionTimeline.send')}>
-          <span>
-            <IconButton color="primary" onClick={send} disabled={!text.trim()} aria-label={t('sessionTimeline.send')}>
-              <SendRoundedIcon />
-            </IconButton>
-          </span>
-        </Tooltip>
-      </Box>
+      {/* 结构化输入条（paseo 式 Composer）：多行自适应 + 按会话草稿 + 两段式提交 + busy 态打断。 */}
+      <Composer sessionId={sessionId} busy={busy} onSubmit={onSend} onInterrupt={onInterrupt} />
 
       {/* 输入框下方的状态行：上下文 / 用量(5h) / 本周（复用 claude-hud 产物，纯文字）。 */}
       <StatusLine metrics={metrics} />

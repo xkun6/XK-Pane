@@ -11,8 +11,6 @@ export const sessionTimelineEnUS: Messages = {
     resultLines: '{{n}} lines',
     showTerminal: 'Show terminal',
     showChat: 'Show conversation',
-    composePlaceholder: 'Message the agent…',
-    send: 'Send',
     copy: 'Copy',
     copied: 'Copied',
     moreLines: '+{{n}} more',

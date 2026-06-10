@@ -11,8 +11,6 @@ export const sessionTimelineZhCN: Messages = {
     resultLines: '{{n}} 行',
     showTerminal: '切到终端',
     showChat: '切到对话',
-    composePlaceholder: '输入发送给 Agent…',
-    send: '发送',
     copy: '复制',
     copied: '已复制',
     moreLines: '还有 {{n}} 行',

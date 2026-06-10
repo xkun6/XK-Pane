@@ -134,6 +134,21 @@ export const TerminalService = {
     await Binding.WriteInput(sessionId, data);
   },
 
+  // 提交一句输入给会话内 CLI：两段式写入（文本 → 按长度延时 → 单独 '\r'）。
+  // 绝不能把 text+'\r' 当一整块写：codex 的 paste-burst 判定（字符间隔 <8ms 视为粘贴）
+  // 会把尾部 '\r' 当换行而非提交；Ink/TUI 也需要时间消化长文本（同后端 orchestrator
+  // submit_to_session 的 computeEnterDelay 范式）。多行文本包 bracketed-paste 序列
+  // （与终端粘贴同通道，claude/codex 都把其中换行当正文）。busy 时直发也安全：
+  // claude/codex TUI 原生支持运行中提交入队（steer/queue），无需前端排队。
+  async submit(sessionId: string, text: string): Promise<void> {
+    const clean = text.replace(/\r\n?/g, '\n'); // 正文里的 \r 统一成 \n（防被当作提交键）
+    const payload = clean.includes('\n') ? `\x1b[200~${clean}\x1b[201~` : clean;
+    await TerminalService.write(sessionId, payload);
+    const delayMs = Math.min(200 + Math.floor(payload.length / 512) * 30, 5000);
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    await TerminalService.write(sessionId, '\r');
+  },
+
   // 调整 PTY 尺寸（cols=宽, rows=高）。浏览器：no-op（resize 权属 = owner/桌面，M6）。
   async resize(sessionId: string, cols: number, rows: number): Promise<void> {
     if (!isDesktop) return;
