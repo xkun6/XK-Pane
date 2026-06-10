@@ -36,10 +36,14 @@ func gitDo(t *testing.T, dir string, args ...string) {
 // initRepo：git init + 首提交（worktree add 需要已生 HEAD）。
 // t.Setenv 隔离全局/系统 git 配置：被测 service 内部 runGit 用 os.Environ()，开发机若
 // 全局开了 commit.gpgsign / core.hooksPath，自动提交会调 gpg/hook 导致测试失败或挂死。
+// XDG_CONFIG_HOME 必须一并指走：core.excludesFile 未设时 git 读默认
+// $XDG_CONFIG_HOME/git/ignore（回退 ~/.config/git/ignore），它不是 config 文件，
+// GIT_CONFIG_GLOBAL 管不到——开发机该文件里的规则会污染 check-ignore 判定。
 func initRepo(t *testing.T) string {
 	t.Helper()
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "xdg"))
 	dir := t.TempDir()
 	gitDo(t, dir, "init")
 	gitDo(t, dir, "config", "user.email", "t@t.test")
@@ -57,6 +61,7 @@ type stubRegistry struct {
 	workspaces []storage.Workspace
 	added      []string // AddProject 收到的 path
 	aliases    []string
+	removed    []string // RemoveProject 收到的 projectID
 }
 
 func (s *stubRegistry) List(context.Context) ([]storage.Workspace, error) {
@@ -72,6 +77,11 @@ func (s *stubRegistry) SetProjectAlias(_ context.Context, _ string, alias *strin
 	if alias != nil {
 		s.aliases = append(s.aliases, *alias)
 	}
+	return nil
+}
+
+func (s *stubRegistry) RemoveProject(_ context.Context, projectID string) error {
+	s.removed = append(s.removed, projectID)
 	return nil
 }
 
@@ -168,15 +178,31 @@ func TestCreateSkipsCommitWhenAlreadyIgnored(t *testing.T) {
 	}
 }
 
+// hasLine 判定 .gitignore 内容里是否存在与 want **整行相等**的 pattern
+// （Contains 不够：".claude/settings.local.json" 也包含 ".claude/" 子串）。
+func hasLine(content, want string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		if strings.TrimSpace(line) == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestSkipsIgnoreForTrackedToolDirs(t *testing.T) {
 	requireGit(t)
 	repoDir := initRepo(t)
-	// .claude 下有被跟踪文件（如本仓自己的 bundled skills）→ 不得把 .claude/ 写进
-	// .gitignore（否则用户后续新增文件被 git add 静默漏收）；其余两个目录照常补。
-	if err := os.MkdirAll(filepath.Join(repoDir, ".claude", "skills"), 0o755); err != nil {
+	// .claude 下有被跟踪文件（如本仓自己的 bundled skills）→ 不得把 .claude/ 整目录写进
+	// .gitignore（否则用户后续新增文件被 git add 静默漏收），但 XK-Pane 运行时产物
+	// （settings.local.json / skills/xkpane-*/ / 版本标记）仍要退化为文件级 pattern 补上
+	// ——其中已被入库的产物（这里故意跟踪一个 xkpane-tracked skill）再逐个跳过。
+	if err := os.MkdirAll(filepath.Join(repoDir, ".claude", "skills", "xkpane-tracked"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(repoDir, ".claude", "skills", "a.md"), []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repoDir, ".claude", "skills", "xkpane-tracked", "SKILL.md"), []byte("x\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	gitDo(t, repoDir, "add", ".claude")
@@ -189,22 +215,42 @@ func TestSkipsIgnoreForTrackedToolDirs(t *testing.T) {
 		t.Fatalf("CreateForProject: %v", err)
 	}
 	if !res.IgnoreCommitted {
-		t.Fatal("should still commit ignore for .codex/.xkpanes")
+		t.Fatal("should still commit ignore for .codex/.xkpanes + degraded .claude artifacts")
 	}
-	gi, err := os.ReadFile(filepath.Join(repoDir, ".gitignore"))
+	raw, err := os.ReadFile(filepath.Join(repoDir, ".gitignore"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(gi), ".claude/") {
-		t.Errorf(".claude/ must NOT be ignored (has tracked files); got:\n%s", gi)
+	gi := string(raw)
+	if hasLine(gi, ".claude/") {
+		t.Errorf(".claude/ must NOT be ignored as whole dir (has tracked files); got:\n%s", gi)
+	}
+	// 退化的文件级 pattern：未入库的产物路径要补上……
+	for _, want := range []string{".claude/settings.local.json", ".claude/skills/.xkpane-skills-version"} {
+		if !hasLine(gi, want) {
+			t.Errorf(".gitignore missing degraded pattern %q; got:\n%s", want, gi)
+		}
+	}
+	// ……已入库的产物（xkpane-* 命中跟踪文件）跳过，不写 glob pattern。
+	if hasLine(gi, ".claude/skills/xkpane-*/") {
+		t.Errorf("xkpane-*/ pattern must be skipped (artifact tracked); got:\n%s", gi)
 	}
 	for _, want := range []string{".codex/", ".xkpanes/"} {
-		if !strings.Contains(string(gi), want) {
+		if !hasLine(gi, want) {
 			t.Errorf(".gitignore missing %q; got:\n%s", want, gi)
 		}
 	}
 	if _, err := os.Stat(res.WorktreePath); err != nil {
 		t.Fatalf("worktree missing: %v", err)
+	}
+
+	// 第二次创建：退化 pattern 已生效（probe 全命中）→ 不再产生新提交，幂等。
+	res2, err := svc.CreateForProject(context.Background(), repoDir)
+	if err != nil {
+		t.Fatalf("second CreateForProject: %v", err)
+	}
+	if res2.IgnoreCommitted {
+		t.Error("second create should be idempotent (no new ignore commit)")
 	}
 }
 
@@ -314,5 +360,67 @@ func TestCreateDoesNotSweepStagedChanges(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "A  feature.txt") {
 		t.Errorf("staged feature.txt should survive; status:\n%s", out.String())
+	}
+}
+
+func TestUnregisterWorktree(t *testing.T) {
+	// 纯登记表操作（不触 git）：只删「集中根之下 + 路径精确匹配」的行，根外路径静默 no-op。
+	root := t.TempDir()
+	wtPath := filepath.Join(root, "ab12cd34", "calm-otter")
+	reg := &stubRegistry{workspaces: []storage.Workspace{{
+		ID:   "ws-1",
+		Name: "测试空间",
+		Projects: []storage.WorkspaceProject{
+			{ID: "p-main", WorkspaceID: "ws-1", Path: filepath.Join(root, "..", "elsewhere")},
+			{ID: "p-wt", WorkspaceID: "ws-1", Path: wtPath},
+		},
+	}}}
+	svc := New(reg)
+	svc.setWorktreesRoot(root)
+
+	// 集中根之外的路径（普通项目 / 用户自建 worktree）→ 所有权校验拒绝，不动登记表。
+	removed, err := svc.UnregisterWorktree(context.Background(), filepath.Join(t.TempDir(), "manual-wt"))
+	if err != nil {
+		t.Fatalf("UnregisterWorktree(outside): %v", err)
+	}
+	if removed || len(reg.removed) != 0 {
+		t.Errorf("outside path must be no-op; removed=%v calls=%v", removed, reg.removed)
+	}
+
+	// 集中根之下且登记在册 → 删对应行。
+	removed, err = svc.UnregisterWorktree(context.Background(), wtPath)
+	if err != nil {
+		t.Fatalf("UnregisterWorktree: %v", err)
+	}
+	if !removed || len(reg.removed) != 1 || reg.removed[0] != "p-wt" {
+		t.Errorf("should remove exactly p-wt; removed=%v calls=%v", removed, reg.removed)
+	}
+
+	// 未登记的根内路径 → 幂等返回 false 不报错。
+	removed, err = svc.UnregisterWorktree(context.Background(), filepath.Join(root, "ab12cd34", "ghost"))
+	if err != nil || removed {
+		t.Errorf("unknown path should be idempotent false; removed=%v err=%v", removed, err)
+	}
+}
+
+func TestResolveRepoRoot(t *testing.T) {
+	requireGit(t)
+	repoDir := initRepo(t)
+	sub := filepath.Join(repoDir, "packages", "app")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	svc := New(nil)
+	got, err := svc.ResolveRepoRoot(context.Background(), sub)
+	if err != nil {
+		t.Fatalf("ResolveRepoRoot: %v", err)
+	}
+	// TopLevel 返回 git 视角的根（正斜杠）；与入参做归一化比较。
+	norm := func(p string) string { return strings.ToLower(strings.ReplaceAll(p, "\\", "/")) }
+	if norm(got) != norm(repoDir) {
+		t.Errorf("root = %q, want %q", got, repoDir)
+	}
+	if _, err := svc.ResolveRepoRoot(context.Background(), t.TempDir()); err == nil {
+		t.Error("non-repo path should error")
 	}
 }

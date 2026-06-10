@@ -36,6 +36,11 @@ export const workspaceTreeEnUS: Messages = {
       launchLoading: 'Detecting CLI tools…',
       notInstalled: 'Not installed',
       launchInWorktree: 'Launch in isolated worktree',
+      worktreeRootConfirm: {
+        title: 'Confirm target repository',
+        message: 'This project lives inside a parent git repository. The worktree will be created on the repository root below (a one-time .gitignore commit may also land there):\n\n{{root}}\n\nContinue?',
+        ok: 'Create anyway',
+      },
       importProject: 'Import project',
       importDialogTitle: 'Choose a project directory',
       addSSHProject: 'Add SSH project',

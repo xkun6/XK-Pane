@@ -45,12 +45,13 @@ var toolDirs = []string{".claude", ".codex", ".xkpanes"}
 // ignoreCommitMessage 是自动补 .gitignore 时的提交信息（写进用户仓库，保持简短双语义）。
 const ignoreCommitMessage = "chore: ignore XK-Pane tool dirs (.claude/.codex/.xkpanes)"
 
-// WorkspaceRegistry 是 workspace service 的窄接口（worktreesvc 只消费这三个方法；
+// WorkspaceRegistry 是 workspace service 的窄接口（worktreesvc 只消费这四个方法；
 // 窄化便于单测 stub，对齐 webapi 窄接口范式）。
 type WorkspaceRegistry interface {
 	List(ctx context.Context) ([]storage.Workspace, error)
 	AddProject(ctx context.Context, workspaceID, path string) (storage.WorkspaceProject, error)
 	SetProjectAlias(ctx context.Context, projectID string, alias *string) error
+	RemoveProject(ctx context.Context, projectID string) error
 }
 
 // Service 是自动 worktree 的 Wails service。无 storage holder（worktree 自身无表，
@@ -144,13 +145,41 @@ func (s *Service) CreateForProject(ctx context.Context, projectPath string) (Cre
 	}, nil
 }
 
+// subPattern 是「整目录已被跟踪」时的退化 ignore 单元：只忽略 XK-Pane 运行时实际
+// 写入的产物路径，不动仓库有意入库的资产。probe 给 check-ignore（glob pattern 用一个
+// 具体示例路径，目录型 pattern 探目录内虚拟文件）；trackSpec 给 ls-files（产物本身也
+// 被入库——如本仓 bundled skills——则尊重现状跳过）。
+type subPattern struct {
+	pattern   string // 追加进 .gitignore 的行
+	probe     string // check-ignore 探针路径
+	trackSpec string // ls-files pathspec（默认 wildmatch，* 可跨层）
+}
+
+// trackedDirSubPatterns 按工具目录列出 projecthooks.Sync / skills 同步的固定写入清单
+// （来源：projecthooks/claude.go settings.local.json、codex.go config.toml、skills.go
+// 两侧 skills/<xkpane-*>/SKILL.md + skills/.xkpane-skills-version）。.xkpanes（本地历史）
+// 无固定子清单：整目录被跟踪时只能整体跳过。
+var trackedDirSubPatterns = map[string][]subPattern{
+	".claude": {
+		{".claude/settings.local.json", ".claude/settings.local.json", ".claude/settings.local.json"},
+		{".claude/skills/xkpane-*/", ".claude/skills/xkpane-probe/SKILL.md", ".claude/skills/xkpane-*"},
+		{".claude/skills/.xkpane-skills-version", ".claude/skills/.xkpane-skills-version", ".claude/skills/.xkpane-skills-version"},
+	},
+	".codex": {
+		{".codex/config.toml", ".codex/config.toml", ".codex/config.toml"},
+		{".codex/skills/xkpane-*/", ".codex/skills/xkpane-probe/SKILL.md", ".codex/skills/xkpane-*"},
+		{".codex/skills/.xkpane-skills-version", ".codex/skills/.xkpane-skills-version", ".codex/skills/.xkpane-skills-version"},
+	},
+}
+
 // ensureToolDirsIgnored 确保三个工具目录被 git 忽略：逐个 check-ignore（综合所有
 // ignore 来源），全部已忽略 → 直接返回；有缺失 → 追加进 <root>/.gitignore 并以
 // pathspec 限定提交一次。返回"本次是否发生了提交"。
 //
-// 两道守门（对抗审查实证过的边界）：
-//   - 目录下已有**被跟踪文件**（如本仓自己的 .claude/skills/**）→ 跳过该目录：
-//     gitignore 不影响已跟踪文件，追加只会让用户后续新增文件被 git add 静默漏收；
+// 三段守门（对抗审查实证过的边界）：
+//   - 目录下已有**被跟踪文件**（如本仓自己的 .claude/skills/**）→ 不 ignore 整目录
+//     （gitignore 不影响已跟踪文件，追加只会让用户后续新增文件被 git add 静默漏收），
+//     退化为只 ignore XK-Pane 运行时产物（trackedDirSubPatterns），产物本身也入库的再跳过；
 //   - 用户对 .gitignore 自身有未提交/已暂存改动 → 明确报错（而非把 WIP 静默卷进
 //     自动提交 / 覆盖暂存版）。
 func (s *Service) ensureToolDirsIgnored(ctx context.Context, repo *gitx.Repo, root string) (bool, error) {
@@ -170,12 +199,35 @@ func (s *Service) ensureToolDirsIgnored(ctx context.Context, repo *gitx.Repo, ro
 		if err != nil {
 			return false, err
 		}
-		if tracked {
-			// 该目录内容是仓库有意入库的资产 → 不自动 ignore（创建 worktree 照常）。
+		if !tracked {
+			missing = append(missing, dir+"/")
+			continue
+		}
+		// 该目录内容是仓库有意入库的资产 → 退化为文件级 pattern（无清单的 .xkpanes 整体跳过）。
+		subs := trackedDirSubPatterns[dir]
+		if len(subs) == 0 {
 			logx.For("worktreesvc").Info("skip auto-ignore: dir has tracked files", "repo", root, "dir", dir)
 			continue
 		}
-		missing = append(missing, dir)
+		for _, sp := range subs {
+			ignored, err := repo.IsPathIgnored(ctx, sp.probe)
+			if err != nil {
+				return false, err
+			}
+			if ignored {
+				continue
+			}
+			tracked, err := repo.HasTrackedFiles(ctx, sp.trackSpec)
+			if err != nil {
+				return false, err
+			}
+			if tracked {
+				// 产物本身被仓库入库（如 XK-Pane 自己跟踪 bundled skills）→ 尊重现状。
+				logx.For("worktreesvc").Info("skip auto-ignore: artifact tracked", "repo", root, "path", sp.trackSpec)
+				continue
+			}
+			missing = append(missing, sp.pattern)
+		}
 	}
 	if len(missing) == 0 {
 		return false, nil
@@ -202,8 +254,8 @@ func (s *Service) ensureToolDirsIgnored(ctx context.Context, repo *gitx.Repo, ro
 		b.WriteByte('\n')
 	}
 	b.WriteString("\n# XK-Pane tool dirs (session hooks / injected skills / local history)\n")
-	for _, dir := range missing {
-		b.WriteString(dir + "/\n")
+	for _, p := range missing {
+		b.WriteString(p + "\n")
 	}
 	if err := filex.WriteAtomic(giPath, []byte(b.String()), 0o644); err != nil {
 		return false, err
@@ -217,6 +269,63 @@ func (s *Service) ensureToolDirsIgnored(ctx context.Context, repo *gitx.Repo, ro
 		return false, err
 	}
 	return true, nil
+}
+
+// ResolveRepoRoot 返回 projectPath 所在 git 仓库的根目录（只读廉价探测，不做任何写
+// 操作）。供前端在建树前确认实际目标仓库：projectPath 可能只是更上层仓库里的子目录
+// （.git 向上探测），自动 .gitignore 提交会落到那个根上，应让用户知情确认。非 git
+// 仓库时报错（与 CreateForProject 同口径）。
+func (s *Service) ResolveRepoRoot(ctx context.Context, projectPath string) (string, error) {
+	if strings.TrimSpace(projectPath) == "" {
+		return "", errors.New("worktreesvc: project path required")
+	}
+	repo, err := gitx.Open(projectPath)
+	if err != nil {
+		return "", err
+	}
+	return repo.TopLevel(ctx)
+}
+
+// UnregisterWorktree 删除 workspace_projects 中指向 worktreePath 的登记行（GitPage
+// 手动删树后调用，避免侧栏留下指向已不存在目录的死行）。路径即所有权：仅当
+// worktreePath 位于本服务集中根（<UserDataDir>/worktrees）之下才动手——普通项目 /
+// 用户自建 worktree 静默返回 false。找不到登记行不算错（幂等）。返回是否删了行。
+func (s *Service) UnregisterWorktree(ctx context.Context, worktreePath string) (bool, error) {
+	if s.workspaces == nil || strings.TrimSpace(worktreePath) == "" {
+		return false, nil
+	}
+	base := s.worktreesRoot
+	if base == "" {
+		dataDir, err := storage.UserDataDir()
+		if err != nil {
+			return false, err
+		}
+		base = filepath.Join(dataDir, "worktrees")
+	}
+	normPath := normalizePath(worktreePath)
+	if !strings.HasPrefix(normPath, normalizePath(base)+"/") {
+		return false, nil
+	}
+	wss, err := s.workspaces.List(ctx)
+	if err != nil {
+		return false, err
+	}
+	removed := false
+	for _, ws := range wss {
+		for _, p := range ws.Projects {
+			if normalizePath(p.Path) != normPath {
+				continue
+			}
+			if err := s.workspaces.RemoveProject(ctx, p.ID); err != nil {
+				return removed, err
+			}
+			removed = true
+		}
+	}
+	if removed {
+		logx.For("worktreesvc").Info("worktree unregistered", "path", worktreePath)
+	}
+	return removed, nil
 }
 
 // groupDirFor 返回该仓库的 worktree 分组目录：<root>/worktrees/<hash8>。

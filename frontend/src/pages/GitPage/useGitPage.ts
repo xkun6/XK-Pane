@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   GitService,
   NativeDialogs,
+  WorktreeService,
   type GitBranch,
   type GitCommit,
   type GitFileStatus,
@@ -11,6 +12,7 @@ import {
   type Project,
 } from '@/services';
 import { useRegisteredProjects } from '@/project';
+import { useWorkspaces } from '@/workspace';
 
 // GitPage ViewModel：消费全局 ProjectProvider 选项目 + 按 path 查询 Git 状态 / 工具条 /
 // VSCode 式源代码管理（变更文件分组 + per-file diff + stage/unstage/discard/commit）。
@@ -118,6 +120,8 @@ function messageOf(e: unknown): string {
 
 export const useGitPage = (): UseGitPageResult => {
   const projects = useRegisteredProjects();
+  // 仅 removeWorktree 用：清掉隔离 worktree 登记行后刷新侧栏。
+  const { refresh: refreshWorkspaces } = useWorkspaces();
   const [selectedPath, setSelectedPath] = useState('');
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -402,6 +406,13 @@ export const useGitPage = (): UseGitPageResult => {
       setBusy(true);
       try {
         await GitService.worktreeRemove(selectedPath, wt.path);
+        // 若删的是 XK-Pane 自动创建的隔离 worktree，顺手清掉 workspace 登记行（后端按
+        // 集中根前缀校验所有权，普通 worktree 此调用是 no-op）；失败不阻断删除结果。
+        void WorktreeService.unregister(wt.path)
+          .then((removed) => {
+            if (removed) void refreshWorkspaces().catch(() => {});
+          })
+          .catch(() => {});
         await NativeDialogs.info(s.successTitle, s.successMessage);
         await load(selectedPath, s.errorTitle);
       } catch (e) {
@@ -410,7 +421,7 @@ export const useGitPage = (): UseGitPageResult => {
         setBusy(false);
       }
     },
-    [selectedPath, busy, load],
+    [selectedPath, busy, load, refreshWorkspaces],
   );
 
   return {

@@ -37,6 +37,11 @@ export const workspaceTreeZhCN: Messages = {
       launchLoading: '检测 CLI 工具中…',
       notInstalled: '未安装',
       launchInWorktree: '在隔离 worktree 中启动',
+      worktreeRootConfirm: {
+        title: '确认目标仓库',
+        message: '该项目位于更上层 git 仓库内，worktree 将创建在以下仓库根上（如有需要还会在该仓库提交一次 .gitignore）：\n\n{{root}}\n\n继续吗？',
+        ok: '继续创建',
+      },
       importProject: '导入项目',
       importDialogTitle: '选择项目目录',
       addSSHProject: '添加 SSH 项目',

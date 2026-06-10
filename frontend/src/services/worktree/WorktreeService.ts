@@ -9,7 +9,7 @@ import { Service as Binding } from '@bindings/xkpane/internal/services/worktrees
 export interface WorktreeCreateResult {
   worktreePath: string; // 新 worktree 绝对路径（= 新会话 projectPath/cwd）
   branch: string; // 创建并检出的新分支名（= slug）
-  repoRoot: string; // 主仓根（作 workspacePath 传 --add-dir）
+  repoRoot: string; // 主仓根（可作 --add-dir 候选；当前隔离启动有意不传——严格隔离）
   ignoreCommitted: boolean; // 本次是否补写了 .gitignore 并提交
   workspaceId: string; // 登记进的工作空间 id；'' = 未登记
 }
@@ -25,5 +25,17 @@ export const WorktreeService = {
       ignoreCommitted: res.ignoreCommitted ?? false,
       workspaceId: res.workspaceId ?? '',
     };
+  },
+
+  // 解析 projectPath 所在 git 仓库的根（只读，不写任何东西）。建树前用它判定
+  // 「实际要动的是哪个仓库」：项目可能位于更上层仓库内，应让用户确认再创建。
+  async resolveRepoRoot(projectPath: string): Promise<string> {
+    return Binding.ResolveRepoRoot(projectPath);
+  },
+
+  // 手动删除 worktree 后清掉对应 workspace 登记行（仅集中根之下的路径有效——后端按
+  // 路径前缀校验所有权，普通项目 / 自建 worktree 是 no-op）。返回是否删了行。
+  async unregister(worktreePath: string): Promise<boolean> {
+    return Binding.UnregisterWorktree(worktreePath);
   },
 } as const;

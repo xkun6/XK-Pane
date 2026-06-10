@@ -31,6 +31,16 @@ export interface ImportStrings {
   errorTitle: string;
 }
 
+// 隔离 worktree 启动的文案束（View 经 t() 填好传入；message 是函数——仓库根要等
+// 后端解析出来才知道，由 View 闭包持 t() 做插值，VM 仍不持翻译串）。
+export interface WorktreeLaunchStrings {
+  rootConfirmTitle: string;
+  rootConfirmMessage: (root: string) => string;
+  okLabel: string;
+  cancelLabel: string;
+  errorTitle: string;
+}
+
 export interface WorkspaceTreeModel {
   loading: boolean;
   pinned: Workspace[];
@@ -42,7 +52,7 @@ export interface WorkspaceTreeModel {
   togglePinned: (ws: Workspace, errorTitle: string) => Promise<void>;
   deleteWorkspace: (ws: Workspace, s: ConfirmStrings) => Promise<void>;
   launch: (target: LaunchTarget, cliTool: string) => void;
-  launchInWorktree: (target: LaunchTarget, cliTool: string, errorTitle: string) => Promise<void>;
+  launchInWorktree: (target: LaunchTarget, cliTool: string, s: WorktreeLaunchStrings) => Promise<void>;
   importProject: (workspaceId: string, s: ImportStrings) => Promise<void>;
   addSSHProject: (workspaceId: string, cfg: SshProjectInfo, errorTitle: string) => Promise<void>;
   submitRename: (id: string, name: string, errorTitle: string) => Promise<void>;
@@ -118,16 +128,33 @@ export function useWorkspaceTree(): WorkspaceTreeModel {
     });
   };
 
+  // 与后端 worktreesvc.normalizePath 同口径（正斜杠 + 去尾斜杠 + 小写）；只用于
+  // 「项目路径 == 仓库根」的相等判定，大小写不敏感在 Windows/macOS 默认卷上都安全。
+  const normalizeFsPath = (p: string): string =>
+    p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+
   // 在隔离 worktree 中启动：先让后端建树（.gitignore 守门 → 集中根建树 → workspace 登记），
   // 再以 worktree 路径为 projectPath 走统一启动入口（worktree 即新的操作目标，符合 D7）。
   // Tab 名带分支 slug 便于与主仓会话区分。仅本地 git 项目（SSH 远程项目无此入口）。
+  // 项目路径 ≠ 仓库根（位于更上层仓库内）时先弹原生确认——自动 .gitignore 提交和建树
+  // 都落在那个根上，必须让用户知情（DetectDotGit 向上探测的祖先仓库风险）。
   const launchInWorktree = async (
     target: LaunchTarget,
     cliTool: string,
-    errorTitle: string,
+    s: WorktreeLaunchStrings,
   ): Promise<void> => {
     if (!target.path || target.ssh) return;
     try {
+      const root = await WorktreeService.resolveRepoRoot(target.path);
+      if (normalizeFsPath(root) !== normalizeFsPath(target.path)) {
+        const ok = await NativeDialogs.confirm({
+          title: s.rootConfirmTitle,
+          message: s.rootConfirmMessage(root),
+          okLabel: s.okLabel,
+          cancelLabel: s.cancelLabel,
+        });
+        if (!ok) return;
+      }
       const res = await WorktreeService.createForProject(target.path);
       launchProject({
         projectId: target.id,
@@ -135,8 +162,10 @@ export function useWorkspaceTree(): WorkspaceTreeModel {
         projectPath: res.worktreePath,
         cliTool,
       });
+      // 已登记进 workspace → 立刻刷新侧栏让新行可见（失败不阻断：下次加载自然到位）。
+      if (res.workspaceId) void ctx.refresh().catch(() => {});
     } catch (e) {
-      await NativeDialogs.error(errorTitle, messageOf(e));
+      await NativeDialogs.error(s.errorTitle, messageOf(e));
     }
   };
 

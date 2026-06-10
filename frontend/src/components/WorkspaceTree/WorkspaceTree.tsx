@@ -151,9 +151,17 @@ export const WorkspaceTree = () => {
     } else if (menu?.kind === 'project') {
       const p = menu.project;
       const target = { id: p.id, name: projectDisplayName(p), path: p.path, ssh: p.ssh };
-      // worktree 模式（仅本地项目可勾选）：先建隔离 worktree 再启动，失败弹原生错误框。
+      // worktree 模式（仅本地项目可勾选）：先建隔离 worktree 再启动，失败弹原生错误框；
+      // 项目位于更上层仓库内时 VM 会先弹根确认框（message 等后端解析出根再插值）。
       if (worktreeMode && !p.ssh) {
-        void vm.launchInWorktree(target, cliTool, errTitle());
+        void vm.launchInWorktree(target, cliTool, {
+          rootConfirmTitle: t('workspaceTree.menu.worktreeRootConfirm.title'),
+          rootConfirmMessage: (root) =>
+            t('workspaceTree.menu.worktreeRootConfirm.message', { root }),
+          okLabel: t('workspaceTree.menu.worktreeRootConfirm.ok'),
+          cancelLabel: t('common.cancel'),
+          errorTitle: errTitle(),
+        });
       } else {
         vm.launch(target, cliTool);
       }
