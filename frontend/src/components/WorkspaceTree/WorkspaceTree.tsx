@@ -52,16 +52,22 @@ export const WorkspaceTree = () => {
   const { tools, loading: toolsLoading } = useCliTools();
   const { machines } = useSshMachines();
 
-  const [menu, setMenu] = useState<WorkspaceMenuState | null>(null);
+  const [menu, setMenuState] = useState<WorkspaceMenuState | null>(null);
   const [textOpen, setTextOpen] = useState(false);
   const [textConfig, setTextConfig] = useState<TextDialogConfig | null>(null);
   // 「添加 SSH 项目」对话框：记住目标工作空间 id（从工作空间右键菜单打开）。
   const [sshTargetWsId, setSshTargetWsId] = useState<string | null>(null);
+  // 「在隔离 worktree 中启动」模式开关：每次打开菜单重置为关（一次性选择，不持久）。
+  const [worktreeMode, setWorktreeMode] = useState(false);
 
   const errTitle = (): string => t('workspaceTree.error.title');
   const openText = (cfg: TextDialogConfig): void => {
     setTextConfig(cfg);
     setTextOpen(true);
+  };
+  const setMenu = (next: WorkspaceMenuState | null): void => {
+    setWorktreeMode(false);
+    setMenuState(next);
   };
   const closeMenu = (): void => setMenu(null);
 
@@ -124,6 +130,7 @@ export const WorkspaceTree = () => {
     openTerminal: t('workspaceTree.menu.openTerminal'),
     launchLoading: t('workspaceTree.menu.launchLoading'),
     notInstalled: t('workspaceTree.menu.notInstalled'),
+    launchInWorktree: t('workspaceTree.menu.launchInWorktree'),
     importProject: t('workspaceTree.menu.importProject'),
     addSSHProject: t('workspaceTree.menu.addSSHProject'),
     rename: t('workspaceTree.menu.rename'),
@@ -143,7 +150,13 @@ export const WorkspaceTree = () => {
       vm.launch({ id: ws.id, name: ws.alias ?? ws.name, path: ws.path }, cliTool);
     } else if (menu?.kind === 'project') {
       const p = menu.project;
-      vm.launch({ id: p.id, name: projectDisplayName(p), path: p.path, ssh: p.ssh }, cliTool);
+      const target = { id: p.id, name: projectDisplayName(p), path: p.path, ssh: p.ssh };
+      // worktree 模式（仅本地项目可勾选）：先建隔离 worktree 再启动，失败弹原生错误框。
+      if (worktreeMode && !p.ssh) {
+        void vm.launchInWorktree(target, cliTool, errTitle());
+      } else {
+        vm.launch(target, cliTool);
+      }
     }
     closeMenu();
   };
@@ -353,9 +366,11 @@ export const WorkspaceTree = () => {
         tools={tools}
         toolsLoading={toolsLoading}
         launchDisabled={menu?.kind === 'workspace' && !menu.workspace.path}
+        worktreeMode={worktreeMode}
         strings={menuStrings}
         onClose={closeMenu}
         onLaunch={handleLaunch}
+        onToggleWorktreeMode={() => setWorktreeMode((v) => !v)}
         onImportProject={handleImportProject}
         onAddSSHProject={handleAddSSHProject}
         onRename={handleRename}

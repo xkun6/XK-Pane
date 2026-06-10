@@ -46,6 +46,7 @@ export {
   type GitWorktree,
   type GitFileStatus,
 } from './git/GitService';
+export { WorktreeService, type WorktreeCreateResult } from './worktree/WorktreeService';
 export {
   LocalHistoryService,
   type RecentChange,

@@ -2,7 +2,7 @@
 // 不返回 JSX、不持翻译串——提示文案由 View 传入（遵 MVVM 铁律）。
 // 折叠状态为单选互斥（同一时刻最多展开一个工作空间），存组件本地 state（禁 localStorage）。
 import { useState } from 'react';
-import { FileService, NativeDialogs, type SshProjectInfo, type Workspace } from '@/services';
+import { FileService, NativeDialogs, WorktreeService, type SshProjectInfo, type Workspace } from '@/services';
 import { useWorkspaces } from '@/workspace';
 import { useTerminal } from '@/terminal';
 import { useRouter } from '@/router';
@@ -42,6 +42,7 @@ export interface WorkspaceTreeModel {
   togglePinned: (ws: Workspace, errorTitle: string) => Promise<void>;
   deleteWorkspace: (ws: Workspace, s: ConfirmStrings) => Promise<void>;
   launch: (target: LaunchTarget, cliTool: string) => void;
+  launchInWorktree: (target: LaunchTarget, cliTool: string, errorTitle: string) => Promise<void>;
   importProject: (workspaceId: string, s: ImportStrings) => Promise<void>;
   addSSHProject: (workspaceId: string, cfg: SshProjectInfo, errorTitle: string) => Promise<void>;
   submitRename: (id: string, name: string, errorTitle: string) => Promise<void>;
@@ -115,6 +116,28 @@ export function useWorkspaceTree(): WorkspaceTreeModel {
       runtimeKind: target.ssh ? 'ssh' : undefined,
       ssh: target.ssh ?? undefined,
     });
+  };
+
+  // 在隔离 worktree 中启动：先让后端建树（.gitignore 守门 → 集中根建树 → workspace 登记），
+  // 再以 worktree 路径为 projectPath 走统一启动入口（worktree 即新的操作目标，符合 D7）。
+  // Tab 名带分支 slug 便于与主仓会话区分。仅本地 git 项目（SSH 远程项目无此入口）。
+  const launchInWorktree = async (
+    target: LaunchTarget,
+    cliTool: string,
+    errorTitle: string,
+  ): Promise<void> => {
+    if (!target.path || target.ssh) return;
+    try {
+      const res = await WorktreeService.createForProject(target.path);
+      launchProject({
+        projectId: target.id,
+        projectName: `${target.name} · ${res.branch}`,
+        projectPath: res.worktreePath,
+        cliTool,
+      });
+    } catch (e) {
+      await NativeDialogs.error(errorTitle, messageOf(e));
+    }
   };
 
   const importProject = async (workspaceId: string, s: ImportStrings): Promise<void> => {
@@ -234,6 +257,7 @@ export function useWorkspaceTree(): WorkspaceTreeModel {
     togglePinned,
     deleteWorkspace,
     launch,
+    launchInWorktree,
     importProject,
     addSSHProject,
     submitRename,

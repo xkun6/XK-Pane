@@ -36,6 +36,7 @@ export const workspaceTreeZhCN: Messages = {
       openTerminal: '打开终端',
       launchLoading: '检测 CLI 工具中…',
       notInstalled: '未安装',
+      launchInWorktree: '在隔离 worktree 中启动',
       importProject: '导入项目',
       importDialogTitle: '选择项目目录',
       addSSHProject: '添加 SSH 项目',

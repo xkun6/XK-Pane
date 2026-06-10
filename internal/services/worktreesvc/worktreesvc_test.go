@@ -80,7 +80,7 @@ func TestCreateForProjectFullFlow(t *testing.T) {
 		Projects: []storage.WorkspaceProject{{ID: "p-1", WorkspaceID: "ws-1", Path: repoDir}},
 	}}}
 	svc := New(reg)
-	svc.SetWorktreesRoot(t.TempDir())
+	svc.setWorktreesRoot(t.TempDir())
 
 	res, err := svc.CreateForProject(context.Background(), repoDir)
 	if err != nil {
@@ -148,7 +148,7 @@ func TestCreateSkipsCommitWhenAlreadyIgnored(t *testing.T) {
 	gitDo(t, repoDir, "commit", "-m", "ignore tool dirs")
 
 	svc := New(nil) // 无 workspace 注册器：登记降级跳过
-	svc.SetWorktreesRoot(t.TempDir())
+	svc.setWorktreesRoot(t.TempDir())
 	res, err := svc.CreateForProject(context.Background(), repoDir)
 	if err != nil {
 		t.Fatalf("CreateForProject: %v", err)
@@ -174,7 +174,7 @@ func TestCreateDoesNotSweepStagedChanges(t *testing.T) {
 	gitDo(t, repoDir, "add", "feature.txt")
 
 	svc := New(nil)
-	svc.SetWorktreesRoot(t.TempDir())
+	svc.setWorktreesRoot(t.TempDir())
 	res, err := svc.CreateForProject(context.Background(), repoDir)
 	if err != nil {
 		t.Fatalf("CreateForProject: %v", err)

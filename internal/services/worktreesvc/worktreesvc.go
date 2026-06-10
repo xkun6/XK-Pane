@@ -65,8 +65,9 @@ func New(workspaces WorkspaceRegistry) *Service {
 	return &Service{workspaces: workspaces}
 }
 
-// SetWorktreesRoot 覆盖集中根目录（单测注入临时目录用；不进 bindings 消费面）。
-func (s *Service) SetWorktreesRoot(root string) { s.worktreesRoot = root }
+// setWorktreesRoot 覆盖集中根目录（单测注入临时目录用；非导出 → 不进 bindings，
+// 前端不应能重定向 worktree 根）。
+func (s *Service) setWorktreesRoot(root string) { s.worktreesRoot = root }
 
 // CreateResult 是一次自动创建的结果（前端据此 launchProject 进 worktree）。
 type CreateResult struct {

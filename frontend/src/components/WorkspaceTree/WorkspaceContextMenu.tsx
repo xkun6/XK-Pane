@@ -1,4 +1,4 @@
-import { Divider, ListItemIcon, ListItemText, Menu, MenuItem } from '@mui/material';
+import { Checkbox, Divider, ListItemIcon, ListItemText, Menu, MenuItem } from '@mui/material';
 import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
 import SmartToyRoundedIcon from '@mui/icons-material/SmartToyRounded';
 import CreateNewFolderRoundedIcon from '@mui/icons-material/CreateNewFolderRounded';
@@ -27,6 +27,7 @@ export interface WorkspaceMenuStrings {
   openTerminal: string;
   launchLoading: string;
   notInstalled: string;
+  launchInWorktree: string;
   importProject: string;
   addSSHProject: string;
   rename: string;
@@ -44,9 +45,11 @@ export interface WorkspaceContextMenuProps {
   tools: CliTool[];
   toolsLoading: boolean;
   launchDisabled: boolean; // 工作空间未设根目录 → 启动项灰置
+  worktreeMode: boolean; // 勾选后下方启动项在隔离 worktree 中执行（仅本地项目节点显示）
   strings: WorkspaceMenuStrings;
   onClose: () => void;
   onLaunch: (cliTool: string) => void;
+  onToggleWorktreeMode: () => void;
   onImportProject: () => void;
   onAddSSHProject: () => void;
   onRename: () => void;
@@ -66,9 +69,11 @@ export const WorkspaceContextMenu = ({
   tools,
   toolsLoading,
   launchDisabled,
+  worktreeMode,
   strings,
   onClose,
   onLaunch,
+  onToggleWorktreeMode,
   onImportProject,
   onAddSSHProject,
   onRename,
@@ -82,6 +87,8 @@ export const WorkspaceContextMenu = ({
 }: WorkspaceContextMenuProps) => {
   // SSH 远程项目：本地文件管理器 / 文件浏览器入口无意义，按 ssh!=null 隐藏。
   const isSSHProject = menu?.kind === 'project' && menu.project.ssh != null;
+  // worktree 隔离启动仅本地项目节点可用（SSH 远程无本地 git；工作空间节点未必是仓库根）。
+  const worktreeVisible = menu?.kind === 'project' && !isSSHProject;
   return (
     <Menu
       open={menu !== null}
@@ -89,6 +96,18 @@ export const WorkspaceContextMenu = ({
       anchorReference="anchorPosition"
       anchorPosition={menu ? { top: menu.anchor.top, left: menu.anchor.left } : undefined}
     >
+      {/* 模式开关：勾选后下方「打开终端 / CLI」在隔离 worktree 中执行。点击不关菜单
+          （用户先勾选再选 CLI）；菜单每次打开重置为关。 */}
+      {worktreeVisible && (
+        <MenuItem onClick={onToggleWorktreeMode}>
+          <ListItemIcon>
+            <Checkbox size="small" edge="start" checked={worktreeMode} disableRipple sx={{ p: 0 }} />
+          </ListItemIcon>
+          <ListItemText>{strings.launchInWorktree}</ListItemText>
+        </MenuItem>
+      )}
+      {worktreeVisible && <Divider />}
+
       <MenuItem disabled={launchDisabled} onClick={() => onLaunch('none')}>
         <ListItemIcon>
           <TerminalRoundedIcon fontSize="small" />

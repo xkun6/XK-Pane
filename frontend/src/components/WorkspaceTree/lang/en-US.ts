@@ -35,6 +35,7 @@ export const workspaceTreeEnUS: Messages = {
       openTerminal: 'Open terminal',
       launchLoading: 'Detecting CLI tools…',
       notInstalled: 'Not installed',
+      launchInWorktree: 'Launch in isolated worktree',
       importProject: 'Import project',
       importDialogTitle: 'Choose a project directory',
       addSSHProject: 'Add SSH project',
