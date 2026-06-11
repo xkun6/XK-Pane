@@ -1,22 +1,20 @@
 package httpx
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
-
-	"golang.org/x/net/proxy"
 )
 
 // proxyclient.go：构造**独立** *http.Client（不复用单例），支持 per-call 代理 / socks5 / 超时 / UA。
 // 给 OTA（bedrockdocsync）这类需走代理的场景用。单例 Client() 保持无代理、不受影响。
 //
-// 对齐 cc-pane bedrock_doc_sync/proxy.rs build_reqwest：http/https 代理走 Transport.Proxy，
-// socks5 走 golang.org/x/net/proxy 的 DialContext；auth "user:pass" 注入；超时 + UA 可定制。
+// 对齐 cc-pane bedrock_doc_sync/proxy.rs build_reqwest：http/https/socks5(h) 统一走
+// Transport.Proxy（stdlib 原生支持 socks5/socks5h scheme，域名解析同样在代理侧完成）；
+// auth "user:pass" 注入 URL userinfo；超时 + UA 可定制。
 
 // ClientOptions 配置一个独立 http.Client。
 type ClientOptions struct {
@@ -56,24 +54,7 @@ func NewClient(opts ClientOptions) (*http.Client, error) {
 			return nil, fmt.Errorf("httpx: invalid proxy url: %q", opts.Proxy)
 		}
 		switch strings.ToLower(u.Scheme) {
-		case "socks5", "socks5h":
-			var auth *proxy.Auth
-			if user, pass, ok := splitProxyAuth(opts.ProxyAuth); ok {
-				auth = &proxy.Auth{User: user, Password: pass}
-			}
-			d, err := proxy.SOCKS5("tcp", u.Host, auth, dialer)
-			if err != nil {
-				return nil, fmt.Errorf("httpx: build socks5 dialer: %w", err)
-			}
-			if cd, ok := d.(proxy.ContextDialer); ok {
-				tr.DialContext = cd.DialContext
-			} else {
-				tr.DialContext = func(_ context.Context, network, addr string) (net.Conn, error) {
-					return d.Dial(network, addr)
-				}
-			}
-			tr.Proxy = nil
-		case "http", "https":
+		case "http", "https", "socks5", "socks5h":
 			if user, pass, ok := splitProxyAuth(opts.ProxyAuth); ok {
 				u.User = url.UserPassword(user, pass)
 			}

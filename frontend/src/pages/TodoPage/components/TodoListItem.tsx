@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Box, Chip, IconButton, Tooltip, Typography, useTheme } from '@mui/material';
-import { keyframes } from '@mui/system';
+import { keyframes } from '@emotion/react';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import DonutLargeRoundedIcon from '@mui/icons-material/DonutLargeRounded';
 import RadioButtonUncheckedRoundedIcon from '@mui/icons-material/RadioButtonUncheckedRounded';

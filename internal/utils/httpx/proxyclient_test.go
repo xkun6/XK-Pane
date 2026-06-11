@@ -44,16 +44,21 @@ func TestNewClient_HTTPProxy(t *testing.T) {
 }
 
 func TestNewClient_SOCKS5(t *testing.T) {
-	c, err := NewClient(ClientOptions{Proxy: "socks5://127.0.0.1:1080"})
+	c, err := NewClient(ClientOptions{Proxy: "socks5://127.0.0.1:1080", ProxyAuth: "user:pass"})
 	if err != nil {
 		t.Fatalf("NewClient socks5: %v", err)
 	}
 	tr := transportOf(t, c)
-	if tr.Proxy != nil {
-		t.Fatal("socks5 应走 DialContext 而非 Transport.Proxy")
+	if tr.Proxy == nil {
+		t.Fatal("socks5 应走 Transport.Proxy（stdlib 原生支持 socks5 scheme）")
 	}
-	if tr.DialContext == nil {
-		t.Fatal("socks5 应设 DialContext")
+	req, _ := http.NewRequest(http.MethodGet, "https://example.com/", nil)
+	u, err := tr.Proxy(req)
+	if err != nil || u == nil || u.Scheme != "socks5" || u.Host != "127.0.0.1:1080" {
+		t.Fatalf("Proxy(req) = %v, %v", u, err)
+	}
+	if user := u.User.Username(); user != "user" {
+		t.Fatalf("代理 auth 用户名应注入，得 %q", user)
 	}
 }
 
