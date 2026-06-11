@@ -9,8 +9,6 @@ export const sessionTimelineZhCN: Messages = {
     tool: '工具',
     result: '结果',
     resultLines: '{{n}} 行',
-    showTerminal: '切到终端',
-    showChat: '切到对话',
     copy: '复制',
     copied: '已复制',
     moreLines: '还有 {{n}} 行',

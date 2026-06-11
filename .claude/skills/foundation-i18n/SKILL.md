@@ -43,8 +43,9 @@ src/pages/<Name>/lang/    ← 页面级语言包
 
 ```tsx
 import { I18nProvider, registerFoundationLocales } from '@/i18n';
-import { registerHomePageLocales } from '@/pages/HomePage';
-import { registerSettingsPageLocales } from '@/pages/SettingsPage';
+// 必须从 lang/ 子路径 import —— 从页面桶 import 会把 lazy 页面主体拖进主 bundle
+import { registerHomePageLocales } from '@/pages/HomePage/lang';
+import { registerSettingsPageLocales } from '@/pages/SettingsPage/lang';
 
 // 1) 公用 locale 必须先就位（页面级 extend 的目标）
 registerFoundationLocales();
@@ -140,19 +141,12 @@ export const registerAccountPageLocales = (): void => {
 };
 ```
 
-最后在页面 `index.ts` 出口处补一行：
-
-```ts
-export { AccountPage } from './AccountPage';
-export { registerAccountPageLocales } from './lang';
-```
-
-并在 `App.tsx` 调用注册函数。**完成。**
+最后在 `App.tsx` 顶部从 `@/pages/AccountPage/lang` import 并调用注册函数（页面不建 `index.ts` 桶）。**完成。**
 
 ### 命名空间约定
 
 - 页面文案使用页面 id 作为顶层命名空间：`home.*` / `settings.*` / `account.*`；
-- 跨页面共享的小术语放公用 `common.*`（保存 / 取消 / 是 / 否 / 加载中 / 跟随系统 / 自动）；
+- 跨页面共享的小术语放公用 `common.*`（当前仅 save / cancel / loading 三键，新术语确有多页面共用时再加）；
 - 框架级（标题栏 / 侧边栏 / 路由）保留在公用 locale，**不要**重复在页面级注册。
 
 ---
@@ -251,7 +245,7 @@ const DEFAULT_RESULT = 'Please enter your name and tap Greet 👇'; // ← 应�
 ❌ 跨过 `t()` 直接拼接：
 
 ```tsx
-<p>错误：{error}</p>  // ← '错误：' 必须来自 t('common.error') 或类似 key
+<p>错误：{error}</p>  // ← '错误：' 必须来自 t() 的某个 key（页面级 lang/ 或公用 common.*）
 ```
 
 ❌ 重复在多个页面定义同义文案（应该提到 `common.*`）：

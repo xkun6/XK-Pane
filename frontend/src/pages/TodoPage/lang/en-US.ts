@@ -44,7 +44,6 @@ export const todoPageEnUS: Messages = {
     untagged: 'Untagged',
     item: {
       subtasks: '{{done}}/{{total}}',
-      overdue: 'Overdue',
       myDayTip: 'My Day',
       statusTip: 'Toggle status',
     },
@@ -60,7 +59,6 @@ export const todoPageEnUS: Messages = {
       priority: 'Priority',
       scope: 'Scope',
       scopeRef: 'Scope Ref',
-      scopeRefPlaceholder: 'workspace name / project path',
       scopeRefNone: 'Unspecified',
       scopeRefRequired: 'Workspace / project scope requires a scope reference',
       type: 'Type',

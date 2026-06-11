@@ -3,7 +3,6 @@ import type { Messages } from '@/i18n';
 export const providerSettingsZhCN: Messages = {
   settings: {
     provider: {
-      title: '接入 Provider',
       hint: '管理用于启动 CLI 的接入凭据（API Key / 端点 / 云配置）。密钥经 AES-GCM 加密存于本地数据库，绝不明文回显——编辑时密钥框留空即保留原值。',
       add: '添加 Provider',
       empty: '暂无 Provider。点「添加 Provider」配置一个。',

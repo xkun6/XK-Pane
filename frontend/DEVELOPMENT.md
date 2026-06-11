@@ -171,7 +171,7 @@ useEffect(() => {
 
 ## 8. 平台分支
 
-`shared/platform.ts` 提供 `isWindows / isMac / isLinux`。
+`shared/platform.ts` 提供 `isWindows / isMac`。
 
 - macOS 保留系统红绿灯：标题栏左侧留出 72px spacer，不画自定义按钮。
 - Windows / Linux 自绘三联按钮（最小化 / 最大化 / 关闭）。

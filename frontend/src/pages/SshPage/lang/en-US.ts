@@ -29,7 +29,6 @@ export const sshPageEnUS: Messages = {
       copy: 'Copy connection',
     },
     launchMenu: {
-      bareTerminal: 'Bare terminal',
       notInstalled: 'Not installed',
     },
     form: {

@@ -37,9 +37,7 @@ export const enUS: Locale = {
     },
     terminal: {
       tab: {
-        new: 'New terminal',
         close: 'Close tab',
-        menu: 'Tab menu',
         rename: 'Rename',
         renameTitle: 'Rename tab',
         renamePlaceholder: 'Tab name',
@@ -55,14 +53,7 @@ export const enUS: Locale = {
     common: {
       save: 'Save',
       cancel: 'Cancel',
-      remove: 'Remove',
-      reset: 'Reset',
-      yes: 'Yes',
-      no: 'No',
       loading: 'Loading…',
-      error: 'Error',
-      followSystem: 'Follow system',
-      auto: 'Auto',
     },
   },
 };

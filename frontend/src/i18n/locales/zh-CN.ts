@@ -5,7 +5,7 @@ import type { Locale } from '../types';
 //   - app.*：应用元数据
 //   - sidebar.* / titleBar.*：基座组件
 //   - route.*：路由 label（多处消费：Sidebar tooltip / 设置页 / 未来面包屑）
-//   - common.*：通用术语（保存 / 取消 / 删除 / 是 / 否 / 加载中 / 错误 / 跟随系统）
+//   - common.*：通用术语（保存 / 取消 / 加载中）
 // 页面级文案（home / settings 等）不要放这里 —— 各 page 自带 lang/ 目录注册。
 //
 // 命名约定：点路径分组；模板插值用 {{var}}（与 t(key, vars) 配合）。
@@ -44,9 +44,7 @@ export const zhCN: Locale = {
     },
     terminal: {
       tab: {
-        new: '新建终端',
         close: '关闭标签',
-        menu: '标签菜单',
         rename: '重命名',
         renameTitle: '重命名标签',
         renamePlaceholder: '标签名称',
@@ -62,14 +60,7 @@ export const zhCN: Locale = {
     common: {
       save: '保存',
       cancel: '取消',
-      remove: '删除',
-      reset: '重置',
-      yes: '是',
-      no: '否',
       loading: '加载中…',
-      error: '错误',
-      followSystem: '跟随系统',
-      auto: '自动',
     },
   },
 };

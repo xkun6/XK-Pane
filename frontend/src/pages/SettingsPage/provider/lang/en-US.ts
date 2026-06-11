@@ -3,7 +3,6 @@ import type { Messages } from '@/i18n';
 export const providerSettingsEnUS: Messages = {
   settings: {
     provider: {
-      title: 'Providers',
       hint: 'Manage the access credentials used to launch CLIs (API key / endpoint / cloud config). Keys are AES-GCM encrypted in the local database and never echoed back in plaintext — leave the key field blank when editing to keep the existing one.',
       add: 'Add provider',
       empty: 'No providers yet. Click "Add provider" to configure one.',

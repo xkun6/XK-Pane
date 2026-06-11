@@ -29,7 +29,6 @@ export const sshPageZhCN: Messages = {
       copy: '复制连接信息',
     },
     launchMenu: {
-      bareTerminal: '裸终端',
       notInstalled: '未安装',
     },
     form: {

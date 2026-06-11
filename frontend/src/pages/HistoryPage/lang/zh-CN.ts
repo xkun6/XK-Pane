@@ -21,10 +21,8 @@ export const historyPageZhCN: Messages = {
     // 阶段 2：版本时间线 + 预览
     backToList: '返回文件列表',
     timeline: {
-      title: '版本',
       selectVersion: '从左侧选择一个版本查看。',
       empty: '该文件暂无版本记录。',
-      current: '工作树当前',
       rightClickHint: '右键版本可打标签',
     },
     tabs: {
@@ -100,7 +98,6 @@ export const historyPageZhCN: Messages = {
       add: '打标签',
       title: '为该版本打标签',
       label: '标签名',
-      placeholder: '如：发布前 / 重要里程碑',
       ok: '保存标签',
       added: { title: '已打标签', message: '标签已保存。' },
       failed: '打标签失败',

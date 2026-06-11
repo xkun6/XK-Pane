@@ -25,7 +25,7 @@ function load(): Promise<CliTool[]> {
   return inflight;
 }
 
-export interface UseCliToolsResult {
+interface UseCliToolsResult {
   tools: CliTool[];
   loading: boolean;
 }

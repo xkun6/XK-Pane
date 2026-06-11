@@ -44,7 +44,6 @@ export const todoPageZhCN: Messages = {
     untagged: '未标记',
     item: {
       subtasks: '{{done}}/{{total}}',
-      overdue: '逾期',
       myDayTip: '我的一天',
       statusTip: '切换状态',
     },
@@ -60,7 +59,6 @@ export const todoPageZhCN: Messages = {
       priority: '优先级',
       scope: '作用域',
       scopeRef: '范围引用',
-      scopeRefPlaceholder: '工作空间名 / 项目路径',
       scopeRefNone: '未指定',
       scopeRefRequired: '工作空间 / 项目作用域必须选择范围引用',
       type: '类型',

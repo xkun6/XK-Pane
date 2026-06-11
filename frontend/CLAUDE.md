@@ -45,7 +45,7 @@
 
 完整规范见 [DEVELOPMENT.md](./DEVELOPMENT.md)。核心四条铁律：
 
-1. **每个组件 / 页面独立文件夹**，至少含 `<Name>.tsx`（View）、`use<Name>.ts`（ViewModel）、`<Name>.styles.ts`（Style）、`index.ts`（出口）。带文案的页面再补 `lang/{<code>.ts, index.ts}`。
+1. **每个组件 / 页面独立文件夹**，至少含 `<Name>.tsx`（View）、`use<Name>.ts`（ViewModel，**有页面级状态才建**，不写空壳占位）、`<Name>.styles.ts`（Style）。公共组件配 `index.ts` 出口；**页面不建桶文件**（routes.tsx 的 lazy 与 App.tsx 的语言注册都直 import 具体文件 / `lang/` 子路径，桶会拖垮 lazy 分包）。带文案的页面再补 `lang/{<code>.ts, index.ts}`。
 2. **View 不写业务**（仅消费 ViewModel），**ViewModel 不返回 JSX**（仅返回数据 + 回调）。
 3. **ViewModel 不直接 import** `@wailsio/runtime` 或 `@bindings/*`，必须经 `services/` 层。**ViewModel 不持有翻译后的字符串** —— 暴露 i18n key 给 View，由 View 调 `t()`。
 4. **任何人类可见字符串必须走 `t()`** —— 见下方"i18n 规范"小节。
@@ -58,19 +58,19 @@
 
 1. **路由表是唯一事实源** —— 所有页面必须在 `src/routes.tsx` 注册一条 `RouteDefinition`，禁止在任何组件里硬编码 `if (page === 'xxx')` 或独立的页面切换 state。
 2. **导航只能通过 `useRouter().navigate(id)`** —— 不允许传递 `onNavigate` 回调、不允许直接读写"当前页"的全局状态、不允许新建并行的路由系统。
-3. **页面 = pages/<Name>/ 文件夹，三件齐全** —— `<Name>.tsx` + `use<Name>.ts`（即使空也要有，便于扩展）+ `<Name>.styles.ts` + `index.ts`，与其他组件相同 MVVM 结构。
+3. **页面 = pages/<Name>/ 文件夹** —— `<Name>.tsx` + `<Name>.styles.ts` 必有；`use<Name>.ts` 有页面级状态才建（不写返回空对象的占位 hook）；不建 `index.ts` 桶（见 MVVM 铁律 #1）。
 4. **`AppLayout` 不接收 `children`** —— 主内容由 `<RouterOutlet />` 从路由表渲染。新增页面**绝不**改 `AppLayout`。
 5. **Sidebar 不维护菜单数组** —— 它从 `useRouter()` 的 `primary` / `footer` 自动读取，新增带导航的页面只需在 `routes.tsx` 设置 `slot`。
 
 ### 添加一个新页面（标准操作）
 
 ```tsx
-// 1. 写页面：pages/AccountPage/{AccountPage.tsx, useAccountPage.ts, AccountPage.styles.ts, index.ts}
+// 1. 写页面：pages/AccountPage/{AccountPage.tsx, useAccountPage.ts, AccountPage.styles.ts}
 //    若有人类可见文案，再加 pages/AccountPage/lang/{zh-CN.ts, en-US.ts, index.ts}
 
-// 2. 在 src/routes.tsx 追加一项
+// 2. 在 src/routes.tsx 追加一项（直 import 具体文件，不建页面桶）
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
-import { AccountPage } from '@/pages/AccountPage';
+import { AccountPage } from '@/pages/AccountPage/AccountPage';
 
 export const routes: RouteDefinition[] = [
   // ...
@@ -86,8 +86,8 @@ export const routes: RouteDefinition[] = [
 ];
 
 // 3. 在 src/i18n/locales/<code>.ts 公用 route.* 节点补一条 'account: ...'
-// 4. 在 src/pages/AccountPage/index.ts 导出 registerAccountPageLocales
-// 5. App.tsx 顶部调一次 registerAccountPageLocales()
+// 4. App.tsx 顶部 import { registerAccountPageLocales } from '@/pages/AccountPage/lang' 并调一次
+//    （lazy 页面的 locale 必须从 lang/ 子路径 import，防止把页面主体拖进主 bundle）
 ```
 
 **完成。** 不需要改 `AppLayout` / `Sidebar` / `App.tsx` —— 系统会自动接管。
@@ -322,7 +322,6 @@ SettingsPage/
 ├── SettingsPage.skeleton.tsx
 ├── SettingsPage.styles.ts     # 仅"框架"样式：root / list / detail / 共享 section
 ├── useSettingsPage.ts         # 仅管 items + activeItemId（不持业务状态）
-├── index.ts                   # 出口：SettingsPage / Skeleton / registerSettingsPageLocales
 ├── lang/                      # 顶层文案：eyebrow / title / list / themes
 │   ├── zh-CN.ts
 │   ├── en-US.ts
@@ -443,15 +442,13 @@ frontend/
         │   ├── HomePage.skeleton.tsx  # ← 该页骨架屏
         │   ├── useHomePage.ts
         │   ├── HomePage.styles.ts
-        │   ├── lang/{zh-CN,en-US,index}.ts
-        │   └── index.ts
+        │   └── lang/{zh-CN,en-US,index}.ts
         └── SettingsPage/      # 设置页：主题 / 显示偏好 / 自定义主题 / 语言
             ├── SettingsPage.tsx
             ├── SettingsPage.skeleton.tsx
             ├── useSettingsPage.ts
             ├── SettingsPage.styles.ts
-            ├── lang/{zh-CN,en-US,index}.ts
-            └── index.ts
+            └── lang/{zh-CN,en-US,index}.ts
 ```
 
 ## 变更记录 (Changelog)

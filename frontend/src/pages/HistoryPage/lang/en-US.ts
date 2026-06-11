@@ -21,10 +21,8 @@ export const historyPageEnUS: Messages = {
     // Stage 2: version timeline + preview
     backToList: 'Back to file list',
     timeline: {
-      title: 'Versions',
       selectVersion: 'Select a version on the left to view.',
       empty: 'No versions recorded for this file.',
-      current: 'Working tree',
       rightClickHint: 'Right-click a version to tag it',
     },
     tabs: {
@@ -100,7 +98,6 @@ export const historyPageEnUS: Messages = {
       add: 'Add tag',
       title: 'Tag this version',
       label: 'Tag name',
-      placeholder: 'e.g. Pre-release / Milestone',
       ok: 'Save tag',
       added: { title: 'Tagged', message: 'The tag has been saved.' },
       failed: 'Failed to add tag',

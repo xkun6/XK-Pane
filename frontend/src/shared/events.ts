@@ -23,5 +23,3 @@ export const AppEvents = {
   // 托盘「设置」菜单 → 主窗口导航到设置页（桌面托盘专属，无 payload，不进 Web 镜像）。
   NavigateSettings: 'app:navigate-settings',
 } as const;
-
-export type AppEventName = (typeof AppEvents)[keyof typeof AppEvents];

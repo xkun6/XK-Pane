@@ -9,8 +9,6 @@ export const sessionTimelineEnUS: Messages = {
     tool: 'Tool',
     result: 'Result',
     resultLines: '{{n}} lines',
-    showTerminal: 'Show terminal',
-    showChat: 'Show conversation',
     copy: 'Copy',
     copied: 'Copied',
     moreLines: '+{{n}} more',
