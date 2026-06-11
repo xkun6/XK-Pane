@@ -1,10 +1,8 @@
 # Wails v3 Skills 索引
 
-本项目附带的 Wails v3 知识库，按功能拆分为 12 个内容 SKILL + 1 个维护 SKILL，覆盖官方文档全部内容（约 30000+ 行）。
+本项目附带的 Wails v3 知识库，按功能拆分为 12 个内容 SKILL，覆盖官方文档全部内容（约 30000+ 行）。
 
 调用方式：在对话中直接使用 `/<skill-name>`，或由 Claude 根据任务匹配自动加载。
-
-> **同步上游文档** → 用 `/wails-skill-update` 自动拉取最新 master 文档并对比更新（脚本在 `wails-skill-update/`）。
 
 | Skill | 触发场景 | 主要内容 |
 |-------|---------|---------|
@@ -20,7 +18,6 @@
 | [wails-build](./wails-build/SKILL.md) | 跨平台构建、签名、混淆、安装包、服务器模式、UAC、故障排查 | guides/build/* + installers + server-build + windows-uac + troubleshooting |
 | [wails-advanced](./wails-advanced/SKILL.md) | 自定义传输、单实例、文件关联、协议、更新器、性能、安全、panic、raw msg、路由、Gin、测试、自定义模板 | guides/* (高级与杂项) |
 | [wails-tutorials-migration](./wails-tutorials-migration/SKILL.md) | 完整教程（todo/notes/self-update）+ v2→v3 迁移 | tutorials/* + migration/* |
-| [wails-skill-update](./wails-skill-update/SKILL.md) | **维护**：拉取最新文档、diff、更新 references | fetch + diff + apply 三个脚本 |
 | [foundation-theme](./foundation-theme/SKILL.md) | **本项目**：主题注册系统使用与扩展 | 注册新主题、切换主题、消费 `theme.palette.foundation` |
 | [foundation-i18n](./foundation-i18n/SKILL.md) | **本项目**：国际化系统（注册式 + 页面级语言包） | 注册新语言、写页面级语言包、消费 `useT()`、铁律：人类可见字符串必须走 `t()` |
 | [foundation-persistence](./foundation-persistence/SKILL.md) | **本项目**：持久化层（SQLite + GORM + AutoMigrate） | 加新表三步、业务 service 接入 Holder、前端 service 包装、路径切换、表统计与清空、PRAGMA / 并发、Provider 异步化模式 |
@@ -73,16 +70,6 @@ wails-<name>/
 | guides/advanced/custom-templates | wails-advanced |
 | tutorials/02..04, tutorials/overview | wails-tutorials-migration |
 | migration/v2-to-v3 | wails-tutorials-migration |
-
-## 维护：同步上游文档
-
-```powershell
-$skill = '.claude\skills\wails-skill-update'
-pwsh -File "$skill\fetch-docs.ps1"          # 拉取最新 master
-pwsh -File "$skill\diff-docs.ps1"           # 看变更
-pwsh -File "$skill\apply-update.ps1"        # dry-run
-pwsh -File "$skill\apply-update.ps1" -Apply # 真正更新（自动备份）
-```
 
 ## 版本
 

@@ -10,7 +10,7 @@
 
 - HTML 入口：`frontend/index.html`
 - TS 入口：`frontend/src/main.tsx`（创建 React 19 root）
-- 应用根：`frontend/src/App.tsx`（注册主题预设 + `<FoundationThemeProvider>` + `AppLayout` + `HomePage`）
+- 应用根：`frontend/src/App.tsx`（注册主题预设与各页面 locale + Provider 链 + `AppLayout`）
 - Vite 配置：`frontend/vite.config.ts`
   - dev server 绑定 `127.0.0.1:9245`（可通过 `WAILS_VITE_PORT` 覆盖）
   - 别名：`@ → src/`、`@bindings → bindings/`
@@ -35,9 +35,9 @@
 `frontend/package.json` 关键字段：
 
 - `type: module`
-- 运行时依赖：`react ^19.2.6`、`react-dom ^19.2.6`、`@mui/material ^9.0.1`、`@mui/icons-material ^9.0.1`、`@emotion/react`、`@emotion/styled`、`@wailsio/runtime` (latest)
-- 开发依赖：`vite ^8.0.14`、`@vitejs/plugin-react ^6.0.2`、`typescript ^6.0.3`、`@types/react`、`@types/react-dom`
-- 脚本：`dev` / `build` / `build:dev` / `preview` / `typecheck`
+- 运行时依赖：`react ^19.2.6`、`react-dom ^19.2.6`、`@mui/material ^9.0.1`、`@mui/icons-material ^9.0.1`、`@emotion/react`、`@emotion/styled`、`@wailsio/runtime` (latest)、`@xterm/xterm ^6`、`monaco-editor`、`@dnd-kit/*` 等（完整见 package.json）
+- 开发依赖：`vite ^8.0.14`、`@vitejs/plugin-react ^6.0.2`、`typescript ^6.0.3`、`vitest`、`@types/react`、`@types/react-dom`
+- 脚本：`dev` / `build` / `build:dev` / `preview` / `typecheck` / `test`
 
 `frontend/tsconfig.json`：strict 全开，`noUncheckedIndexedAccess`，`paths` 别名 `@/* @bindings/*`，`allowJs: true`（Wails 生成的 bindings 是 .js）。
 
@@ -241,7 +241,7 @@ import { NativeDialogs } from '@/services';
 // 选一个 .db 文件保存
 const path = await NativeDialogs.saveFile({
   title: t('xxx.dialog.title'),
-  filename: 'foundation.db',
+  filename: 'xkpane.db',
   filters: [{ displayName: 'SQLite (*.db)', pattern: '*.db;*.sqlite' }],
 });
 if (path) { /* path 是绝对路径 */ }
@@ -360,22 +360,15 @@ SettingsPage/
 ❌ 子页面 import 兄弟子页面的 hook（`personalization/` import `database/useDatabase`）
 
 
-## 数据模型
-
-`src/components/Sidebar/useSidebar.ts` 内有占位的 `SidebarItem` 类型，仅作演示。真实业务接入时把 `items` 替换为路由表 / 模块清单。
-
 ## 测试与质量
 
-- 当前未配置测试框架（无 Vitest / Playwright）。
+- Vitest 已配置（`pnpm test`，jsdom 环境），覆盖 ViewModel hook 与纯函数；新增复杂 VM 逻辑时配套 `.test.ts`。
 - TypeScript strict 模式 + `noUncheckedIndexedAccess` 已开启。
-- 推荐：Vitest 覆盖 `use<Page>` ViewModel hook（纯函数，易测），Playwright 覆盖窗口控制 / 关键页面流程。
 
 ## 常见问题 (FAQ)
 
-- Q：`@bindings/foundation/...` 报模块找不到？
+- Q：`@bindings/xkpane/...` 报模块找不到？
   - A：bindings 是 Wails 在 dev / generate 时生成的。首次执行 `wails3 dev` 或 `wails3 generate bindings` 后才会出现。该目录已 `.gitignore`。
-- Q：改了 Go module 名后前端报错？
-  - A：bindings 路径前缀就是 module 名。改 `go.mod` 后必须重新跑 `wails3 generate bindings`，并把 `src/services/` 下各 Service 包装文件中的 `@bindings/<旧模块名>/...` 路径改为新模块名。
 - Q：能否换回 JavaScript？
   - A：可以，但会丢失 ViewModel 类型契约。如果要换，请保留 `<Name>.types.ts` 写 JSDoc 类型；不推荐。
 - Q：标题栏拖拽不工作？
@@ -385,79 +378,30 @@ SettingsPage/
 
 ## 相关文件清单
 
+> 只列顶层目录（具体文件随业务演进快，以目录内实际文件为准）。
+
 ```
 frontend/
 ├── DEVELOPMENT.md             # 前端开发规范（MVVM）
-├── index.html                 # HTML 入口
-├── package.json               # 依赖与脚本
-├── vite.config.ts             # Vite 配置 + 路径别名
-├── tsconfig.json              # TS strict + paths
-├── public/                    # 静态资源
-│   ├── wails.png              # favicon
-│   └── fonts/JetBrainsMono-Regular.woff2  # 终端字体（index.html @font-face）
+├── index.html                 # HTML 入口（内联首屏骨架）
+├── package.json / vite.config.ts / tsconfig.json
+├── public/                    # 静态资源（favicon + 终端字体）
 ├── bindings/                  # wails3 generate bindings 产物（.gitignore）
 └── src/
-    ├── main.tsx               # React 19 createRoot
-    ├── App.tsx                # I18nProvider + ThemeProvider + PreferencesProvider + RouterProvider
-    ├── vite-env.d.ts
+    ├── main.tsx / App.tsx     # createRoot / Provider 链 + locale 注册
     ├── routes.tsx             # 路由表（唯一事实源）
-    ├── i18n/                  # 国际化系统（详见 foundation-i18n SKILL）
-    │   ├── types.ts
-    │   ├── registry.ts        # localeRegistry（register / extend / list / subscribe）
-    │   ├── I18nProvider.tsx   # <I18nProvider> + useI18n() / useT()
-    │   ├── index.ts
-    │   └── locales/{zh-CN,en-US}.ts   # 公用 locale（不含页面级文案）
-    ├── router/                # key-based 桌面路由（无 URL）
-    │   ├── types.ts
-    │   ├── RouterProvider.tsx
-    │   ├── RouterOutlet.tsx   # 含 keepAlive 缓存逻辑
-    │   └── index.ts
-    ├── preferences/           # 显示偏好（showLogo / showTooltip）
-    │   ├── types.ts
-    │   ├── PreferencesProvider.tsx
-    │   └── index.ts
-    ├── styles/
-    │   └── themes/                # 注册式主题系统（详见 foundation-theme SKILL）
-    │       ├── types.ts
-    │       ├── buildMuiTheme.ts
-    │       ├── registry.ts
-    │       ├── ThemeProvider.tsx
-    │       ├── customTheme.ts # 用户自定义主题（foundation-custom）
-    │       ├── index.ts
-    │       └── presets/{light,dark,obsidian}.ts
-    ├── shared/
-    │   ├── platform.ts        # isWindows / isMac
-    │   ├── events.ts          # AppEvents 常量
-    │   └── hooks/             # 跨页面复用的事件订阅等 hook
-    ├── services/              # 27+ 个领域 Service 包装（经 index.ts 桶导出）
-    │   └── index.ts
-    ├── components/
-    │   ├── AppLayout/         # 两栏外壳（TitleBar + Sidebar + RouterOutlet）
-    │   ├── TitleBar/          # 自绘标题栏 + 三联控制按钮（按 OS 隐藏）
-    │   ├── Sidebar/           # 左侧导航 + 底部 Settings 按钮
-    │   └── Skeleton/          # 骨架屏基础组件（Skeleton / SkeletonText）
-    └── pages/
-        ├── HomePage/          # 仪表盘页（问候 / 项目数 / 最近启动 / CLI 检测）
-        │   ├── HomePage.tsx
-        │   ├── HomePage.skeleton.tsx  # ← 该页骨架屏
-        │   ├── useHomePage.ts
-        │   ├── HomePage.styles.ts
-        │   └── lang/{zh-CN,en-US,index}.ts
-        └── SettingsPage/      # 设置页：主题 / 显示偏好 / 自定义主题 / 语言
-            ├── SettingsPage.tsx
-            ├── SettingsPage.skeleton.tsx
-            ├── useSettingsPage.ts
-            ├── SettingsPage.styles.ts
-            └── lang/{zh-CN,en-US,index}.ts
+    ├── i18n/                  # 国际化系统（registry + 公用 locales）
+    ├── router/                # key-based 桌面路由（RouterProvider / RouterOutlet / keepAlive）
+    ├── preferences/           # 显示偏好 Provider
+    ├── styles/themes/         # 注册式主题系统（presets + customTheme）
+    ├── shared/                # platform / events 常量 / 跨页面 hooks
+    ├── services/              # 领域 Service 包装 bindings（经 index.ts 桶导出）
+    ├── components/            # AppLayout / TitleBar / Sidebar / 终端 / 树 / 卡片等公共组件
+    └── pages/                 # Terminal / Home / Todo / Files / Git / History / Ssh / Mcpe / Settings
+                               #   （页面 = View + VM + Style + lang，规范见上文）
 ```
 
 ## 变更记录 (Changelog)
 
-- 2026-05-28 13:09:44：初始化模块文档（React 18）。
-- 2026-05-28（升级）：升级到 React 19.2.6 + MUI 9.0.1 + TypeScript 6.0.3 + Vite 8.0.14；切换为 TypeScript（strict）；引入 MVVM 规范与 `DEVELOPMENT.md`；新增 `AppLayout` / `TitleBar` / `ServerList` / `ChannelList` 组件；新增 `services/` 与 `shared/` 分层；引入 `@/`、`@bindings/` 别名。
-- 2026-05-28（基座化）：移除 Discord 风格三栏（删除 `ServerList` / `ChannelList`），改为干净的两栏（`Sidebar` + 主内容）；左下角加入 `Settings` 按钮；引入注册式主题系统 `src/styles/themes/`，内置 `foundation-light`（默认白）+ `foundation-dark`，新增 `<FoundationThemeProvider>` 与 `useFoundationTheme()`；按钮统一为方形圆角（`borderRadius: 6`），不再使用圆形；新增 `foundation-theme` SKILL。
-- 2026-05-28（i18n）：新增国际化系统 `src/i18n/`（注册式 + 页面级语言包），内置 `zh-CN`（默认）/ `en-US`；公用文案与页面文案分离（`src/i18n/locales/` 与 `src/pages/<Name>/lang/`），通过 `localeRegistry.extend(code, partial)` 深合并；引入 `<I18nProvider>` / `useT()` / `useI18n()`；TitleBar / Sidebar / HomePage / SettingsPage 全部接入 `t()`；路由表 `RouteDefinition` 增加 `labelKey`；设置页拆出独立的"语言"入口；新增 `foundation-i18n` SKILL，确立"任何人类可见字符串必须走 `t()`"铁律。
-- 2026-05-28（首屏骨架）：新增 `src/components/Skeleton/` 基础骨架组件（`Skeleton` / `SkeletonText`，shimmer 跟随主题）；HomePage / SettingsPage 各自补 `<Name>.skeleton.tsx`；`RouteDefinition` 增加 `fallback`，`RouterOutlet` 包裹 `<Suspense>`；`SettingsPage` 走 `React.lazy` 拆出独立 chunk（约 17KB），主 bundle 减小；`index.html` 内联首屏静态骨架（独立于 `#root`，160ms 淡出），`prefers-color-scheme` 适配明暗，`prefers-reduced-motion` 关闭扫光，消除 webview 启动 → React mount 间的白屏。
-- 2026-05-28（持久化迁移 SQLite）：后端引入 `internal/storage` 模块（modernc/sqlite + GORM AutoMigrate + WAL + 单连接池），暴露 `preferences` / `appsettings` / `storagesvc` 三个 Wails service；前端 `PreferencesProvider` / `FoundationThemeProvider` / `I18nProvider` 全部异步化，**移除 localStorage**，统一改走 `PreferencesService` / `AppSettingsService`；`customTheme` 不再写本地 storage（持久化由 `appsettings.custom_theme` 字段承担）；新增 `NativeDialogs` 服务封装 Wails v3 `Dialogs.*`，**禁止使用浏览器 alert/confirm/prompt**；设置页新增「数据存储」子项，支持原生「另存为」对话框切换数据库路径 + 重置回默认。
-- 2026-05-28（设置页子目录隔离）：`SettingsPage` 重构为「框架 + 子页面」结构 —— `personalization/` / `language/` / `database/` 三个子目录各自独立 `<Sub>.tsx` + `use<Sub>.ts` + `<Sub>.styles.ts` + `lang/`；顶层 `useSettingsPage` 仅管 items + activeItemId；新增子页面遵循同样规范（导出顶层 View + register 函数，文案命名空间 `settings.<sub>.*`）。
-- 2026-05-28（数据可视化 + 表清理 + Icon 规范）：升级 `@mui/x-charts@^9.3.0`；数据存储页新增双图（PieChart 占比 + 横向 BarChart 字节，颜色取自 `theme.palette.foundation.*`），表清单逐项清空（仅对 `Clearable=true` 的表启用，带原生确认对话框）；后端 `internal/storage/models.go` 引入 `ModelDescriptor`（labelKey / clearable），`storagesvc` 新增 `GetTableStats` / `ClearTable`；新增 Icon 规范铁律：禁止 emoji / Unicode / 第三方 icon 包，必须用 `@mui/icons-material` 的 `*Rounded` 系列（与方圆设计语言对齐）。
+- 脚手架时期（2026-05-28 系列：React 19 升级 / 主题系统 / i18n / 骨架屏 / SQLite 迁移 / 设置页隔离 / Icon 规范）的演进记录见 git 历史。
+- 业务化之后的功能演进按 commit 记录（`git log --oneline -- frontend`），不再在本文件重复维护。

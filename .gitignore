@@ -6,7 +6,6 @@ frontend/bindings
 frontend/*.tsbuildinfo
 build/linux/appimage/build
 build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
-/.claude/skills/wails-skill-update/
 /.claude/index.json
 /.claude/settings.json
 /.claude/settings.local.json
@@ -20,8 +19,6 @@ build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 .ace-tool/
 
 # Go 编译产物（开发时偶尔会在仓库根目录生成）
-/foundation.exe
-/foundation
 /*.exe
 
 # 应用运行时数据：把本仓作为项目打开时生成的 Local History 存储（D10：<proj>/.xkpanes/）

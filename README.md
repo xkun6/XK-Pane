@@ -1,4 +1,4 @@
-# Foundation
+# XK-Pane
 
 [![Wails v3](https://img.shields.io/badge/Wails-v3.0.0--alpha-red)](https://v3.wails.io)
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://go.dev)
@@ -6,22 +6,15 @@
 [![MUI](https://img.shields.io/badge/MUI-9.0-007FFF?logo=mui)](https://mui.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript)](https://www.typescriptlang.org)
 
-**Foundation** 是一个**生产可用的 Wails v3 桌面应用脚手架**。开箱包含：
-
-- 🪟 Windows / macOS / Linux 三平台原生窗口（Win/Linux 前端自绘 + macOS 沉浸式红绿灯）
-- 🎨 注册式主题系统（内置三套预设 + 自定义调色板）
-- 🌐 注册式 i18n（公用 + 页面级语言包）
-- 💾 SQLite + GORM 持久化（AutoMigrate 零迁移文件，可视化数据存储页 + 表清空）
-- 🛠 工具层：HTTP 客户端、子进程（Windows JobObject）、AES-GCM 加密、slog 日志、原子写
-- 📐 严格的 MVVM 前端规范（View / ViewModel / Style / Service / lang 五层）
-
-**适用人群**：想跳过"造轮子两周"直接进入业务开发的团队 / 个人。
+**XK-Pane** 是基于 Wails v3（Go + React 19 + MUI 9）的桌面工作台：以多面板终端为核心，
+编排 claude / codex 等 CLI 会话，配套工作区 / 项目管理、本地文件历史、Todo 分派、
+SSH 连接中心与 MC PE（Minecraft 中国版）调试桥。
 
 ---
 
 ## 目录
 
-- [Foundation](#foundation)
+- [XK-Pane](#xk-pane)
   - [目录](#目录)
   - [✨ 特性一览](#-特性一览)
   - [🛠 安装 Wails CLI](#-安装-wails-cli)
@@ -30,14 +23,12 @@
     - [安装 wails3 CLI](#安装-wails3-cli)
     - [验证环境](#验证环境)
   - [🚀 快速开始](#-快速开始)
-    - [1. 克隆 + 改名](#1-克隆--改名)
-    - [2. 装依赖](#2-装依赖)
-    - [3. 生成 bindings](#3-生成-bindings)
-    - [4. 跑起来](#4-跑起来)
+    - [1. 装依赖](#1-装依赖)
+    - [2. 生成 bindings](#2-生成-bindings)
+    - [3. 跑起来](#3-跑起来)
   - [📂 项目结构](#-项目结构)
   - [⌨️ 常用命令速查](#️-常用命令速查)
   - [📐 工程规范](#-工程规范)
-  - [✏️ 把脚手架改名为你的项目](#️-把脚手架改名为你的项目)
   - [🧩 加新功能：常见路径](#-加新功能常见路径)
     - [加一个页面](#加一个页面)
     - [加一张数据表](#加一张数据表)
@@ -62,7 +53,6 @@
 | **持久化** | SQLite + GORM AutoMigrate；用户可在「设置 → 数据存储」改数据库位置（原生「另存为」对话框） |
 | **数据可视化** | 设置页内置环形 + 条形图（@mui/x-charts）展示各表占用 + 逐表清空 |
 | **工具层** | `httpx` HTTP / `procx` 子进程（Windows JobObject）/ `cryptox` AES-GCM / `logx` slog+rotate / `filex` 原子写 |
-| **子进程** | 严格白名单子进程 service：前端可调，命令必须在 `commands.go` 注册并通过 `ArgPattern` 校验 |
 | **原生对话框** | `NativeDialogs` 服务封装 Wails v3 `Dialogs.*`，禁用浏览器 `alert/confirm/prompt` |
 
 ---
@@ -121,17 +111,7 @@ wails3 doctor
 
 ## 🚀 快速开始
 
-### 1. 克隆 + 改名
-
-```sh
-git clone https://github.com/FxRayHughes/foundation.git my-app
-cd my-app
-
-# 强烈建议立即按下方「改名指南」把 module 名 / 应用名替换为你自己的
-# 不改也能跑，但生成 bindings 后路径里都是 foundation 字样
-```
-
-### 2. 装依赖
+### 1. 装依赖
 
 ```sh
 # Go 依赖
@@ -141,15 +121,15 @@ go mod tidy
 cd frontend && pnpm install && cd ..
 ```
 
-### 3. 生成 bindings
+### 2. 生成 bindings
 
 ```sh
 wails3 generate bindings
 ```
 
-> bindings 是 Wails 自动生成的前端 ↔ 后端 RPC 胶水代码，路径在 `frontend/bindings/<module-name>/...`。**改了 Go module 名或 service 后必须重新生成。** 已加入 `.gitignore`。
+> bindings 是 Wails 自动生成的前端 ↔ 后端 RPC 胶水代码，路径在 `frontend/bindings/xkpane/...`。**改了 service 签名 / 事件注册后必须重新生成。** 已加入 `.gitignore`。
 
-### 4. 跑起来
+### 3. 跑起来
 
 ```sh
 # 开发（前后端热重载，Vite dev server 默认端口 9245）
@@ -163,13 +143,13 @@ task build
 task package
 ```
 
-应用首次启动会在用户数据目录建立 `foundation.db`：
+应用首次启动会在用户数据目录建立 `xkpane.db`（dev 构建目录带 `-Dev` 后缀，与 release 隔离）：
 
 | 平台 | 默认数据库位置 |
 |------|---------------|
-| Windows | `%AppData%\Foundation\foundation.db` |
-| macOS | `~/Library/Application Support/Foundation/foundation.db` |
-| Linux | `~/.local/share/Foundation/foundation.db` |
+| Windows | `%AppData%\XK-Pane\xkpane.db` |
+| macOS | `~/Library/Application Support/XK-Pane/xkpane.db` |
+| Linux | `~/.local/share/XK-Pane/xkpane.db` |
 
 可在应用内「设置 → 数据存储」修改位置（原生「另存为」对话框，自动迁移现有数据）。
 
@@ -178,31 +158,23 @@ task package
 ## 📂 项目结构
 
 ```
-foundation/
+XK-Pane/
 ├── main.go                            # 仅 embed.FS + app.Run；不接受业务代码
-├── go.mod
+├── go.mod                             # module xkpane
 ├── Taskfile.yml                       # 顶层任务（dev/build/package）
 │
 ├── internal/                          # 后端业务（package private）
-│   ├── app/
-│   │   ├── app.go                     # 启动顺序：logx→httpx UA→storage→service→app.Run
-│   │   ├── window_windows.go          # 无边框窗口（build tag）
-│   │   ├── window_darwin.go           # 沉浸式 + 红绿灯
-│   │   └── window_linux.go            # 无边框窗口
+│   ├── app/                           # 启动装配 + 平台窗口（window_<os>.go build tag）
 │   ├── events/events.go               # 集中注册类型化事件
-│   ├── services/                      # Wails Service（自动暴露给前端）
-│   │   ├── preferences/               # KV 偏好（持久化）
-│   │   ├── appsettings/               # 单行表（主题/自定义/语言）
-│   │   └── storagesvc/                # 数据库路径管理 + 表统计 + 清空
-│   ├── storage/                       # SQLite 持久化层
-│   │   ├── db.go                      # Open / Holder（热替换）
-│   │   ├── pragma.go                  # WAL / busy_timeout / cache / mmap
-│   │   ├── models.go                  # AllModels（加表唯一注册中心）
-│   │   ├── usage.go                   # dbstat 表占用统计
-│   │   └── ...
+│   ├── services/                      # Wails Service，30+ 领域子包（terminal / workspace /
+│   │                                  #   orchestrator / localhistorysvc / mcpe / sshmachine /
+│   │                                  #   todosvc / preferences / appsettings / storagesvc / …）
+│   ├── storage/                       # SQLite 持久化层（Open/Holder/PRAGMA/AllModels）
+│   ├── webapi/                        # Web 镜像（viewer）HTTP 端点
 │   └── utils/                         # 跨业务工具层
-│       ├── httpx/                     # HTTP 客户端 + JSON helper + retry
+│       ├── httpx/                     # HTTP 客户端 + JSON helper + 代理 client
 │       ├── procx/                     # 子进程 + Windows JobObject
+│       ├── ptyx/ gitx/                # PTY 封装 / go-git 封装
 │       ├── cryptox/                   # AES-GCM 对称加密
 │       ├── logx/                      # slog + 控制台 + 文件 rotate
 │       └── filex/                     # 原子写
@@ -210,41 +182,21 @@ foundation/
 ├── frontend/                          # React 19 + MUI 9 + Vite 8
 │   ├── index.html                     # 内联首屏骨架（消除白屏）
 │   ├── src/
-│   │   ├── main.tsx
 │   │   ├── App.tsx                    # Provider 链装配
 │   │   ├── routes.tsx                 # 路由表（唯一事实源）
-│   │   ├── components/                # AppLayout / TitleBar / Sidebar / Skeleton
-│   │   ├── pages/
-│   │   │   ├── HomePage/              # 一个页面 = View+VM+Style+lang+Skeleton
-│   │   │   └── SettingsPage/
-│   │   │       ├── SettingsPage.tsx   # 框架：左列入口 + 右列分发
-│   │   │       ├── personalization/   # 子页：主题 + 偏好 + 自定义主题
-│   │   │       ├── language/          # 子页：语言切换
-│   │   │       └── database/          # 子页：数据存储路径 / 图表 / 清空
-│   │   ├── router/                    # RouteDefinition / RouterOutlet / useRouter
-│   │   ├── services/                  # services 包装 bindings（View/VM 不直接 import bindings）
-│   │   ├── styles/themes/             # 主题注册系统（含 customTheme）
-│   │   ├── i18n/                      # 注册式 i18n
-│   │   └── preferences/               # PreferencesProvider（异步对接 SQLite）
+│   │   ├── components/                # AppLayout / TitleBar / Sidebar / 终端与树等公共组件
+│   │   ├── pages/                     # Terminal / Home / Todo / Files / Git / History /
+│   │   │                              #   Ssh / Mcpe / Settings（页面 = View+VM+Style+lang）
+│   │   ├── router/ services/ styles/ i18n/ preferences/ shared/
+│   │   └── main.tsx
 │   ├── bindings/                      # wails3 自动生成（gitignore）
 │   └── package.json
 │
-├── build/                             # 多平台构建配置 + 资源
-│   ├── config.yml                     # productName / identifier / version
-│   ├── windows/ darwin/ linux/        # 各平台 Taskfile + 资源
-│   └── ...
-│
-├── .claude/                           # AI 协作工作区
-│   └── skills/
-│       ├── wails-*/                   # Wails v3 官方文档（13 个 skill）
-│       ├── foundation-theme/          # 主题系统使用指南
-│       ├── foundation-i18n/           # i18n 使用指南
-│       ├── foundation-persistence/    # 持久化层使用指南
-│       └── foundation-utils/          # 工具层使用指南（httpx/procx/cryptox/logx/filex）
-│
+├── build/                             # 多平台构建配置 + 资源（windows/darwin/linux/docker）
+├── .claude/skills/                    # wails-*（Wails v3 文档）+ foundation-*（基建指南）
+│                                      #   + xkpane-*（业务 skill）
 ├── CLAUDE.md                          # 项目级 AI 协作约定
-├── README.md                          # 本文
-└── .gitignore
+└── README.md                          # 本文
 ```
 
 ---
@@ -292,38 +244,6 @@ foundation/
 
 ---
 
-## ✏️ 把脚手架改名为你的项目
-
-`foundation` 这个名字出现在多处，按顺序替换：
-
-| 步骤 | 文件 / 字段 | 替换 |
-|------|------------|------|
-| 1 | `go.mod` 第 1 行 `module foundation` | `module <your-app>` |
-| 2 | 全局替换 `import "foundation/internal/...` | `import "<your-app>/internal/...` |
-| 3 | `internal/storage/paths.go` 的 `AppDirName = "Foundation"` | 你的产品名 |
-| 4 | `internal/utils/cryptox/cryptox.go` 的 `AppDirName` | 同上 |
-| 5 | `internal/utils/logx/logx.go` 的 `AppDirName` | 同上 |
-| 6 | `internal/app/app.go` 的 `Name`、`Description` | 你的产品信息 |
-| 7 | `internal/app/window_*.go` 的 `Title` | 同上 |
-| 8 | `frontend/services/greet/GreetService.ts` 的 `@bindings/foundation/...` | `@bindings/<your-app>/...` |
-| 9 | `frontend/package.json` 的 `name` 字段 | `<your-app>-frontend` |
-| 10 | `frontend/index.html` 的 `<title>` | 你的产品名 |
-| 11 | `Taskfile.yml` 的 `APP_NAME: "foundation"` | `<your-app>` |
-| 12 | `build/config.yml` 的 `info.productName` / `info.companyName` / `info.productIdentifier` | 你的元信息 |
-
-替换完毕：
-
-```sh
-go mod tidy
-cd frontend && pnpm install
-wails3 generate bindings
-wails3 task common:update:build-assets   # 用新 productName 重生成图标 / Info.plist
-```
-
-> 改名后第一次 `wails3 dev` 之前**一定**要重新 `wails3 generate bindings`，否则前端 import 路径会指向不存在的旧 module。
-
----
-
 ## 🧩 加新功能：常见路径
 
 ### 加一个页面
@@ -331,12 +251,13 @@ wails3 task common:update:build-assets   # 用新 productName 重生成图标 / 
 详见 `frontend/CLAUDE.md` 的「路由规范」。
 
 ```ts
-// 1. 写页面：frontend/src/pages/AccountPage/{AccountPage.tsx, useAccountPage.ts, AccountPage.styles.ts, AccountPage.skeleton.tsx, index.ts}
+// 1. 写页面：frontend/src/pages/AccountPage/{AccountPage.tsx, AccountPage.styles.ts, AccountPage.skeleton.tsx}
+//    有页面级状态再加 useAccountPage.ts；不建 index.ts 桶
 //    若有人类可见文案：再加 lang/{zh-CN.ts, en-US.ts, index.ts} + register<Name>Locales
 
-// 2. 在 src/routes.tsx 追加一项
+// 2. 在 src/routes.tsx 追加一项（直 import 具体文件）
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
-import { AccountPage } from '@/pages/AccountPage';
+import { AccountPage } from '@/pages/AccountPage/AccountPage';
 import { AccountPageSkeleton } from '@/pages/AccountPage/AccountPage.skeleton';
 
 export const routes: RouteDefinition[] = [
@@ -394,7 +315,7 @@ Services: []application.Service{
 // 3. wails3 generate bindings
 
 // 4. frontend/src/services/messages/MessagesService.ts 包装
-import { Service as Binding } from '@bindings/foundation/internal/services/messages';
+import { Service as Binding } from '@bindings/xkpane/internal/services/messages';
 export const MessagesService = {
     async send(content: string) { return Binding.Send(content); },
 };
@@ -405,7 +326,7 @@ export const MessagesService = {
 详见 `.claude/skills/foundation-utils/SKILL.md`。
 
 ```go
-import "foundation/internal/utils/httpx"
+import "xkpane/internal/utils/httpx"
 
 var resp WeatherResp
 if err := httpx.GetJSON(ctx, url, &resp); err != nil {
@@ -419,7 +340,7 @@ if err := httpx.GetJSON(ctx, url, &resp); err != nil {
 ### 启动子进程
 
 ```go
-import "foundation/internal/utils/procx"
+import "xkpane/internal/utils/procx"
 
 err := procx.Run(ctx, procx.Spec{
     Name: "ffmpeg",
@@ -442,7 +363,7 @@ err := procx.Run(ctx, procx.Spec{
 | [frontend/CLAUDE.md](./frontend/CLAUDE.md) | 前端模块详细规范（MVVM / 路由 / 持久化 / 原生对话框 / Icon / 子目录隔离） |
 | [frontend/DEVELOPMENT.md](./frontend/DEVELOPMENT.md) | 前端 MVVM 落地细则 |
 | [build/CLAUDE.md](./build/CLAUDE.md) | 多平台构建配置说明 |
-| `.claude/skills/wails-*/` | Wails v3 官方文档（按主题拆分的 13 个 skill） |
+| `.claude/skills/wails-*/` | Wails v3 官方文档（按主题拆分的 12 个 skill） |
 | `.claude/skills/foundation-theme/` | 主题系统使用指南 |
 | `.claude/skills/foundation-i18n/` | i18n 使用指南 |
 | `.claude/skills/foundation-persistence/` | 持久化层使用指南 |
