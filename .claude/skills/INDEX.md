@@ -24,7 +24,7 @@
 | [foundation-theme](./foundation-theme/SKILL.md) | **本项目**：主题注册系统使用与扩展 | 注册新主题、切换主题、消费 `theme.palette.foundation` |
 | [foundation-i18n](./foundation-i18n/SKILL.md) | **本项目**：国际化系统（注册式 + 页面级语言包） | 注册新语言、写页面级语言包、消费 `useT()`、铁律：人类可见字符串必须走 `t()` |
 | [foundation-persistence](./foundation-persistence/SKILL.md) | **本项目**：持久化层（SQLite + GORM + AutoMigrate） | 加新表三步、业务 service 接入 Holder、前端 service 包装、路径切换、表统计与清空、PRAGMA / 并发、Provider 异步化模式 |
-| [foundation-utils](./foundation-utils/SKILL.md) | **本项目**：工具层（httpx / procx / cryptox / logx / filex） | HTTP 客户端、子进程（含 Windows JobObject）、AES-GCM、slog 日志、原子写；含 subprocess 白名单 service |
+| [foundation-utils](./foundation-utils/SKILL.md) | **本项目**：工具层（httpx / procx / cryptox / logx / filex） | HTTP 客户端、子进程（含 Windows JobObject）、AES-GCM、slog 日志、原子写 |
 
 ## 内容来源
 

@@ -93,14 +93,6 @@ export {
   type FileFilter,
 } from './dialogs/NativeDialogs';
 export {
-  SubprocessService,
-  type RunSpec,
-  type RunResult,
-  type AvailableCommand,
-  type SubprocessItem,
-  type ExitInfo,
-} from './subprocess/SubprocessService';
-export {
   TerminalService,
   attachSessionOutput,
   type CreateSpec,

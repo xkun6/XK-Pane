@@ -35,7 +35,6 @@ import (
 	"xkpane/internal/services/sessionscan"
 	"xkpane/internal/services/sshmachine"
 	"xkpane/internal/services/storagesvc"
-	"xkpane/internal/services/subprocess"
 	"xkpane/internal/services/taskbinding"
 	"xkpane/internal/services/terminal"
 	"xkpane/internal/services/todo"
@@ -86,10 +85,6 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	holder := storage.NewHolder(db)
 	logx.For("app").Info("storage opened", "path", dbPath)
 
-	// subprocess / terminal service 需要 *application.App 才能向前端 Emit 事件。
-	// 但 application.New 又需要 services 列表 —— 用预创建 + Bind 模式：
-	//   先 new 一个空 service 占位，然后在 app.New 之后回填 app 引用。
-	subSvc := subprocess.New(nil) // app 暂为 nil
 	// CLI 工具注册表只建一次，terminal（启动拼装）与 clitools（暴露给前端列表）共享同一实例，
 	// 避免两处各自 Default() 导致 DetectAll 重复跑 which + --version 探测。
 	cliRegistry := cliadapters.Default()
@@ -123,7 +118,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	wailsNotifier := notifications.New()
 	notifSvc := notification.New(holder, wailsNotifier)
 	// 子窗口系统（foundation 框架能力）：类型化子窗口（confirm / message / blank）+ 事件总线通信。
-	// 同 subprocess 用预创建 + AttachApp 回填 app 引用模式。
+	// 预创建 + AttachApp 回填 app 引用模式（application.New 需要 services 列表，而 service 又需 app 引用）。
 	childWinSvc := NewChildWindowService()
 
 	// Web 网关（P7 M1）：独立 0.0.0.0 HTTP server，托管同一份 frontend/dist 供手机/平板局域网访问。
@@ -198,7 +193,6 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(session.New(holder)),
 			application.NewService(gitSvc),
 			application.NewService(lhSvc),
-			application.NewService(subSvc),
 			application.NewService(termSvc),
 			application.NewService(clitools.New(cliRegistry)),
 			application.NewService(wsSvc),
@@ -233,7 +227,6 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			},
 		},
 	})
-	subSvc.AttachApp(app)
 	// 组合双路 emit（P7 §6.1）：会话事件同时推给 ① 桌面 webview（app.Event.Emit，进程内同步、
 	// 零回归）② Web 网关（RouteEvent → 浏览器 WS，白名单过滤 + 慢端剔除，绝不反压回 PTY）。
 	// 取代 termSvc/orchSvc.AttachApp（二者原本仅注入 app.Event.Emit 单路；AttachApp 保留供单测）。

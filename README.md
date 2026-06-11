@@ -191,11 +191,9 @@ foundation/
 │   │   └── window_linux.go            # 无边框窗口
 │   ├── events/events.go               # 集中注册类型化事件
 │   ├── services/                      # Wails Service（自动暴露给前端）
-│   │   ├── greet/                     # 示例 service
 │   │   ├── preferences/               # KV 偏好（持久化）
 │   │   ├── appsettings/               # 单行表（主题/自定义/语言）
-│   │   ├── storagesvc/                # 数据库路径管理 + 表统计 + 清空
-│   │   └── subprocess/                # 子进程白名单（前端可调）
+│   │   └── storagesvc/                # 数据库路径管理 + 表统计 + 清空
 │   ├── storage/                       # SQLite 持久化层
 │   │   ├── db.go                      # Open / Holder（热替换）
 │   │   ├── pragma.go                  # WAL / busy_timeout / cache / mmap
@@ -432,7 +430,7 @@ err := procx.Run(ctx, procx.Spec{
 // 父进程崩溃时子进程自动连带 kill（Windows JobObject / Unix pgid）
 ```
 
-要让前端能调，必须经过 `internal/services/subprocess/commands.go` 的白名单。
+要让前端能调子进程，必须经白名单 service（原 `internal/services/subprocess` 实现已删，需要时按 git 历史恢复），禁止开万能 `RunCommand`。
 
 ---
 

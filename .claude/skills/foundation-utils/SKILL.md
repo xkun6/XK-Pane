@@ -15,7 +15,7 @@ description: Foundation 脚手架的 Go 工具层使用指南：httpx（HTTP 客
 | `logx` | `log/slog` + 控制台 + 文件 rotate | `fmt.Println`、`log.Printf` |
 | `filex` | 原子写、限长读、目录确保 | `os.WriteFile` 写配置（断电半截） |
 
-> 这些工具**只在 Go 端**。前端要用通过对应业务 service 暴露（如 `subprocess` service 把 procx 包成 Wails 接口）。
+> 这些工具**只在 Go 端**。前端要用通过对应业务 service 暴露（业务 service 内部调用 utils，再经 bindings 暴露窄接口）。
 
 ---
 
@@ -28,7 +28,7 @@ description: Foundation 脚手架的 Go 工具层使用指南：httpx（HTTP 客
 | 3 | 敏感字符串落 SQLite **必须**先 `cryptox.EncryptString` | "API key 明文存 db" 是不可接受的 |
 | 4 | 业务代码**禁止** `log.Printf` / `fmt.Println` | 没结构化字段、不落文件；用 `logx.For("component").Info(...)` |
 | 5 | 写"配置类文件"**必须** `filex.WriteAtomic`（不是普通 `os.WriteFile`） | 断电 / 崩溃产生半截 JSON 会让下一次启动炸 |
-| 6 | 子进程暴露给前端**只能**走 `internal/services/subprocess` 的白名单 | 直接开 `RunArbitraryCommand` 等于把 webview 变 RCE 通道 |
+| 6 | 子进程暴露给前端**只能**走白名单 service（原 `internal/services/subprocess` 实现已删，需要时按 git 历史恢复） | 直接开 `RunArbitraryCommand` 等于把 webview 变 RCE 通道 |
 
 ---
 
@@ -294,59 +294,16 @@ data, err := filex.ReadLimit(path, 4<<20) // 4MB 上限
 
 ---
 
-## 7. subprocess Wails service：把 procx 暴露给前端
+## 7. 把子进程能力暴露给前端（安全模型）
 
-### 7.1 安全模型（**重要**）
+子进程能力开放给前端 = 给 webview 一条潜在 RCE 通道。**只能用白名单 service，禁止开万能 `RunCommand`**。
 
-子进程能力开放给前端 = 给 webview 一条潜在 RCE 通道。**只能用白名单**：
+原 `internal/services/subprocess` 白名单实现（Command 注册表 + ArgPattern 校验 + AllowedCwdRoots + 前端 SubprocessService 包装）因白名单恒空、零消费者，已于 2026-06-11 减法审计中删除；将来真有前端跑子进程的需求时，**按 git 历史恢复该实现**（含本节原文档），不要重新发明。
 
-```go
-// internal/services/subprocess/commands.go
-var whitelist = []Command{
-    {
-        Name:        "ping",
-        Description: "Ping a host",
-        Exe:         "ping",
-        PrependArgs: []string{"-n", "4"}, // Windows
-        ArgPattern:  regexp.MustCompile(`^[a-zA-Z0-9._:-]+$`),
-        MaxArgs:     1,
-    },
-}
-```
-
-每加一行白名单前先回答：
+每开放一条命令前先回答：
 1. 这条命令的副作用范围（写文件 / 网络 / 改系统）能接受吗？
-2. 用户能在 args 里塞路径 / shell 元字符吗？必须用 `ArgPattern` 卡死
-3. `Cwd` 要不要锁到应用数据目录子树（`AllowedCwdRoots`）？
-
-### 7.2 前端用法
-
-```ts
-import { SubprocessService } from '@/services';
-
-// 列出可用命令（用来动态渲染 UI）
-const cmds = await SubprocessService.availableCommands();
-
-// 启动
-const { id, pid } = await SubprocessService.run({ name: 'ping', args: ['8.8.8.8'] });
-
-// 订阅输出
-const offLine = SubprocessService.onLine(id, (line, stream) => {
-  console.log(`[${stream}] ${line}`);
-});
-const offExit = SubprocessService.onExit(id, ({ exitCode, error }) => {
-  console.log('exit', exitCode, error);
-});
-
-// 停止
-await SubprocessService.stop(id);
-
-// 卸载时清理订阅
-offLine();
-offExit();
-```
-
-事件名约定：`subprocess:<stdout|stderr|exit>:<id>`，业务方一般不直接订阅，用 `onLine` / `onExit` 即可。
+2. 用户能在 args 里塞路径 / shell 元字符吗？必须用 ArgPattern 卡死
+3. Cwd 要不要锁到应用数据目录子树？
 
 ---
 
@@ -435,10 +392,4 @@ internal/utils/
 │   └── logx.go         # Init / For / fileRotator / fanoutHandler
 └── filex/
     └── filex.go        # WriteAtomic / ReadLimit
-
-internal/services/subprocess/   # procx 的前端入口
-├── subprocess.go      # Service / Run / Stop / List / AvailableCommands
-└── commands.go        # whitelist + Command.validateArgs / validateCwd
-
-frontend/src/services/subprocess/SubprocessService.ts  # 前端包装 + 事件订阅
 ```

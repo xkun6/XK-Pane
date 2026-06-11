@@ -158,7 +158,7 @@ func (s *Service) DoSomething(ctx context.Context) error {
   - **加密**：敏感字符串落 SQLite **必须**先 `cryptox.EncryptString`
   - **日志**：禁止 `log.Printf` / `fmt.Println`；用 `logx.For("component").Info(...)`
   - **配置文件**：禁止 `os.WriteFile` 写配置；用 `filex.WriteAtomic`
-  - **前端调子进程**：必须经 `internal/services/subprocess` 白名单，**禁止**给前端开万能 `RunCommand`
+  - **前端调子进程**：必须经白名单 service（原 `internal/services/subprocess` 实现因白名单恒空已删，需要时按 git 历史恢复），**禁止**给前端开万能 `RunCommand`
 - **前端调用边界**：组件 → ViewModel hook → `services/<Domain>Service.ts` → `@bindings/<module>/...`。View 不许直接 import bindings；ViewModel 不许直接 import bindings。
 - **原生对话框铁律**：所有"打开 / 保存 / 选择文件夹 / 确认 / 错误提示"必须走 `NativeDialogs`（封装 Wails v3 `Dialogs.*`）。**禁止**使用浏览器 `alert` / `confirm` / `prompt` / `<input type="file">`。
 - **Icon 铁律**：UI 中所有图标必须用 `@mui/icons-material` 的 React 组件（推荐 `*Rounded` 系列以匹配方圆设计语言）。**禁止** emoji、Unicode 符号、第三方 icon 包当图标。详见 `frontend/CLAUDE.md` 的「Icon 规范」。
