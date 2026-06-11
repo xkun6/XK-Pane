@@ -72,7 +72,7 @@ func TestSendPacketWritesFrame(t *testing.T) {
 	}
 
 	_ = client.SetReadDeadline(time.Now().Add(time.Second))
-	got, err := ReadFrom(client)
+	got, err := readFrom(client)
 	if err != nil {
 		t.Fatalf("client read frame: %v", err)
 	}

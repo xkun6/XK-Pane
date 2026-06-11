@@ -2,7 +2,9 @@ package mcdkbridge
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
+	"io"
 	"testing"
 )
 
@@ -106,13 +108,31 @@ func TestUnknownTypeIDRoundTrips(t *testing.T) {
 	}
 }
 
+// readFrom 测试 helper：从 io.Reader 读取一个完整帧（先读 6 字节头，再按 length 读 payload）。
+// 生产代码是 fire-and-forget 单向发帧不解析入站，此读半边仅用于守住编解码往返对称性。
+func readFrom(r io.Reader) (Packet, error) {
+	var header [HeaderLen]byte
+	if _, err := io.ReadFull(r, header[:]); err != nil {
+		return Packet{}, err
+	}
+	typeID := binary.BigEndian.Uint16(header[0:2])
+	length := int(binary.BigEndian.Uint32(header[2:6]))
+	payload := make([]byte, length)
+	if length > 0 {
+		if _, err := io.ReadFull(r, payload); err != nil {
+			return Packet{}, err
+		}
+	}
+	return Packet{Type: PacketType(typeID), Payload: payload}, nil
+}
+
 func TestWriteReadRoundTrip(t *testing.T) {
 	var buf bytes.Buffer
 	p := ExecuteServerCode("print('async')")
 	if _, err := p.WriteTo(&buf); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	got, err := ReadFrom(&buf)
+	got, err := readFrom(&buf)
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -126,7 +146,7 @@ func TestWriteReadEmptyPayload(t *testing.T) {
 	if _, err := ReloadGame().WriteTo(&buf); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	got, err := ReadFrom(&buf)
+	got, err := readFrom(&buf)
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}

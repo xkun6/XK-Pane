@@ -2,7 +2,6 @@ package localhistory
 
 import (
 	"context"
-	"strings"
 )
 
 // RecentChange 是跨文件的最近变更条目（含该版本若被某标签快照引用的标签名）。对齐 cc-pane。
@@ -45,22 +44,6 @@ func (s *Store) GetRecentChanges(ctx context.Context, limit int) ([]RecentChange
 	return out, err
 }
 
-// ListDirectoryChanges 列出某目录下所有文件的版本（最新在前）。dirPath 为空 = 全部；since 非空
-// 则只取 created_at >= since 的。对齐 cc-pane list_directory_changes（LIKE + ESCAPE '\'）。
-func (s *Store) ListDirectoryChanges(ctx context.Context, dirPath, since string) ([]FileVersion, error) {
-	pattern := "%"
-	if dirPath != "" {
-		pattern = escapeLikePattern(strings.TrimRight(dirPath, "/")) + "/%"
-	}
-	q := s.gdb.WithContext(ctx).Where(`file_path LIKE ? ESCAPE '\'`, pattern)
-	if since != "" {
-		q = q.Where("created_at >= ?", since)
-	}
-	out := make([]FileVersion, 0)
-	err := q.Order("created_at DESC, id DESC").Find(&out).Error
-	return out, err
-}
-
 // ListDeletedFiles 列出「最新版本为删除标记」的文件（当前已删但有历史可恢复）。对齐 cc-pane。
 func (s *Store) ListDeletedFiles(ctx context.Context) ([]FileVersion, error) {
 	out := make([]FileVersion, 0)
@@ -70,13 +53,4 @@ func (s *Store) ListDeletedFiles(ctx context.Context) ([]FileVersion, error) {
 		Order("created_at DESC, id DESC").
 		Find(&out).Error
 	return out, err
-}
-
-// escapeLikePattern 转义 SQLite LIKE 模式中的特殊字符（\ % _）。必须先转义 \，再转义 % 和 _，
-// 否则会二次转义。对齐 cc-pane escape_like_pattern。
-func escapeLikePattern(input string) string {
-	input = strings.ReplaceAll(input, `\`, `\\`)
-	input = strings.ReplaceAll(input, "%", `\%`)
-	input = strings.ReplaceAll(input, "_", `\_`)
-	return input
 }

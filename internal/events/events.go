@@ -23,11 +23,6 @@ const (
 	// payload 见 OrchestratorLaunchPayload；前端 listener 见 P6c-3。
 	OrchestratorLaunch = "orchestrator:launch"
 
-	// cli-hook 回报事件（被启动 CLI 的 SessionStart hook → POST /api/terminal/session-started
-	// → orchestrator 转发）。payload 见 OrchestratorSessionStartedPayload。P6d-3：本轮仅
-	// log + emit（XK 暂无 LaunchCwd 消费方，不回填 launch_history；前端订阅留后续）。
-	OrchestratorSessionStarted = "orchestrator:session-started"
-
 	// MC PE 运行事件（后端 launcher PTY reader/wait goroutine → 前端 MC PE 面板）。P6e。
 	// payload 见 MCOutputPayload / MCLaunchedPayload / MCExitedPayload；前端按 runId 分发。
 	MCPeOutput   = "mc_pe:output"   // 一行已过滤/分类的 MC PE 日志
@@ -110,16 +105,6 @@ type OrchestratorLaunchPayload struct {
 	CliTool       string `json:"cliTool,omitempty"`
 }
 
-// OrchestratorSessionStartedPayload 是 OrchestratorSessionStarted 事件载荷。
-// 由被启动 CLI 的 session-start hook 经 REST 上报，orchestrator 据此转发给前端。
-type OrchestratorSessionStartedPayload struct {
-	PtySessionID    string `json:"ptySessionId"`
-	ResumeSessionID string `json:"resumeSessionId,omitempty"`
-	CliTool         string `json:"cliTool,omitempty"`
-	RuntimeKind     string `json:"runtimeKind,omitempty"`
-	Cwd             string `json:"cwd,omitempty"`
-}
-
 // MCOutputPayload 是 MCPeOutput 事件载荷。Timestamp/Category/Level 为 nil 时序列化成
 // JSON null（对齐 cc-pane emit 行为，前端按可选字段处理）。
 type MCOutputPayload struct {
@@ -174,7 +159,6 @@ func Register() {
 	application.RegisterEvent[TerminalAskPendingPayload](TerminalAskPending)
 	application.RegisterEvent[LocalHistoryChangedPayload](LocalHistoryChanged)
 	application.RegisterEvent[OrchestratorLaunchPayload](OrchestratorLaunch)
-	application.RegisterEvent[OrchestratorSessionStartedPayload](OrchestratorSessionStarted)
 	application.RegisterEvent[MCOutputPayload](MCPeOutput)
 	application.RegisterEvent[MCLaunchedPayload](MCPeLaunched)
 	application.RegisterEvent[MCExitedPayload](MCPeExited)

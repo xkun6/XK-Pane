@@ -6,11 +6,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 	"time"
 
-	"xkpane/internal/events"
 	"xkpane/internal/storage"
 )
 
@@ -50,45 +48,6 @@ func TestHandleSessionStartedUnauthorized(t *testing.T) {
 	s.handleSessionStarted(w, req)
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("code=%d want 401", w.Code)
-	}
-}
-
-func TestHandleSessionStartedEmitsEvent(t *testing.T) {
-	s := newTestService("secret")
-	var (
-		mu     sync.Mutex
-		gotEvt string
-		gotPay any
-	)
-	s.emit = func(name string, payload any) {
-		mu.Lock()
-		defer mu.Unlock()
-		gotEvt = name
-		gotPay = payload
-	}
-
-	body, _ := json.Marshal(sessionStartedRequest{
-		PtySessionID: "pty-1", ResumeSessionID: "rs-1", CliTool: "reclaude", RuntimeKind: "local", Cwd: `C:\proj`,
-	})
-	req := httptest.NewRequest(http.MethodPost, "/api/terminal/session-started", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer secret")
-	w := httptest.NewRecorder()
-	s.handleSessionStarted(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("code=%d want 200 body=%s", w.Code, w.Body.String())
-	}
-	mu.Lock()
-	defer mu.Unlock()
-	if gotEvt != events.OrchestratorSessionStarted {
-		t.Errorf("event=%q want %q", gotEvt, events.OrchestratorSessionStarted)
-	}
-	pay, ok := gotPay.(events.OrchestratorSessionStartedPayload)
-	if !ok {
-		t.Fatalf("payload 类型=%T", gotPay)
-	}
-	if pay.PtySessionID != "pty-1" || pay.CliTool != "reclaude" || pay.Cwd != `C:\proj` {
-		t.Errorf("payload=%+v 不符", pay)
 	}
 }
 

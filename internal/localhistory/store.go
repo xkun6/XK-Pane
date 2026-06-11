@@ -192,13 +192,6 @@ func (s *Store) ListVersions(ctx context.Context, filePath string) ([]FileVersio
 	return out, err
 }
 
-// ListVersionsByBranch 列出 filePath 在指定 branch 的版本（id 升序）。
-func (s *Store) ListVersionsByBranch(ctx context.Context, filePath, branch string) ([]FileVersion, error) {
-	out := make([]FileVersion, 0)
-	err := s.gdb.WithContext(ctx).Where("file_path = ? AND branch = ?", filePath, branch).Order("id ASC").Find(&out).Error
-	return out, err
-}
-
 // GetFileBranches 返回 filePath 有版本记录的所有分支（去重，升序）。
 func (s *Store) GetFileBranches(ctx context.Context, filePath string) ([]string, error) {
 	out := make([]string, 0)

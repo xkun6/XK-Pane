@@ -5,22 +5,6 @@ import (
 	"testing"
 )
 
-func TestEscapeLikePattern(t *testing.T) {
-	cases := map[string]string{
-		"src/main.go":     "src/main.go",
-		"100%done":        `100\%done`,
-		"file_name":       `file\_name`,
-		`path\to\file`:    `path\\to\\file`,
-		`a\b%c_d`:         `a\\b\%c\_d`,
-		"":                "",
-	}
-	for in, want := range cases {
-		if got := escapeLikePattern(in); got != want {
-			t.Errorf("escapeLikePattern(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 func TestGetRecentChanges(t *testing.T) {
 	ctx := context.Background()
 	s := openTemp(t)
@@ -62,39 +46,6 @@ func TestGetRecentChanges(t *testing.T) {
 	// limit 生效。
 	if one, _ := s.GetRecentChanges(ctx, 1); len(one) != 1 || one[0].VersionID != a2.ID {
 		t.Errorf("limit 1 = %v, want [a2]", one)
-	}
-}
-
-func TestListDirectoryChanges(t *testing.T) {
-	ctx := context.Background()
-	s := openTemp(t)
-	_, _ = s.SaveVersion(ctx, "src/a.go", []byte("a"), false, "main", 0)
-	_, _ = s.SaveVersion(ctx, "src/sub/b.go", []byte("b"), false, "main", 0)
-	_, _ = s.SaveVersion(ctx, "root.txt", []byte("r"), false, "main", 0)
-
-	// src/ 下两个（含嵌套），不含 root.txt。
-	in, err := s.ListDirectoryChanges(ctx, "src", "")
-	if err != nil {
-		t.Fatalf("ListDirectoryChanges: %v", err)
-	}
-	if len(in) != 2 {
-		t.Fatalf("src changes = %d, want 2", len(in))
-	}
-	for _, v := range in {
-		if v.FilePath == "root.txt" {
-			t.Error("root.txt should not be under src/")
-		}
-	}
-	// 空目录 = 全部。
-	if all, _ := s.ListDirectoryChanges(ctx, "", ""); len(all) != 3 {
-		t.Fatalf("all changes = %d, want 3", len(all))
-	}
-	// since 过滤：远古 → 全部；远未来 → 空。
-	if old, _ := s.ListDirectoryChanges(ctx, "src", "2000-01-01T00:00:00Z"); len(old) != 2 {
-		t.Errorf("since past = %d, want 2", len(old))
-	}
-	if future, _ := s.ListDirectoryChanges(ctx, "src", "2099-01-01T00:00:00Z"); len(future) != 0 {
-		t.Errorf("since future = %d, want 0", len(future))
 	}
 }
 

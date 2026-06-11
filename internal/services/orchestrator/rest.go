@@ -46,8 +46,8 @@ func writeJSONError(w http.ResponseWriter, code int, msg string) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
-// handleSessionStarted 接收 cli-hook 的 session-start 回报：校验 token + 限流 → log + emit
-// 前端事件（P6d-3：本轮不回填 launch_history，XK 暂无 LaunchCwd 消费方）。
+// handleSessionStarted 接收 cli-hook 的 session-start 回报：校验 token + 限流 → log +
+// 回包注入同工作空间兄弟项目（不回填 launch_history，XK 暂无 LaunchCwd 消费方）。
 func (s *Service) handleSessionStarted(w http.ResponseWriter, r *http.Request) {
 	if !s.verifyToken(r) {
 		writeJSONError(w, http.StatusUnauthorized, "Invalid or missing Bearer token")
@@ -74,14 +74,6 @@ func (s *Service) handleSessionStarted(w http.ResponseWriter, r *http.Request) {
 		"runtimeKind", req.RuntimeKind,
 		"cwd", req.Cwd,
 		"hasResumeId", req.ResumeSessionID != "")
-
-	s.emitEvent(events.OrchestratorSessionStarted, events.OrchestratorSessionStartedPayload{
-		PtySessionID:    req.PtySessionID,
-		ResumeSessionID: req.ResumeSessionID,
-		CliTool:         req.CliTool,
-		RuntimeKind:     req.RuntimeKind,
-		Cwd:             req.Cwd,
-	})
 
 	// 据 cwd 反查同工作空间兄弟项目回给 cli-hook，让其注入「说项目名即引用绝对路径」。
 	// 仅当前工作空间（同目录隶属多工作空间时合并去重）；查不到 / 不属任何工作空间则省略该字段。

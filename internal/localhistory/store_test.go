@@ -122,11 +122,16 @@ func TestBranchIsolation(t *testing.T) {
 	if _, err := s.SaveVersion(ctx, "a.txt", []byte("feat-1"), false, "feature", 0); err != nil {
 		t.Fatalf("save feature: %v", err)
 	}
-	if vs, _ := s.ListVersionsByBranch(ctx, "a.txt", "main"); len(vs) != 1 || vs[0].Branch != "main" {
-		t.Fatalf("main branch versions wrong: %v", vs)
+	vs, err := s.ListVersions(ctx, "a.txt")
+	if err != nil || len(vs) != 2 {
+		t.Fatalf("versions = %v (err=%v), want 2", vs, err)
 	}
-	if vs, _ := s.ListVersionsByBranch(ctx, "a.txt", "feature"); len(vs) != 1 || vs[0].Branch != "feature" {
-		t.Fatalf("feature branch versions wrong: %v", vs)
+	seen := map[string]bool{}
+	for _, v := range vs {
+		seen[v.Branch] = true
+	}
+	if !seen["main"] || !seen["feature"] {
+		t.Fatalf("branch field wrong: %v", vs)
 	}
 	brs, err := s.GetFileBranches(ctx, "a.txt")
 	if err != nil {

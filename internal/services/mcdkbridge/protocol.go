@@ -97,24 +97,11 @@ func Decode(b []byte) (Packet, int, error) {
 
 // WriteTo 把整帧写入任意 io.Writer（实现 io.WriterTo）。io.Writer.Write 契约保证
 // 「写入不足即返回错误」，故单次 Write 即等价于 cc-pane 的 write_all。
+//
+// 注：Go 侧桥是 fire-and-forget 单向发帧，生产代码不解析入站帧；入站读半边
+// （protocol.rs 的 read 对应物）只保留在 protocol_test.go 的 readFrom 测试 helper 里，
+// 用于守住「线上格式与游戏内 IPCSystem.py 拆包对称」的往返覆盖。
 func (p Packet) WriteTo(w io.Writer) (int64, error) {
 	n, err := w.Write(p.Encode())
 	return int64(n), err
-}
-
-// ReadFrom 从 io.Reader 读取一个完整帧（先读 6 字节头，再按 length 读 payload）。
-func ReadFrom(r io.Reader) (Packet, error) {
-	var header [HeaderLen]byte
-	if _, err := io.ReadFull(r, header[:]); err != nil {
-		return Packet{}, err
-	}
-	typeID := binary.BigEndian.Uint16(header[0:2])
-	length := int(binary.BigEndian.Uint32(header[2:6]))
-	payload := make([]byte, length)
-	if length > 0 {
-		if _, err := io.ReadFull(r, payload); err != nil {
-			return Packet{}, err
-		}
-	}
-	return Packet{Type: PacketType(typeID), Payload: payload}, nil
 }

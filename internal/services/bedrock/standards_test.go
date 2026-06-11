@@ -87,8 +87,8 @@ func TestHelpText(t *testing.T) {
 func TestService_Delegation(t *testing.T) {
 	resetState()
 	svc := New()
-	if err := svc.Warm(); err != nil {
-		t.Fatalf("Warm: %v", err)
+	if _, err := getIndices(); err != nil {
+		t.Fatalf("getIndices: %v", err)
 	}
 	if out, err := svc.GetStandard("modsdk-expert"); err != nil || !strings.HasPrefix(out, "# modsdk-expert") {
 		t.Fatalf("GetStandard 委托错: err=%v", err)
