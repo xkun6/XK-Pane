@@ -190,7 +190,7 @@ orchSvc 同理
 - 只读列表：`GET /api/projects`、`/api/workspaces`、`/api/launchhistory`、`/api/preferences`、`/api/appsettings`（脱敏）。
 
 **永不挂远程路由**（红线 / 高危，桌面/本机专属）：
-- `subprocess.Run`（万能子进程 = RCE）；`gitsvc` 全部写方法（Clone/Worktree*/Push/Pull/Fetch/Stash*/Stage/Unstage/Discard/Commit）；`localhistorysvc` 写方法（Snapshot/Save*/Restore*/*Label）；`storagesvc.SetCustomPath`；`provider.ResolveLaunchEnv`（明文密钥；窄版 EnvVars 已删）、`session.LoadSessionsDecrypted`（明文密钥）；notifications/systray/childwindow/窗口控制；MC PE 调试桥。
+- `subprocess.Run`（万能子进程 = RCE）；`gitsvc` 全部写方法（Clone/Worktree*/Push/Pull/Fetch/Stash*/Stage/Unstage/Discard/Commit）；`localhistorysvc` 写方法（Snapshot/Save*/Restore*/*Label）；`storagesvc.SetCustomPath`；`provider.ResolveLaunchEnv`（明文密钥；窄版 EnvVars 与 session 服务已删）；notifications/systray/childwindow/窗口控制；MC PE 调试桥。
 - 远程「添加项目」无原生选目录 → 改「手输路径 + 后端校验存在/是目录」。
 
 ---

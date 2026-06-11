@@ -27,7 +27,7 @@ func TestAutoMigrateAllModels(t *testing.T) {
 // TestCoreCcpaneTablesRegistered 确认 cc-pane 核心表都已登记到 AllModels。
 func TestCoreCcpaneTablesRegistered(t *testing.T) {
 	want := []string{
-		"projects", "launch_history", "terminal_sessions", "task_bindings",
+		"projects", "launch_history", "task_bindings",
 	}
 	for _, name := range want {
 		if FindDescriptor(name) == nil {

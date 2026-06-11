@@ -18,7 +18,6 @@ func init() {
 	AllModels = append(AllModels,
 		ModelDescriptor{Model: &Project{}, TableName: "projects", LabelKey: "projects", Clearable: false},
 		ModelDescriptor{Model: &LaunchHistory{}, TableName: "launch_history", LabelKey: "launchHistory", Clearable: true},
-		ModelDescriptor{Model: &TerminalSession{}, TableName: "terminal_sessions", LabelKey: "terminalSessions", Clearable: true},
 		ModelDescriptor{Model: &TaskBinding{}, TableName: "task_bindings", LabelKey: "taskBindings", Clearable: true},
 		// Todo 子系统（结合 ccpane 重新接回）：待办 + 子任务两表，跨 scope（global/workspace/project/external/temp_script）。
 		ModelDescriptor{Model: &Todo{}, TableName: "todos", LabelKey: "todos", Clearable: true},
@@ -85,28 +84,6 @@ type LaunchHistory struct {
 	ProviderSelection   *string `gorm:"type:text" json:"providerSelection,omitempty"` // manual | auto | last_used
 }
 
-// TerminalSession 跨重启会话恢复（一次启动 / 标签）。
-type TerminalSession struct {
-	SessionID     string  `gorm:"primaryKey;size:64" json:"sessionId"`
-	TabID         string  `gorm:"type:text;not null" json:"tabId"`
-	PaneID        string  `gorm:"type:text;not null" json:"paneId"`
-	ProjectPath   string  `gorm:"type:text;not null;index" json:"projectPath"` // = PTY cwd（铁律）
-	WorkspaceName *string `gorm:"type:text" json:"workspaceName,omitempty"`
-	WorkspacePath *string `gorm:"type:text" json:"workspacePath,omitempty"` // --add-dir 用（铁律）
-	ProviderID    *string `gorm:"type:text" json:"providerId,omitempty"`
-	CliTool       string  `gorm:"type:text;not null;default:'none'" json:"cliTool"`
-	ResumeID      *string `gorm:"type:text" json:"resumeId,omitempty"`
-	SshConfig     *string `gorm:"type:text" json:"sshConfig,omitempty"` // TODO(phase3): 敏感，cryptox 加密
-	CustomTitle   *string `gorm:"type:text" json:"customTitle,omitempty"`
-	RuntimeKind   string  `gorm:"type:text;not null;default:'local'" json:"runtimeKind"`
-
-	WorkspaceSnapshotID *string `gorm:"type:text" json:"workspaceSnapshotId,omitempty"`
-	LaunchProfileID     *string `gorm:"type:text" json:"launchProfileId,omitempty"`
-	ProviderSelection   *string `gorm:"type:text" json:"providerSelection,omitempty"`
-
-	CreatedAt time.Time `json:"createdAt"`
-	SavedAt   time.Time `gorm:"index" json:"savedAt"`
-}
 
 // TaskBinding 编排任务绑定（session + todo + prompt）。
 type TaskBinding struct {
@@ -169,7 +146,6 @@ type TodoSubtask struct {
 // "launch_histories"）。表名与 ModelDescriptor / cc-pane 原表名严格一致。
 func (Project) TableName() string         { return "projects" }
 func (LaunchHistory) TableName() string   { return "launch_history" }
-func (TerminalSession) TableName() string { return "terminal_sessions" }
 func (TaskBinding) TableName() string     { return "task_bindings" }
 func (Todo) TableName() string            { return "todos" }
 func (TodoSubtask) TableName() string     { return "todo_subtasks" }

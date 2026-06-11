@@ -10,7 +10,7 @@
 //
 // 真正的会话编排 REST（/api/launch、/api/sessions/*）与 /ws 实时广播在 M3 接入。
 // 安全铁律：本网关与 orchestrator 物理隔离（独立 listener / 独立 token / 不改 Accept 头）。
-// 明文密钥红线（provider.ResolveLaunchEnv / session.LoadSessionsDecrypted）永不挂任何路由。
+// 明文密钥红线（provider.ResolveLaunchEnv 等解密出口）永不挂任何路由。
 package webapi
 
 import (
