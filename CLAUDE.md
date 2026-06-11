@@ -15,20 +15,20 @@
 - 后端：Go 1.25，`main.go` 仅做 `embed.FS` + `app.Run`，业务装配集中在 `internal/app`。
 - 前端：React 19 + TypeScript（strict）+ MUI 9 + Vite 8，主题统一在 `frontend/src/styles/theme.ts`。
 - 通信：通过 `wails3 generate bindings` 生成 `frontend/bindings/foundation/...`，前端 `services/` 层包装。
-- 构建：根 `Taskfile.yml` 调用各平台子 Taskfile（Windows/macOS/Linux/iOS/Android/Docker）。
+- 构建：根 `Taskfile.yml` 调用各平台子 Taskfile（Windows/macOS/Linux/Docker）。
 
 通信链路：
 
 ```
 React 组件 (View)
     └── ViewModel (use<Page>)
-        └── services/GreetService.ts
-            └── @bindings/foundation/internal/services/greet (Wails 生成)
-                └── 后端 internal/services/greet.Greet
+        └── services/preferences/PreferencesService.ts
+            └── @bindings/xkpane/internal/services/preferences (Wails 生成)
+                └── 后端 internal/services/preferences
 
-后端 internal/events/events.go (RegisterEvent[string]("time"))
-    └── internal/app/app.go: app.Event.Emit("time", ...)
-        └── 前端 shared/hooks/useTimeEvent.ts (Events.On)
+后端 internal/events/events.go (RegisterEvent[LocalHistoryChangedPayload]("localhistory:changed"))
+    └── 后端业务 service: app.Event.Emit(events.LocalHistoryChanged, ...)
+        └── 前端 Events.On(AppEvents.LocalHistoryChanged, ...)（事件名见 shared/events.ts）
 ```
 
 ## 模块结构图

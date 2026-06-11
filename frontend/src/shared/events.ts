@@ -2,7 +2,6 @@
 // 严格一致，由 events.test.ts 断言防漂移，P7 §7 铁律 5）。桌面经 Wails 应用级总线、Web 经
 // /ws 镜像广播，两路都用这套名字。transport 抽象按这些名字订阅（见 services/transport）。
 export const AppEvents = {
-  Time: 'time',
   // Local History 自动捕获保存版本后后端广播（前端历史页按 projectPath 过滤后 live 刷新）。
   LocalHistoryChanged: 'localhistory:changed',
   // 编排：后端 launch_task / POST /api/launch 建好会话后广播，前端开新 Tab 附着该 sessionId。

@@ -1,4 +1,3 @@
-export { GreetService } from './greet/GreetService';
 export {
   FileService,
   type FileEntry,

@@ -74,8 +74,8 @@ src/
 | 组件文件 / 文件夹 / Type | `PascalCase` | `ServerList`, `UseHomePageResult` |
 | 普通函数 / 变量 / hook | `camelCase` | `useServerList`, `formatTime` |
 | ViewModel hook | `use<ComponentName>` | `useTitleBar`, `useHomePage` |
-| 服务对象 | `<Domain>Service` | `GreetService` |
-| 事件名常量 | `UPPER_SNAKE` 容器内 | `AppEvents.Time` |
+| 服务对象 | `<Domain>Service` | `PreferencesService` |
+| 事件名常量 | `UPPER_SNAKE` 容器内 | `AppEvents.LocalHistoryChanged` |
 | Style 模块 | `<Name>Styles` | `TitleBarStyles` |
 | Boolean 状态 | `is/has/should` 前缀 | `isMaximised`, `hasError` |
 
@@ -140,11 +140,11 @@ export const titleBarStyles = (theme: Theme): Record<string, SxProps<Theme>> => 
 2. 暴露**调用方友好**的 Promise 方法签名。
 
 ```ts
-import { Service as GreetServiceBinding } from '@bindings/foundation/internal/services/greet';
+import { Service as PreferencesBinding } from '@bindings/xkpane/internal/services/preferences';
 
-export const GreetService = {
-  greet(name: string): Promise<string> {
-    return GreetServiceBinding.Greet(name);
+export const PreferencesService = {
+  get(key: string): Promise<string> {
+    return PreferencesBinding.Get(key);
   },
 } as const;
 ```
@@ -155,14 +155,14 @@ export const GreetService = {
 
 ## 7. 事件订阅规范
 
-- 事件名集中在 `shared/events.ts`（`AppEvents.Time` 等），不要在组件内手写字符串。
+- 事件名集中在 `shared/events.ts`（`AppEvents.LocalHistoryChanged` 等），不要在组件内手写字符串。
 - 跨组件复用的事件订阅 → `shared/hooks/use<EventName>Event.ts`。
 - 单页面专用的订阅 → 直接写在该页面的 `use<Page>.ts` 里。
 - 订阅必须在 useEffect cleanup 取消。
 
 ```ts
 useEffect(() => {
-  const cancel = Events.On(AppEvents.Time, (e) => setTime(e.data));
+  const cancel = Events.On(AppEvents.LocalHistoryChanged, (e) => refresh(e.data));
   return () => { if (typeof cancel === 'function') cancel(); };
 }, []);
 ```
@@ -187,14 +187,14 @@ useEffect(() => {
 正确：
 
 ```ts
-import { GreetService } from '@/services';
-import { useTimeEvent } from '@/shared/hooks/useTimeEvent';
+import { PreferencesService } from '@/services';
+import { useTrayNavigation } from '@/shared/hooks/useTrayNavigation';
 ```
 
 错误（产生易碎相对路径）：
 
 ```ts
-import { GreetService } from '../../../services/greet/GreetService';
+import { PreferencesService } from '../../../services/preferences/PreferencesService';
 ```
 
 ---
@@ -219,21 +219,21 @@ import { GreetService } from '../../../services/greet/GreetService';
 
 ```tsx
 // HomePage.tsx
-import { Service } from '@bindings/foundation/...';
-const onClick = () => Service.Greet(name).then(setResult);
+import { Service } from '@bindings/xkpane/...';
+const onClick = () => Service.Get(key).then(setValue);
 ```
 
 ✅ 经过 ViewModel + Service：
 
 ```tsx
 // useHomePage.ts
-import { GreetService } from '@/services';
-const greet = useCallback(async () => {
-  setResult(await GreetService.greet(name));
-}, [name]);
+import { PreferencesService } from '@/services';
+const load = useCallback(async () => {
+  setValue(await PreferencesService.get(key));
+}, [key]);
 
 // HomePage.tsx
-const { result, greet } = useHomePage();
+const { value, load } = useHomePage();
 ```
 
 ---

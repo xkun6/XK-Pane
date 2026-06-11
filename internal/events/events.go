@@ -4,8 +4,6 @@ import "github.com/wailsapp/wails/v3/pkg/application"
 
 // Names 集中声明前后端共享的事件名，避免硬编码字符串散落各处。
 const (
-	Time = "time"
-
 	// 终端会话事件（后端 PTY reader/wait goroutine → 前端 xterm.js）。
 	// payload 见下方对应 *Payload 类型；前端按 sessionId 分发到对应面板。
 	TerminalOutput = "terminal:output" // PTY 原始字节（批量）
@@ -170,7 +168,6 @@ type BedrockDocSyncProgressPayload struct {
 // Register 在 application 初始化前注册所有强类型事件，
 // Wails 的 binding 生成器会据此为前端生成类型化 API。
 func Register() {
-	application.RegisterEvent[string](Time)
 	application.RegisterEvent[TerminalOutputPayload](TerminalOutput)
 	application.RegisterEvent[TerminalStatusPayload](TerminalStatus)
 	application.RegisterEvent[TerminalExitPayload](TerminalExit)

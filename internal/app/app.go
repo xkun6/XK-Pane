@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync/atomic"
-	"time"
 
 	"xkpane/internal/events"
 	"xkpane/internal/services/appsettings"
@@ -21,7 +20,6 @@ import (
 	"xkpane/internal/services/clitools"
 	"xkpane/internal/services/file"
 	"xkpane/internal/services/gitsvc"
-	"xkpane/internal/services/greet"
 	"xkpane/internal/services/launchhistory"
 	"xkpane/internal/services/lhwatcher"
 	"xkpane/internal/services/localhistorysvc"
@@ -187,7 +185,6 @@ func Run(assets embed.FS, trayIcon []byte) error {
 		Name:        "XK-Pane",
 		Description: "Claude Code 多实例分屏管理桌面应用",
 		Services: []application.Service{
-			application.NewService(greet.New()),
 			application.NewService(preferences.New(holder)),
 			application.NewService(appSettingsSvc),
 			application.NewService(storagesvc.New(holder, cfgMgr)),
@@ -379,8 +376,6 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	defer mcpeSvc.CleanupAll()        // app 退出时杀所有 MC PE 子进程
 	defer termSvc.CleanupMCPConfigs() // app 退出时补删仍活着会话的 per-session MCP 配置（waitLoop 没赶上的）
 
-	go emitTimeLoop(app)
-
 	// Local History 自动捕获：启动时扫已登记项目，仅对已启用本地历史（.xkpanes/history 存在且
 	// config.enabled）的项目启 watcher（决策 D4-4）。放后台 goroutine 避免阻塞窗口出现（涉及扫盘 +
 	// 逐项目读 config.json）。SaveConfig(enabled) / launchProject 时的补启在 P4a-2 接线。
@@ -426,14 +421,4 @@ func registeredProjectPaths(ctx context.Context, projSvc *project.Service, wsSvc
 		logx.For("app").Warn("list workspaces for watcher failed", "err", err)
 	}
 	return out
-}
-
-// emitTimeLoop 演示后端主动推事件给前端的链路。
-// 真实业务可参考此结构注册自己的后台 goroutine。
-func emitTimeLoop(app *application.App) {
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for range ticker.C {
-		app.Event.Emit(events.Time, time.Now().Format(time.RFC1123))
-	}
 }

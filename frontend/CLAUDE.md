@@ -22,12 +22,12 @@
 
 | 交互方式 | 当前用法 | 涉及文件 |
 |----------|----------|----------|
-| 方法调用 | `GreetService.greet(name)` | `src/services/greet/GreetService.ts` 包装 `@bindings/foundation/internal/services/greet` |
+| 方法调用 | `PreferencesService.get(key)` 等 | `src/services/<domain>/<Name>Service.ts` 包装 `@bindings/xkpane/internal/services/<domain>` |
 | 偏好读写 | `PreferencesService.{get/set/list/delete/reset}` | `src/services/preferences/PreferencesService.ts` |
 | 应用设置 | `AppSettingsService.{get,setThemeChoice,setCustomTheme,setLocaleChoice,...}` | `src/services/appsettings/AppSettingsService.ts` |
 | 数据存储 | `StorageService.{getStats,setCustomPath,resetPath}` | `src/services/storage/StorageService.ts` |
 | 原生对话框 | `NativeDialogs.{openFile,openFiles,openDirectory,saveFile,confirm,info,warning,error}` | `src/services/dialogs/NativeDialogs.ts` |
-| 事件订阅 | `time` 事件 → `useTimeEvent()` | `src/shared/hooks/useTimeEvent.ts` |
+| 事件订阅 | `localhistory:changed` 等事件 → `AppEvents.*` 常量订阅 | `src/shared/events.ts`（事件名唯一事实源） |
 | 窗口控制 | 最小化 / 最大化 / 关闭 | `src/components/TitleBar/useWindowControls.ts` 调用 `Window.Minimise/Maximise/Close` |
 
 ## 关键依赖与配置
@@ -376,7 +376,7 @@ SettingsPage/
 - Q：`@bindings/foundation/...` 报模块找不到？
   - A：bindings 是 Wails 在 dev / generate 时生成的。首次执行 `wails3 dev` 或 `wails3 generate bindings` 后才会出现。该目录已 `.gitignore`。
 - Q：改了 Go module 名后前端报错？
-  - A：bindings 路径前缀就是 module 名。改 `go.mod` 后必须重新跑 `wails3 generate bindings`，并修改 `src/services/greet/GreetService.ts` 中的 `@bindings/foundation/...` 路径。
+  - A：bindings 路径前缀就是 module 名。改 `go.mod` 后必须重新跑 `wails3 generate bindings`，并把 `src/services/` 下各 Service 包装文件中的 `@bindings/<旧模块名>/...` 路径改为新模块名。
 - Q：能否换回 JavaScript？
   - A：可以，但会丢失 ViewModel 类型契约。如果要换，请保留 `<Name>.types.ts` 写 JSDoc 类型；不推荐。
 - Q：标题栏拖拽不工作？
@@ -427,21 +427,18 @@ frontend/
     │       ├── index.ts
     │       └── presets/{light,dark,obsidian}.ts
     ├── shared/
-    │   ├── platform.ts        # isWindows / isMac / isLinux
+    │   ├── platform.ts        # isWindows / isMac
     │   ├── events.ts          # AppEvents 常量
-    │   └── hooks/
-    │       └── useTimeEvent.ts
-    ├── services/
-    │   ├── index.ts
-    │   └── greet/
-    │       └── GreetService.ts
+    │   └── hooks/             # 跨页面复用的事件订阅等 hook
+    ├── services/              # 27+ 个领域 Service 包装（经 index.ts 桶导出）
+    │   └── index.ts
     ├── components/
     │   ├── AppLayout/         # 两栏外壳（TitleBar + Sidebar + RouterOutlet）
     │   ├── TitleBar/          # 自绘标题栏 + 三联控制按钮（按 OS 隐藏）
     │   ├── Sidebar/           # 左侧导航 + 底部 Settings 按钮
     │   └── Skeleton/          # 骨架屏基础组件（Skeleton / SkeletonText）
     └── pages/
-        ├── HomePage/          # 示例页：Greet 调用 + Time 事件
+        ├── HomePage/          # 仪表盘页（问候 / 项目数 / 最近启动 / CLI 检测）
         │   ├── HomePage.tsx
         │   ├── HomePage.skeleton.tsx  # ← 该页骨架屏
         │   ├── useHomePage.ts

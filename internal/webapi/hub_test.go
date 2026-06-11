@@ -81,8 +81,8 @@ func TestRouteEventWhitelist(t *testing.T) {
 		t.Fatal("whitelisted event was not forwarded")
 	}
 
-	// 白名单外（time）：丢弃，不进队列。
-	g.RouteEvent(events.Time, "12:00")
+	// 白名单外：丢弃，不进队列。
+	g.RouteEvent("demo:unlisted", "12:00")
 	select {
 	case <-c.send:
 		t.Fatal("non-whitelisted event leaked to ws")
