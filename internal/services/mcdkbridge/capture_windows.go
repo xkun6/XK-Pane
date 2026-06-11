@@ -9,7 +9,7 @@ package mcdkbridge
 // go-sdk 的 json.Marshal 对 []byte 自动 base64（见 content.go imageAudioWire）。
 //
 // 显式偏离：缩放滤波 Lanczos3 → golang.org/x/image/draw.CatmullRom（Go 无原生 Lanczos3，
-// 画质略降，P6e_PLAN.md §2 已拍板）。
+// 画质略降，docs/archive/P6e_PLAN.md §2 已拍板）。
 
 import (
 	"bytes"

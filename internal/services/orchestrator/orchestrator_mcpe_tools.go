@@ -9,7 +9,7 @@ package orchestrator
 //
 // 显式偏离：execute_mc_code 成功文案由 cc-pane 的「用 get_session_output 看 PTY 日志」改为
 // 「用 get_mc_pe_logs 看日志」——cc-pane 原文案与本工具集自相矛盾（MC PE 不挂在 terminal session
-// 上，get_session_output 读不到），统一指向 get_mc_pe_logs（见 P6e_PLAN.md §1.4）。
+// 上，get_session_output 读不到），统一指向 get_mc_pe_logs（见 docs/archive/P6e_PLAN.md §1.4）。
 
 import (
 	"context"

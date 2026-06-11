@@ -4,7 +4,7 @@ package mcdkbridge
 
 // window_windows.go — MC PE 渲染窗口定位 + capture/click 共享的 Win32 FFI 声明。
 // 忠实移植 cc-pane mcdk_bridge/window.rs；GDI/User32 多数符号无 x/sys/windows 现成 wrapper，
-// 用 LazyDLL.NewProc 手写（见 P6e_PLAN.md §5）。结构体布局对 SendInput/GetDIBits 敏感，
+// 用 LazyDLL.NewProc 手写（见 docs/archive/P6e_PLAN.md §5）。结构体布局对 SendInput/GetDIBits 敏感，
 // 在 win32_windows_test.go 用 unsafe.Sizeof 断言（INPUT=40 / MOUSEINPUT=32 / BITMAPINFOHEADER=40）。
 
 import (

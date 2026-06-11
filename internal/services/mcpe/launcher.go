@@ -109,7 +109,7 @@ func readLoop(pt *ptyx.PTY, runID, packageID string, emit emitFunc, done chan st
 			trimmed := bytes.TrimRight(lineBytes, "\r\n")
 			cleaned := ansiRE.ReplaceAll(trimmed, nil)
 			// MC 在 Windows 输出混合编码（GBK+UTF-8），lossy 解码避免非法字节丢整行
-			// （忠实 cc-pane from_utf8_lossy；若中文乱码再上 GBK 解码，见 P6e_PLAN 待澄清）。
+			// （忠实 cc-pane from_utf8_lossy；若中文乱码再上 GBK 解码，见 docs/archive/P6e_PLAN.md 待澄清）。
 			line := strings.ToValidUTF8(string(cleaned), "�")
 			if parsed, ok := parseStdoutLine(line); ok {
 				emit(events.MCPeOutput, events.MCOutputPayload{
