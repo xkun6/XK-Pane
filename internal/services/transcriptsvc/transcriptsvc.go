@@ -5,9 +5,8 @@
 // unsupported。本服务把 webapi handler 的「sessionId→cwd/cliTool/claudeID→定位转录→解析」同一套逻辑
 // 包成一个 Wails 方法 GetTimeline，让桌面也能渲染 SessionTimeline 卡片视图（桌面/Web 同源同语义）。
 //
-// 依赖（与 webapi handler 同源）：SessionLister（活跃会话快照，由 terminal.Service 实现）+
-// SessionScanner（按项目扫历史 jsonl 回退，由 sessionscan.Service 实现）。只读 ~/.claude/projects，
-// 无 DB / 子进程 / 明文密钥副作用。
+// 依赖（与 webapi handler 同源）：terminal.Service（活跃会话快照）+ sessionscan.Service
+// （按项目扫历史 jsonl 回退）。只读 ~/.claude/projects，无 DB / 子进程 / 明文密钥副作用。
 package transcriptsvc
 
 import (
@@ -19,24 +18,14 @@ import (
 	"xkpane/internal/services/transcript"
 )
 
-// SessionLister 提供活跃会话快照（sessionId → cwd + cliTool + claudeSessionID）。terminal.Service 实现。
-type SessionLister interface {
-	SessionSnapshots() []terminal.SessionSnapshot
-}
-
-// SessionScanner 按项目目录扫可恢复的历史会话（回退定位旧会话转录）。sessionscan.Service 实现。
-type SessionScanner interface {
-	ListProjectSessions(ctx context.Context, projectPath string, limit int) ([]sessionscan.ResumeSession, error)
-}
-
 // Service 是结构化时间线的 Wails 门面。无状态：每次调用即时按 sessionId 解析转录。
 type Service struct {
-	sessions SessionLister
-	scanner  SessionScanner
+	sessions *terminal.Service
+	scanner  *sessionscan.Service
 }
 
 // New 构造 Service。sessions/scanner 由 app 装配处注入（分别是 terminal / sessionscan 服务）。
-func New(sessions SessionLister, scanner SessionScanner) *Service {
+func New(sessions *terminal.Service, scanner *sessionscan.Service) *Service {
 	return &Service{sessions: sessions, scanner: scanner}
 }
 

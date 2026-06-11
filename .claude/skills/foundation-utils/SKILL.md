@@ -40,7 +40,7 @@ description: Foundation 脚手架的 Go 工具层使用指南：httpx（HTTP 客
 - 默认 30s 超时（用 context deadline，不用 `Client.Timeout`）
 - 默认 UA：`logx.SetUserAgent` 注入；不设也带个 fallback
 - 4xx/5xx 自动包成 `*HTTPError`，业务可 `errors.As` 取 status / body 摘要
-- **缺省不重试**；要重试调 `httpx.Retry(...)` 显式开
+- **缺省不重试**；要重试的业务自带退避循环（如 bedrockdocsync 的 fetchText）
 
 ### 2.2 典型用法
 
@@ -77,26 +77,7 @@ func sendMessage(ctx context.Context, text string) (string, error) {
 }
 ```
 
-### 2.3 重试（按需）
-
-```go
-err := httpx.Retry(ctx, httpx.RetryConfig{
-    MaxAttempts: 3,
-    BaseDelay:   200 * time.Millisecond,
-    MaxDelay:    3 * time.Second,
-}, func(ctx context.Context) error {
-    return httpx.GetJSON(ctx, url, &out)
-})
-```
-
-`DefaultShouldRetry` 策略：
-- 5xx / 408 / 429 → 重试
-- context 取消 / 超时 → 不重试（调用方主动停了）
-- 其他 IO / 网络错误 → 重试
-
-要自定义判定，传 `cfg.ShouldRetry`。
-
-### 2.4 自定义 Header / 流式
+### 2.3 自定义 Header / 流式
 
 ```go
 req, cancel, err := httpx.NewRequest(ctx, http.MethodPost, url, body)
@@ -260,8 +241,8 @@ procx.Run(ctx, procx.Spec{
 
 ### 5.4 Rotate
 
-`fileRotator` size-based：默认 8MB 一卷，保留 3 个历史（`app.log.1` … `app.log.3`）。
-要改阈值传 `Config.MaxSizeBytes` / `Backups`。生产环境若有集中日志（ELK / Loki），通常**不依赖**本地 rotate，关掉 console / 降低 backups 即可。
+`fileRotator` size-based：8MB 一卷，保留 3 个历史（`app.log.1` … `app.log.3`）。
+阈值是 logx.go 的包内常量（`defaultMaxSizeBytes` / `defaultBackups`），要改直接改常量。生产环境若有集中日志（ELK / Loki），通常**不依赖**本地 rotate。
 
 ---
 
@@ -381,7 +362,7 @@ filex.WriteAtomic("storage.json", data, 0o644)
 internal/utils/
 ├── httpx/
 │   ├── httpx.go        # Client / NewRequest / GetJSON / PostJSON / HTTPError
-│   └── retry.go        # Retry / RetryConfig / DefaultShouldRetry
+│   └── proxyclient.go  # NewClient（按 ClientOptions 走 HTTP/SOCKS5 代理）
 ├── procx/
 │   ├── procx.go        # Spec / Process / StartCtx / Run / Wait / Stop
 │   ├── procx_windows.go # JobObject + KILL_ON_JOB_CLOSE + ResumeThread

@@ -28,27 +28,18 @@ import (
 )
 
 // Config 控制日志输出。在 internal/app.Run 早期调一次 Init，业务代码后续用 For()。
+// 目录 / 文件名 / 滚动参数为包内常量（平台默认 logs/ 目录、app.log、8MB × 3 卷）。
 type Config struct {
 	// Level 默认 LevelInfo；dev 期可以传 LevelDebug。
 	Level slog.Level
-	// Dir 日志目录；空时取平台默认（与数据库同级目录下的 logs/）。
-	Dir string
-	// Filename 日志文件名（不含路径）；默认 "app.log"。
-	Filename string
-	// MaxSizeBytes 单文件大小阈值，超过滚动到 .1。默认 8MB。
-	MaxSizeBytes int64
-	// Backups 保留多少个滚动文件（不含当前）。默认 3。
-	Backups int
-	// ConsoleEnabled 是否同时打控制台。默认 true（dev 友好）。
+	// ConsoleEnabled 是否同时打控制台（dev 友好）。
 	ConsoleEnabled bool
-	// AddSource 在每条日志里加调用 file:line。默认 false（生产降噪）。
-	AddSource bool
 }
 
 const (
 	defaultFilename     = "app.log"
-	defaultMaxSizeBytes = 8 << 20
-	defaultBackups      = 3
+	defaultMaxSizeBytes = 8 << 20 // 单文件大小阈值，超过滚动到 .1
+	defaultBackups      = 3       // 保留的滚动文件数（不含当前）
 )
 
 const AppDirName = appinfo.AppDirName // 来自 appinfo，与 storage / cryptox 同源
@@ -71,32 +62,18 @@ func Init(cfg Config) error {
 }
 
 func doInit(cfg Config) error {
-	if cfg.Filename == "" {
-		cfg.Filename = defaultFilename
-	}
-	if cfg.MaxSizeBytes <= 0 {
-		cfg.MaxSizeBytes = defaultMaxSizeBytes
-	}
-	if cfg.Backups <= 0 {
-		cfg.Backups = defaultBackups
-	}
-
-	dir := cfg.Dir
-	if dir == "" {
-		d, err := defaultLogDir()
-		if err != nil {
-			return err
-		}
-		dir = d
+	dir, err := defaultLogDir()
+	if err != nil {
+		return err
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("logx: mkdir %s: %w", dir, err)
 	}
 
 	rot := &fileRotator{
-		path:    filepath.Join(dir, cfg.Filename),
-		maxSize: cfg.MaxSizeBytes,
-		backups: cfg.Backups,
+		path:    filepath.Join(dir, defaultFilename),
+		maxSize: defaultMaxSizeBytes,
+		backups: defaultBackups,
 	}
 	if err := rot.open(); err != nil {
 		return err
@@ -105,15 +82,9 @@ func doInit(cfg Config) error {
 	logCloser = rot
 
 	handlers := []slog.Handler{}
-	handlers = append(handlers, slog.NewJSONHandler(rot, &slog.HandlerOptions{
-		Level:     cfg.Level,
-		AddSource: cfg.AddSource,
-	}))
+	handlers = append(handlers, slog.NewJSONHandler(rot, &slog.HandlerOptions{Level: cfg.Level}))
 	if cfg.ConsoleEnabled {
-		handlers = append(handlers, slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-			Level:     cfg.Level,
-			AddSource: cfg.AddSource,
-		}))
+		handlers = append(handlers, slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: cfg.Level}))
 	}
 
 	rootMu.Lock()

@@ -4,7 +4,7 @@
 //   - 单例 *http.Client，复用连接池；业务代码不要再造 client
 //   - 默认 30s 超时（可覆盖），所有请求要求 context.Context（可取消）
 //   - JSON helper：GetJSON / PostJSON 一行解析
-//   - 缺省不重试：避免无脑放大错误风暴；需要时调 Retry()
+//   - 缺省不重试：避免无脑放大错误风暴；要重试的业务自带退避循环（如 bedrockdocsync）
 //   - User-Agent 默认带应用名，便于服务端识别
 //
 // 业务约束：

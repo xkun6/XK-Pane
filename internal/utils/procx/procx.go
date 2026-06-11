@@ -37,8 +37,6 @@ type Spec struct {
 	Dir string   // 工作目录；空 = 继承父进程
 	Env []string // 形如 "K=V"；nil = 继承父进程；非 nil 完全替换
 
-	Stdin io.Reader // 输入流，nil 表示不写
-
 	// OnStdout / OnStderr 在每行出现时被调用。回调由独立 goroutine 串行触发。
 	// 不需要回调可传 nil；不需要捕获输出请把 CaptureOutput 设为 false。
 	OnStdout LineHandler
@@ -102,9 +100,6 @@ func StartCtx(ctx context.Context, spec Spec) (*Process, error) {
 	cmd.Dir = spec.Dir
 	if spec.Env != nil {
 		cmd.Env = spec.Env
-	}
-	if spec.Stdin != nil {
-		cmd.Stdin = spec.Stdin
 	}
 
 	// 平台相关 SysProcAttr / Job 准备
