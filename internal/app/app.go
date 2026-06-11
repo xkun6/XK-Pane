@@ -116,9 +116,6 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	// 注册 toast GUID/激活器）+ XK notification 服务（读 app_settings 开关 + 去重 + 聚焦判定）。
 	wailsNotifier := notifications.New()
 	notifSvc := notification.New(holder, wailsNotifier)
-	// 子窗口系统（foundation 框架能力）：类型化子窗口（confirm / message / blank）+ 事件总线通信。
-	// 预创建 + AttachApp 回填 app 引用模式（application.New 需要 services 列表，而 service 又需 app 引用）。
-	childWinSvc := NewChildWindowService()
 
 	// Web 网关（P7 M1）：独立 0.0.0.0 HTTP server，托管同一份 frontend/dist 供手机/平板局域网访问。
 	// 与 orchestrator（127.0.0.1 + MCP）物理隔离。webAccessSvc 是薄 Wails 门面（只暴露 GetAccessInfo
@@ -198,7 +195,6 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(scanSvc),
 			application.NewService(transcriptSvc), // 结构化时间线（桌面卡片视图取数）
 			application.NewService(wailsNotifier),     // Wails 通知 service（跑 ServiceStartup 注册 toast）
-			application.NewService(childWinSvc),       // 子窗口系统
 			application.NewService(webAccessSvc),      // Web 网关门面（GetAccessInfo → 配对二维码）
 			application.NewService(mcpeSvc),           // MC PE 控制（包管理 / 启动 / 日志 / 桥状态）
 			application.NewService(bedrockDocSyncSvc), // Bedrock OTA 文档同步（设置 → 知识库面板）
@@ -236,7 +232,6 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	mcpeSvc.SetEmitter(mirrorEmit)           // MC PE 日志/退出事件双路（桌面 webview + Web 网关）
 	mcpeSvc.SetBridge(mcdkBridge)            // 取桥端口注入 MCDEV_DEBUG_IPC_PORT + 查桥状态
 	bedrockDocSyncSvc.SetEmitter(mirrorEmit) // OTA 同步进度事件双路（桌面 webview + Web 网关）
-	childWinSvc.AttachApp(app)
 	lhWatcher.AttachApp(app) // watcher 经此向前端 Emit localhistory:changed（live 刷新）
 	// Local History 启停补启接线（决策 D4-4）：
 	//   - SaveConfig(enabled=true) 即时启 / (false) 即时停该项目 watcher；

@@ -157,7 +157,7 @@ orchSvc 同理
 
 ## 7. 铁律
 
-1. **桌面零回归**：`main.go`、`internal/app/window_*.go`、systray/childwindow、orchestrator 127.0.0.1 server、桌面 kill 路径**一律不动**；webapi 是纯叠加。
+1. **桌面零回归**：`main.go`、`internal/app/window_*.go`、systray、orchestrator 127.0.0.1 server、桌面 kill 路径**一律不动**；webapi 是纯叠加。（childwindow 系统已于 2026-06-11 减法审计整删。）
 2. **webapi 独立 listener**：0.0.0.0 网关与 orchestrator MCP（127.0.0.1）物理隔离，互不污染中间件/token。
 3. **fail-closed 白名单**：远程能力默认不暴露，新增 service 方法默认无远程路由，需显式 opt-in 过 review（§9）。
 4. **明文密钥红线**：`provider.ResolveLaunchEnv`、`session.LoadSessionsDecrypted` 永不挂任何 HTTP 路由，保持非绑定包级函数现状。
@@ -190,7 +190,7 @@ orchSvc 同理
 - 只读列表：`GET /api/projects`、`/api/workspaces`、`/api/launchhistory`、`/api/preferences`、`/api/appsettings`（脱敏）。
 
 **永不挂远程路由**（红线 / 高危，桌面/本机专属）：
-- `subprocess.Run`（万能子进程 = RCE）；`gitsvc` 全部写方法（Clone/Worktree*/Push/Pull/Fetch/Stash*/Stage/Unstage/Discard/Commit）；`localhistorysvc` 写方法（Snapshot/Save*/Restore*/*Label）；`storagesvc.SetCustomPath`；`provider.ResolveLaunchEnv`（明文密钥；窄版 EnvVars 与 session 服务已删）；notifications/systray/childwindow/窗口控制；MC PE 调试桥。
+- `subprocess.Run`（万能子进程 = RCE）；`gitsvc` 全部写方法（Clone/Worktree*/Push/Pull/Fetch/Stash*/Stage/Unstage/Discard/Commit）；`localhistorysvc` 写方法（Snapshot/Save*/Restore*/*Label）；`storagesvc.SetCustomPath`；`provider.ResolveLaunchEnv`（明文密钥；窄版 EnvVars 与 session 服务已删）；notifications/systray/窗口控制；MC PE 调试桥。
 - 远程「添加项目」无原生选目录 → 改「手输路径 + 后端校验存在/是目录」。
 
 ---
