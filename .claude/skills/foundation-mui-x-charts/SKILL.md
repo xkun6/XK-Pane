@@ -1,6 +1,6 @@
 ---
 name: foundation-mui-x-charts
-description: "@mui/x-charts v9.3 在 Foundation 项目中的详尽用法。社区版图表：Pie/Bar/Line/Scatter/Gauge/Sparkline + 项目自实现高级图表：Heatmap/Funnel/Radar/Candlestick/Sankey/Gantt/Treemap/Zoom。"
+description: "@mui/x-charts v9.3 在 Foundation 项目中的详尽用法。社区版图表：Pie/Bar/Line/Scatter/Gauge/Sparkline。"
 ---
 
 # Foundation MUI X Charts 用法指南
@@ -11,14 +11,13 @@ description: "@mui/x-charts v9.3 在 Foundation 项目中的详尽用法。社�
 
 MUI X Charts 提供声明式 React 图表组件，支持 PieChart、BarChart、LineChart、ScatterChart、Gauge、SparkLineChart 六大类型，以及 Composition API 实现完全自定义组合。
 
-此外，Foundation 项目自实现了高级图表组件（位于 `src/components/x-pro/charts/`），覆盖官方 Pro/Premium 付费图表类型。
+> 注：原「项目自实现高级图表」库（`src/components/x-pro/`，Heatmap/Funnel/Radar 等）已于 2026-06-11 减法审计中整目录删除（全应用零引用），需要时按 git 历史恢复。**禁止**使用 `@mui/x-charts-pro` / `@mui/x-charts-premium` 官方付费包。
 
 ## 何时使用本 Skill
 
 - 需要在 Foundation 中添加任何数据可视化图表时
 - 修改「设置→数据存储」页面的 PieChart / BarChart 时
 - 需要了解 @mui/x-charts v9 的 API、Composition 模式、dataset prop 时
-- 需要使用高级图表（Heatmap/Funnel/Radar/Candlestick/Sankey/Gantt/Treemap）时
 - 为图表设置主题配色、响应式布局、无障碍属性时
 
 ## 支持的图表类型
@@ -33,26 +32,6 @@ MUI X Charts 提供声明式 React 图表组件，支持 PieChart、BarChart、L
 | 散点图 | `ScatterChart` | 相关性、分布密度 |
 | 仪表盘 | `Gauge` / `GaugeContainer` | 单值指标、进度 |
 | 迷你图 | `SparkLineChart` | 行内趋势、紧凑展示 |
-
-### 自实现高级图表（@/components/x-pro）
-
-**禁止**使用 `@mui/x-charts-pro` / `@mui/x-charts-premium` 官方付费包。
-
-| 类型 | 组件 | 适用场景 |
-|------|------|----------|
-| 热力图 | `HeatmapChart` | 矩阵数据、时间×类别密度 |
-| 漏斗图 | `FunnelChart` | 转化率、流程衰减 |
-| 雷达图 | `RadarChart` | 多维对比、能力评估 |
-| K线图 | `CandlestickChart` | 金融 OHLC 数据 |
-| 桑基图 | `SankeyChart` | 流量分配、资源流向 |
-| 甘特图 | `GanttChart` | 项目时间线、任务依赖 |
-| 树状图 | `TreemapChart` | 层级占比、磁盘空间 |
-| 缩放包装 | `ZoomableChart` | 为任何图表添加缩放平移 |
-
-```tsx
-// 高级图表统一 import
-import { HeatmapChart, FunnelChart, RadarChart, CandlestickChart, SankeyChart, GanttChart, TreemapChart, ZoomableChart } from '@/components/x-pro';
-```
 
 ## Foundation 铁律摘要
 
@@ -117,7 +96,6 @@ Foundation 的「设置 → 数据存储」页面已使用：
 | [references/sparkline.md](./references/sparkline.md) | SparkLineChart 迷你图 |
 | [references/axis-legend-tooltip.md](./references/axis-legend-tooltip.md) | 坐标轴 / 图例 / 提示框通用配置 |
 | [references/styling-composition.md](./references/styling-composition.md) | 样式定制 + Composition API |
-| [references/pro-premium-charts.md](./references/pro-premium-charts.md) | **自实现高级图表**：Heatmap/Funnel/Radar/Candlestick/Sankey/Gantt/Treemap/ZoomableChart |
 
 ## 通用 Props 速查
 

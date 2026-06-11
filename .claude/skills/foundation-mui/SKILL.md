@@ -15,9 +15,8 @@ description: Foundation 项目 MUI 9 组件库总索引。汇总全部 Foundatio
 | `@mui/icons-material` | ^9.0.1 | 图标库（仅用 *Rounded 系列） |
 | `@mui/system` | ^7.3.11 | sx prop / styled / theme utilities |
 | `@mui/x-charts` | ^9.3.0 | 图表（Pie/Bar/Line/Scatter/Gauge...） |
-| `@mui/x-data-grid` | ^9.3.0 | 数据表格（DataGrid） |
 
-**未安装（不要使用）**：`@mui/lab`、`@mui/x-date-pickers`、`@mui/x-tree-view`、`@mui/x-scheduler`
+**未安装（不要使用）**：`@mui/lab`、`@mui/x-date-pickers`、`@mui/x-tree-view`、`@mui/x-scheduler`、`@mui/x-data-grid`（2026-06-11 已随 x-pro 死代码移除）
 
 ---
 
@@ -167,7 +166,6 @@ View (.tsx) → ViewModel hook (use<Name>.ts) → services/ → @bindings/
 | [foundation-mui-layout](../foundation-mui-layout/SKILL.md) | Box / Container / Grid / Stack / ImageList | 布局 |
 | [foundation-mui-utils](../foundation-mui-utils/SKILL.md) | Modal / Popover / Popper / Portal / ClickAway / CssBaseline / Transitions / useMediaQuery / NoSsr / TextareaAutosize | 工具 |
 | [foundation-mui-icons](../foundation-mui-icons/SKILL.md) | @mui/icons-material 用法 / 搜索选型 / 自定义 SVG | 图标 |
-| [foundation-mui-x-data-grid](../foundation-mui-x-data-grid/SKILL.md) | DataGrid 全功能（列/行/编辑/筛选/排序/分页/导出） | 数据表格 |
 | [foundation-mui-x-charts](../foundation-mui-x-charts/SKILL.md) | Pie / Bar / Line / Scatter / Gauge / Sparkline / 图表定制 | 图表 |
 
 ---

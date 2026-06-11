@@ -23,7 +23,6 @@
     "@mui/material": "^9.0.1",
     "@mui/system": "^7.3.11",
     "@mui/x-charts": "^9.3.0",
-    "@mui/x-data-grid": "^9.3.0",
     "@wailsio/runtime": "latest",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-unicode11": "^0.9.0",

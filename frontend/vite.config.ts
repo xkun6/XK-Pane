@@ -35,7 +35,6 @@ export default defineConfig({
       "@mui/system",
       "@mui/icons-material",
       "@mui/x-charts",
-      "@mui/x-data-grid",
       "@xterm/xterm",
       "@xterm/addon-fit",
       "qrcode.react",
