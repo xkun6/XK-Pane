@@ -40,9 +40,13 @@ func TestAddDirSkippedWhenWorkspaceAbsent(t *testing.T) {
 // 顺序对齐 cc-pane 生产注册点（Reclaude 紧跟 Claude）。
 func TestDefaultRegistersClaudeReclaudeCodex(t *testing.T) {
 	want := []string{"claude", "reclaude", "codex"}
-	got := Default().IDs()
+	tools := Default().ListTools()
+	got := make([]string, 0, len(tools))
+	for _, ti := range tools {
+		got = append(got, ti.ID)
+	}
 	if !slices.Equal(got, want) {
-		t.Fatalf("Default().IDs() = %v, want %v", got, want)
+		t.Fatalf("Default().ListTools() ids = %v, want %v", got, want)
 	}
 }
 

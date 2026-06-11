@@ -115,17 +115,6 @@ func TestSendWithoutClientErrors(t *testing.T) {
 	}
 }
 
-func TestDisconnectClearsState(t *testing.T) {
-	s := startBridge(t)
-	dialBridge(t, s)
-	waitFor(t, func() bool { return s.Status().Connected })
-
-	s.Disconnect()
-	if s.Status().Connected {
-		t.Fatal("expected disconnected after Disconnect()")
-	}
-}
-
 func TestClientDisconnectClearsState(t *testing.T) {
 	s := startBridge(t)
 	client := dialBridge(t, s)

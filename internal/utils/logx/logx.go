@@ -146,12 +146,6 @@ func For(component string) *slog.Logger {
 	return r.With(slog.String("component", component))
 }
 
-// 便捷函数（用 default logger）
-func Info(msg string, args ...any)  { For("").Info(msg, args...) }
-func Warn(msg string, args ...any)  { For("").Warn(msg, args...) }
-func Error(msg string, args ...any) { For("").Error(msg, args...) }
-func Debug(msg string, args ...any) { For("").Debug(msg, args...) }
-
 func defaultLogDir() (string, error) {
 	switch runtime.GOOS {
 	case "windows":

@@ -94,9 +94,3 @@ func ReadLimit(path string, max int64) ([]byte, error) {
 	}
 	return io.ReadAll(io.LimitReader(f, max))
 }
-
-// EnsureDir 是 os.MkdirAll(path, 0o755) 的语义化包装。
-// 已存在不报错；目标是一个文件时报错。
-func EnsureDir(path string) error {
-	return os.MkdirAll(path, 0o755)
-}

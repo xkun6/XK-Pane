@@ -101,16 +101,6 @@ func Open(path string) (*DB, error) {
 	return &DB{GORM: gdb, Path: path}, nil
 }
 
-// MustOpen 打开数据库，失败直接 panic。仅用于 main / 启动路径，
-// 切换路径等运行时操作请用 Open（可恢复）。
-func MustOpen(path string) *DB {
-	db, err := Open(path)
-	if err != nil {
-		panic(err)
-	}
-	return db
-}
-
 // Close 关闭底层连接池。在切换路径或退出时调用。
 func (d *DB) Close() error {
 	if d == nil || d.GORM == nil {

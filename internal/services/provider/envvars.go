@@ -42,16 +42,6 @@ func loadDecrypted(ctx context.Context, db *gorm.DB, id string) (*storage.Provid
 	return &p, nil
 }
 
-// EnvVars 复刻 cc-pane provider.to_env_vars + resolve_env_vars：按 ProviderType 产出
-// 启动 env（含解密后的明文 apiKey）。id""/未知 → 空 map；解密失败 → 错误。
-func EnvVars(ctx context.Context, db *gorm.DB, id string) (map[string]string, error) {
-	p, err := loadDecrypted(ctx, db, id)
-	if err != nil {
-		return nil, err
-	}
-	return envVarsFor(p), nil
-}
-
 // ResolveLaunchEnv 一次加载+解密，返回启动所需的全部：Tier-A env + Tier-B cli provider
 // 上下文（含明文 key）。id""/未知 → (空 map, nil, nil)。terminal 启动路径用。
 func ResolveLaunchEnv(ctx context.Context, db *gorm.DB, id string) (map[string]string, *cliadapters.Provider, error) {

@@ -26,13 +26,6 @@ func (r *Registry) Get(id string) (Adapter, bool) {
 	return a, ok
 }
 
-// IDs 返回注册顺序的 id 列表（拷贝）。
-func (r *Registry) IDs() []string {
-	out := make([]string, len(r.order))
-	copy(out, r.order)
-	return out
-}
-
 // ListTools 按注册顺序返回各工具静态元信息（未检测安装状态）。
 func (r *Registry) ListTools() []ToolInfo {
 	out := make([]ToolInfo, 0, len(r.order))

@@ -452,7 +452,7 @@ internal/storage/
 ├── paths.go        # 平台默认路径
 ├── config.go       # storage.json 读写
 ├── pragma.go       # PRAGMA 注入
-├── db.go           # Open / MustOpen / Close
+├── db.go           # Open / Close
 ├── models.go       # AllModels + ModelDescriptor + AutoMigrate
 ├── usage.go        # CollectTableUsage（dbstat / 估算）
 ├── health.go       # IntegrityCheck / WALCheckpoint / FileSize

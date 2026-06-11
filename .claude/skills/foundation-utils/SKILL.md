@@ -290,11 +290,7 @@ data, err := filex.ReadLimit(path, 4<<20) // 4MB 上限
 
 防止超大 / 失控文件耗尽内存。0 / 负数取默认 8MB。
 
-### 6.3 EnsureDir
-
-```go
-filex.EnsureDir("/some/nested/path") // mkdir -p 同义
-```
+建目录直接用标准库 `os.MkdirAll(path, 0o755)`（原 `filex.EnsureDir` 一行包装已删）。
 
 ---
 
@@ -438,7 +434,7 @@ internal/utils/
 ├── logx/
 │   └── logx.go         # Init / For / fileRotator / fanoutHandler
 └── filex/
-    └── filex.go        # WriteAtomic / ReadLimit / EnsureDir
+    └── filex.go        # WriteAtomic / ReadLimit
 
 internal/services/subprocess/   # procx 的前端入口
 ├── subprocess.go      # Service / Run / Stop / List / AvailableCommands

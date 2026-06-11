@@ -119,17 +119,6 @@ func (s *Service) SendPacket(p Packet) error {
 	return nil
 }
 
-// Disconnect 主动断开当前 client。
-func (s *Service) Disconnect() {
-	s.mu.Lock()
-	old := s.active
-	s.active = nil
-	s.mu.Unlock()
-	if old != nil {
-		_ = old.conn.Close()
-	}
-}
-
 func (s *Service) acceptLoop(ln net.Listener) {
 	for {
 		conn, err := ln.Accept()
