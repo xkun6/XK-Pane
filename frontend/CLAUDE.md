@@ -394,9 +394,8 @@ frontend/
 ├── vite.config.ts             # Vite 配置 + 路径别名
 ├── tsconfig.json              # TS strict + paths
 ├── public/                    # 静态资源
-│   ├── wails.png
-│   ├── react.svg
-│   └── Inter-Medium.ttf
+│   ├── wails.png              # favicon
+│   └── fonts/JetBrainsMono-Regular.woff2  # 终端字体（index.html @font-face）
 ├── bindings/                  # wails3 generate bindings 产物（.gitignore）
 └── src/
     ├── main.tsx               # React 19 createRoot

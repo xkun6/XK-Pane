@@ -4,7 +4,7 @@
 
 ## 模块职责
 
-集中维护跨平台构建、打包、分发所需的所有脚本、配置与资源。每个平台拥有独立的 `Taskfile.yml`，由根 `Taskfile.yml` 通过 `includes` 聚合调用。打包目标涵盖 Windows (NSIS / MSIX)、macOS (Info.plist / Assets.car)、Linux (AppImage / nfpm)、iOS (Xcode 项目模板)、Android (Gradle 项目)、以及 Docker 服务器/跨编译镜像。
+集中维护跨平台构建、打包、分发所需的所有脚本、配置与资源。每个平台拥有独立的 `Taskfile.yml`，由根 `Taskfile.yml` 通过 `includes` 聚合调用。打包目标涵盖 Windows (NSIS)、macOS (Info.plist / Assets.car)、Linux (AppImage / nfpm)、以及 Docker 服务器/跨编译镜像。（iOS / Android 构建链与 MSIX 打包链路已于 2026-06-11 减法审计中移除，需要时按 git 历史恢复。）
 
 ## 入口与启动
 
@@ -18,11 +18,9 @@
 
 | 子模块 | 入口 Taskfile | 主要产物 |
 |--------|---------------|----------|
-| Windows | `build/windows/Taskfile.yml` | `nsis/project.nsi`、`msix/template.xml`、`wails.exe.manifest` |
+| Windows | `build/windows/Taskfile.yml` | `nsis/project.nsi`、`wails.exe.manifest` |
 | macOS | `build/darwin/Taskfile.yml` | `Info.plist`、`Info.dev.plist`、`Assets.car`、`icons.icns` |
 | Linux | `build/linux/Taskfile.yml` | `appimage/build.sh`、`nfpm/nfpm.yaml`、`desktop/` |
-| iOS | `build/ios/Taskfile.yml` | `project.pbxproj`、`Info.plist`、`main.m`、`main_ios.go`、`Assets.xcassets` |
-| Android | `build/android/Taskfile.yml` | Gradle 工程：`build.gradle`、`settings.gradle`、`gradlew`、`app/src/main/...` |
 | Docker | `build/docker/` | `Dockerfile.server`、`Dockerfile.cross` |
 
 ## 关键依赖与配置
@@ -31,10 +29,6 @@
   - `info.*`：版本、公司、Bundle ID、Copyright
   - `dev_mode`：dev server 监视/忽略规则、子进程启动顺序
   - `fileAssociations`：文件关联占位
-- iOS 选配段：`config.yml` 中注释的 `ios:` 段允许覆盖 bundleID、版本等
-- iOS Go 入口：`build/ios/main_ios.go`、`app_options_ios.go`、`app_options_default.go`
-- Android Activity：`build/android/app/src/main/java/com/wails/app/MainActivity.java`、`WailsBridge.java`、`WailsJSBridge.java`、`WailsPathHandler.java`
-- Android 入口：`build/android/main_android.go`
 - 安装钩子（Linux）：`build/linux/nfpm/scripts/{preinstall,postinstall,preremove,postremove}.sh`
 
 ## 数据模型
@@ -50,9 +44,7 @@
 ## 常见问题 (FAQ)
 
 - Q：修改了 `build/config.yml` 中的 `info.*` 字段，但二进制元数据没变？
-  - A：执行 `wails3 task common:update:build-assets` 重新生成各平台资源（plist、manifest、msix 等）。
-- Q：为什么 iOS / Android 目录里有独立的 `main_*.go`？
-  - A：移动平台需要不同的初始化路径（无独立桌面窗口、需要绑定到原生 Activity / UIViewController），通过构建标签隔离。
+  - A：执行 `wails3 task common:update:build-assets` 重新生成各平台资源（plist、manifest 等）。注意：该命令可能把已删除的 iOS/MSIX 模板资源重新生成回来，回流无害，再删一次即可。
 - Q：如何切换包管理器？
   - A：根 Taskfile 的 `PACKAGE_MANAGER` 默认 `pnpm`，可在调用任务时通过 `task PACKAGE_MANAGER=npm dev` 覆盖。
 
@@ -68,8 +60,7 @@ build/
 │   ├── icon.ico
 │   ├── info.json
 │   ├── wails.exe.manifest
-│   ├── nsis/{project.nsi, wails_tools.nsh}
-│   └── msix/{app_manifest.xml, template.xml}
+│   └── nsis/{project.nsi, wails_tools.nsh}
 ├── darwin/
 │   ├── Taskfile.yml
 │   ├── Info.plist / Info.dev.plist
@@ -80,30 +71,6 @@ build/
 │   ├── appimage/build.sh
 │   ├── desktop/
 │   └── nfpm/{nfpm.yaml, scripts/*.sh}
-├── ios/
-│   ├── Taskfile.yml
-│   ├── Info.plist / Info.dev.plist
-│   ├── entitlements.plist
-│   ├── project.pbxproj
-│   ├── main.m / main_ios.go
-│   ├── app_options_ios.go / app_options_default.go
-│   ├── LaunchScreen.storyboard
-│   ├── Assets.xcassets
-│   ├── icon.png
-│   └── build.sh
-├── android/
-│   ├── Taskfile.yml
-│   ├── build.gradle / settings.gradle / gradle.properties
-│   ├── gradlew / gradlew.bat
-│   ├── gradle/wrapper/{gradle-wrapper.jar, gradle-wrapper.properties}
-│   ├── main_android.go
-│   ├── scripts/deps/install_deps.go
-│   └── app/
-│       ├── build.gradle / proguard-rules.pro
-│       └── src/main/
-│           ├── AndroidManifest.xml
-│           ├── java/com/wails/app/{MainActivity,WailsBridge,WailsJSBridge,WailsPathHandler}.java
-│           └── res/{layout, mipmap-*, values}
 └── docker/
     ├── Dockerfile.server          # 服务器模式镜像
     └── Dockerfile.cross           # 跨编译镜像（约 800MB）
@@ -111,4 +78,5 @@ build/
 
 ## 变更记录 (Changelog)
 
+- 2026-06-11：减法审计批 3——移除 `build/ios/`、`build/android/` 整目录与根 Taskfile 对应 include、MSIX 打包链路（`build/windows/msix/` + 两个 task，原引用不存在的 wails.json 本就损坏）、死任务 `frontend:vendor:puppertino` 与 `ios:device:list` / `ios:run:device`；`windows:package` 收敛为仅 NSIS。详见 SUBTRACTION_AUDIT.md #51-#53。
 - 2026-05-28 13:09:44：初始化模块文档。
