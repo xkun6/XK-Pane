@@ -112,6 +112,9 @@ func allocGlobalPayload(data []byte) (uintptr, error) {
 }
 
 // openClipboardRetry 打开剪贴板；可能被其它进程短暂持有，带退避重试。
+// 调用约定：调用方所在 goroutine 须已 runtime.LockOSThread —— 剪贴板会话有 OS 线程
+// 亲和性，CloseClipboard 跨线程会静默失败致剪贴板滞留打开态。写路径由 trigger 的
+// LockOSThread 覆盖，读路径在 platformClipboardPastePaths 入口加锁。
 func openClipboardRetry() error {
 	for i := 0; i < 5; i++ {
 		if r, _, _ := procOpenClipboard.Call(0); r != 0 {

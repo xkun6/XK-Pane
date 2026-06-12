@@ -40,6 +40,7 @@ import {
   shouldKeepCliOutputInNormalBuffer,
   stripAlternateBufferSequences,
 } from './compat/terminalBufferMode';
+import { formatPastedPaths } from './compat/terminalClipboardPaste';
 import { isTerminalCopyShortcut, isTerminalPasteShortcut } from './compat/terminalKeyboard';
 import {
   createTerminalWriteFlowControl,
@@ -322,18 +323,21 @@ export function useTerminalView({
 
     // 文件/图片粘贴（对译 cc-pane terminalClipboard ②流）：剪贴板是文件对象（Explorer 复制
     // 的文件、XK 截图的 CF_HDROP）或纯位图（截图工具「复制图像」）时，浏览器 paste 事件的
-    // text/plain 为空 → xterm 默认什么都不写。capture 阶段截获后问后端：文件取路径 / 位图
-    // 落盘 screenshots 目录换路径，再经 term.paste() 写入 —— xterm 会按应用是否开启
-    // bracketed-paste 自动包 \x1b[200~（claude/codex 据此识别图片路径为附件）。有文本时不拦，
-    // 照走 xterm 原生单份粘贴（见上方 Ctrl/Cmd+V 注释）。仅桌面端（viewer 没有该 binding）。
+    // text/plain 为空 → xterm 默认什么都不写（仅 bracketed 模式下发空括号对）。capture 阶段
+    // 截获后问后端：文件取路径 / 位图落盘 screenshots 目录换路径，再经 term.paste() 写入 ——
+    // xterm 会按应用是否开启 bracketed-paste 自动包 \x1b[200~（claude/codex 据此识别图片路径
+    // 为附件）。有文本时不拦，照走 xterm 原生单份粘贴（见上方 Ctrl/Cmd+V 注释）。
+    // 仅 Windows 桌面端：viewer 没有该 binding；macOS/Linux 后端恒空，且必须放行原生空粘贴
+    // —— claude 收到空 bracketed 括号对会走自己的取图管线（osascript/xclip），拦了反而把
+    // 改动前可用的图片粘贴弄失效（对抗审查确证的回归，勿改回只判 isDesktop）。
     const onHostPaste = (event: ClipboardEvent) => {
-      if (!isDesktop) return;
+      if (!isDesktop || !isWindows) return;
       if (event.clipboardData?.getData('text/plain')) return;
       event.preventDefault();
       event.stopPropagation();
       void ScreenshotService.clipboardPastePaths()
         .then((paths) => {
-          if (paths.length > 0) termRef.current?.paste(paths.join(' '));
+          if (paths.length > 0) termRef.current?.paste(formatPastedPaths(paths));
         })
         .catch(() => {});
     };
