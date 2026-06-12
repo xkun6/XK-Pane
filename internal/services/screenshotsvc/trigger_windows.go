@@ -4,7 +4,7 @@ package screenshotsvc
 
 // trigger_windows.go — 截图全流程编排（对齐 cc-pane trigger_screenshot 时序）：
 // CAS 防重入 → 主窗口排除捕获 → 截光标所在显示器 → 选区遮罩（阻塞）→ 裁剪 →
-// 存 PNG → 路径写剪贴板 → Emit screenshot:saved → 恢复捕获。
+// 存 PNG → 双格式写剪贴板（文件 + 位图）→ Emit screenshot:saved → 恢复捕获。
 
 import (
 	"image"
@@ -96,10 +96,10 @@ func (s *Service) trigger() {
 		}
 		logFor().Info("截图已保存", "path", path, "size", sel.String())
 
-		// 剪贴板放图片文件本身（CF_HDROP，同 Explorer「复制文件」），不放路径字符串——
-		// 粘贴到聊天工具/资源管理器拿到的是图。
-		if err := copyFileToClipboard(path); err != nil {
-			logFor().Warn("截图文件写剪贴板失败", "err", err)
+		// 剪贴板同时放图片文件（CF_HDROP）与位图（CF_DIB）：资源管理器/聊天工具取文件，
+		// Claude Code Alt+V（Get-Clipboard -Format Image 只认位图）取位图。
+		if err := copyScreenshotToClipboard(path, cropped); err != nil {
+			logFor().Warn("截图写剪贴板失败", "err", err)
 		}
 		if s.emit != nil {
 			s.emit(events.ScreenshotSaved, events.ScreenshotSavedPayload{
