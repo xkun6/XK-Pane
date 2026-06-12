@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react';
 import { Box, useMediaQuery, useTheme } from '@mui/material';
 import { TitleBar } from '@/components/TitleBar';
 import { Sidebar } from '@/components/Sidebar';
+import { ScreenshotBridge } from '@/components/ScreenshotBridge';
 import { RouterOutlet, useRouter } from '@/router';
 import { RightPanelDrawer } from '@/rightpanel';
 import { lifecycleRole } from '@/services/transport';
@@ -45,6 +46,8 @@ export const AppLayout = ({ title }: AppLayoutProps) => {
         {/* 右侧抽屉（Git / 本地历史）：未开启时渲染 null，不占布局；与主区并列在 flex row 内推开内容 */}
         {!hideChrome && <RightPanelDrawer />}
       </Box>
+      {/* 截图闭环桥（常驻无界面）：screenshot:saved → 路径写活跃终端 + snackbar */}
+      <ScreenshotBridge />
     </>
   );
 };

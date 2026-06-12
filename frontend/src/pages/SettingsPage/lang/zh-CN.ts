@@ -34,6 +34,10 @@ export const settingsPageZhCN: Messages = {
         label: 'Web 访问',
         description: '手机 / 平板局域网访问与会话互通',
       },
+      screenshot: {
+        label: '截图快捷键',
+        description: '全局截图热键与截图文件保留策略',
+      },
     },
     themes: {
       system: { label: '跟随系统', description: '随操作系统的明暗模式自动切换' },

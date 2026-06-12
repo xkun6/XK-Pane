@@ -76,6 +76,14 @@ export {
 } from './sshmachine/SshMachineService';
 export { PreferencesService } from './preferences/PreferencesService';
 export {
+  ScreenshotService,
+  SCREENSHOT_PREF_SHORTCUT,
+  SCREENSHOT_PREF_RETENTION_DAYS,
+  SCREENSHOT_DEFAULT_SHORTCUT,
+  SCREENSHOT_DEFAULT_RETENTION_DAYS,
+  type ScreenshotSavedPayload,
+} from './screenshot/ScreenshotService';
+export {
   AppSettingsService,
   type AppSettingsSnapshot,
 } from './appsettings/AppSettingsService';

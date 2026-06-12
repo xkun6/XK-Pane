@@ -14,6 +14,7 @@ import { registerWebWorkspaceTreeLocales } from '@/components/WebWorkspaceTree';
 import { registerTerminalKeyBarLocales } from '@/components/TerminalKeyBar';
 import { registerSessionTimelineLocales } from '@/components/SessionTimeline';
 import { registerComposerLocales } from '@/components/Composer';
+import { registerScreenshotBridgeLocales } from '@/components/ScreenshotBridge';
 import { PreferencesProvider } from '@/preferences';
 import { CurrentDirProvider } from '@/currentdir';
 import { RightPanelProvider } from '@/rightpanel';
@@ -49,6 +50,7 @@ registerWebWorkspaceTreeLocales();
 registerTerminalKeyBarLocales();
 registerSessionTimelineLocales();
 registerComposerLocales();
+registerScreenshotBridgeLocales();
 
 // Provider 嵌套顺序（自外向内）：
 //  ① I18nProvider —— 文案是任何子组件都可能用到的最基础上下文

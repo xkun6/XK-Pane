@@ -36,6 +36,10 @@ const (
 	// NavigateSettings 托盘「设置」菜单 → 主窗口前端导航到设置页（桌面托盘专属，无 payload，
 	// 不进 Web 镜像白名单）。前端 AppLayout 经 useTrayNavigation 监听后 navigate('settings')。
 	NavigateSettings = "app:navigate-settings"
+
+	// ScreenshotSaved 截图快捷键流程保存 PNG 成功（后端 screenshotsvc → 前端把路径写进活跃终端 +
+	// snackbar）。payload 见 ScreenshotSavedPayload；桌面专属，不进 Web 镜像白名单。
+	ScreenshotSaved = "screenshot:saved"
 )
 
 // TerminalOutputPayload 是 TerminalOutput 事件载荷。
@@ -150,6 +154,14 @@ type BedrockDocSyncProgressPayload struct {
 	Msg          string   `json:"msg,omitempty"`          // log
 }
 
+// ScreenshotSavedPayload 是 ScreenshotSaved 事件载荷。FilePath 是已落盘 PNG 的绝对路径
+// （Windows 反斜杠格式，可直接粘进 Claude Code 引用图片）。
+type ScreenshotSavedPayload struct {
+	FilePath string `json:"filePath"`
+	Width    int    `json:"width"`
+	Height   int    `json:"height"`
+}
+
 // Register 在 application 初始化前注册所有强类型事件，
 // Wails 的 binding 生成器会据此为前端生成类型化 API。
 func Register() {
@@ -163,4 +175,5 @@ func Register() {
 	application.RegisterEvent[MCLaunchedPayload](MCPeLaunched)
 	application.RegisterEvent[MCExitedPayload](MCPeExited)
 	application.RegisterEvent[BedrockDocSyncProgressPayload](BedrockDocSyncProgress)
+	application.RegisterEvent[ScreenshotSavedPayload](ScreenshotSaved)
 }

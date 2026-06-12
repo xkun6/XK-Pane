@@ -22,4 +22,6 @@ export const AppEvents = {
   BedrockDocSyncProgress: 'bedrock-doc-sync:progress',
   // 托盘「设置」菜单 → 主窗口导航到设置页（桌面托盘专属，无 payload，不进 Web 镜像）。
   NavigateSettings: 'app:navigate-settings',
+  // 截图快捷键保存 PNG 成功（后端 screenshotsvc → 前端把路径写进活跃终端 + snackbar）。桌面专属。
+  ScreenshotSaved: 'screenshot:saved',
 } as const;

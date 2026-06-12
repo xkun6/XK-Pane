@@ -31,6 +31,10 @@ export const settingsPageEnUS: Messages = {
         label: 'Web access',
         description: 'LAN access from phone / tablet, shared sessions',
       },
+      screenshot: {
+        label: 'Screenshot shortcut',
+        description: 'Global capture hotkey and screenshot retention',
+      },
     },
     themes: {
       system: { label: 'Follow system', description: 'Tracks the OS light / dark preference' },

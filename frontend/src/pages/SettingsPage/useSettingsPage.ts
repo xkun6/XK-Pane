@@ -54,6 +54,11 @@ export const useSettingsPage = (): UseSettingsPageResult => {
         labelKey: 'settings.list.webaccess.label',
         descriptionKey: 'settings.list.webaccess.description',
       },
+      {
+        id: 'screenshot',
+        labelKey: 'settings.list.screenshot.label',
+        descriptionKey: 'settings.list.screenshot.description',
+      },
     ],
     [],
   );

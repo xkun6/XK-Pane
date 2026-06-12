@@ -31,6 +31,7 @@ import (
 	"xkpane/internal/services/project"
 	"xkpane/internal/services/provider"
 	"xkpane/internal/services/reminder"
+	"xkpane/internal/services/screenshotsvc"
 	"xkpane/internal/services/sessionscan"
 	"xkpane/internal/services/sshmachine"
 	"xkpane/internal/services/storagesvc"
@@ -141,6 +142,10 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	// TaskBinding 编排任务绑定（结合 ccpane）：记录每次「分派」(Todo→会话) 及其状态/进度。
 	// 前端「分派」按钮 + orchestrator create/update/query_task_binding MCP 工具共用同一实例。
 	tbSvc := taskbinding.New(holder)
+	// 截图快捷键（结合 ccpane trigger_screenshot）：全局热键 → 选区截图 → 存 PNG →
+	// 路径写剪贴板 + screenshot:saved 事件（前端把路径写进活跃终端）。窗口钩子在 mainWindow
+	// 创建后注入；热键注册失败 fail-open（设置页改键可恢复）。
+	shotSvc := screenshotsvc.New(holder)
 	// Bedrock OTA 文档同步（P6f-9c）：把 gitea/http 引擎 + 索引构建器 + manifest 串成一次同步，
 	// 原子换目录到 <UserDataDir>/bedrock-data/ 后经 BedrockHooks 热切 bedrock 查询层。进 Wails
 	// Services 列表（前端「设置 → 知识库」面板调用），经 SetEmitter 推 BedrockDocSyncProgress 进度。
@@ -198,6 +203,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(webAccessSvc),      // Web 网关门面（GetAccessInfo → 配对二维码）
 			application.NewService(mcpeSvc),           // MC PE 控制（包管理 / 启动 / 日志 / 桥状态）
 			application.NewService(bedrockDocSyncSvc), // Bedrock OTA 文档同步（设置 → 知识库面板）
+			application.NewService(shotSvc),           // 截图快捷键（设置 → 截图：改键 UpdateShortcut）
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -282,6 +288,18 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	})
 	// 通知 only_when_unfocused 判定：注入主窗口聚焦查询（解耦 notification service 与 Wails 窗口 API）。
 	notifSvc.SetFocusCheck(func() bool { return mainWindow.IsFocused() })
+
+	// 截图快捷键接线：emit 双路 + 窗口钩子（截图期间 SetContentProtection 把主窗口从屏幕捕获
+	// 排除，等价 cc-pane WDA_EXCLUDEFROMCAPTURE；路径经 app.Clipboard 写剪贴板兜底）。
+	shotSvc.SetEmitter(mirrorEmit)
+	shotSvc.SetWindowHooks(
+		func(on bool) { mainWindow.SetContentProtection(on) },
+		func(text string) bool { return app.Clipboard.SetText(text) },
+	)
+	if err := shotSvc.Start(); err != nil {
+		logx.For("app").Warn("screenshot hotkey start failed (设置页改键可恢复，fail-open)", "err", err)
+	}
+	defer shotSvc.Stop()
 
 	// 待办提醒后台轮询（结合 ccpane G2）：每 60s 扫 reminder_at<=now 的未完成待办 → 经 notifSvc 发原生
 	// 通知（读 app_settings 开关 + 聚焦判定 + 10min 重提醒去重）。后端 ticker 不受窗口最小化时

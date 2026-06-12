@@ -15,6 +15,7 @@ const EXPECTED_BACKEND_EVENT_NAMES = {
   MCPeExited: 'mc_pe:exited',
   BedrockDocSyncProgress: 'bedrock-doc-sync:progress',
   NavigateSettings: 'app:navigate-settings',
+  ScreenshotSaved: 'screenshot:saved',
 } as const;
 
 describe('AppEvents ↔ internal/events/events.go', () => {

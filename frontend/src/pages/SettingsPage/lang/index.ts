@@ -7,6 +7,7 @@ import { registerDatabaseLocales } from '../database';
 import { registerKnowledgeLocales } from '../knowledge';
 import { registerProviderSettingsLocales } from '../provider';
 import { registerWebAccessLocales } from '../webaccess';
+import { registerScreenshotLocales } from '../screenshot';
 
 let registered = false;
 
@@ -23,5 +24,6 @@ export const registerSettingsPageLocales = (): void => {
   registerKnowledgeLocales();
   registerProviderSettingsLocales();
   registerWebAccessLocales();
+  registerScreenshotLocales();
   registered = true;
 };
