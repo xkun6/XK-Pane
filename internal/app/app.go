@@ -290,12 +290,9 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	notifSvc.SetFocusCheck(func() bool { return mainWindow.IsFocused() })
 
 	// 截图快捷键接线：emit 双路 + 窗口钩子（截图期间 SetContentProtection 把主窗口从屏幕捕获
-	// 排除，等价 cc-pane WDA_EXCLUDEFROMCAPTURE；路径经 app.Clipboard 写剪贴板兜底）。
+	// 排除，等价 cc-pane WDA_EXCLUDEFROMCAPTURE）。剪贴板由 service 内 CF_HDROP 自理（文件对象）。
 	shotSvc.SetEmitter(mirrorEmit)
-	shotSvc.SetWindowHooks(
-		func(on bool) { mainWindow.SetContentProtection(on) },
-		func(text string) bool { return app.Clipboard.SetText(text) },
-	)
+	shotSvc.SetWindowHooks(func(on bool) { mainWindow.SetContentProtection(on) })
 	if err := shotSvc.Start(); err != nil {
 		logx.For("app").Warn("screenshot hotkey start failed (设置页改键可恢复，fail-open)", "err", err)
 	}

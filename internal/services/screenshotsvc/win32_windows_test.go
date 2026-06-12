@@ -26,6 +26,9 @@ func TestWin32StructSizes(t *testing.T) {
 	if got := unsafe.Sizeof(bitmapInfoHeader{}); got != 40 {
 		t.Errorf("BITMAPINFOHEADER 应为 40 字节，实际 %d", got)
 	}
+	if got := unsafe.Sizeof(dropFiles{}); got != 20 {
+		t.Errorf("DROPFILES 应为 20 字节，实际 %d", got)
+	}
 }
 
 func TestBlendFunctionArg(t *testing.T) {

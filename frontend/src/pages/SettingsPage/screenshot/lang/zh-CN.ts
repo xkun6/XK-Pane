@@ -4,7 +4,7 @@ export const screenshotZhCN: Messages = {
   settings: {
     screenshot: {
       title: '截图快捷键',
-      hint: '在任意界面按下快捷键即可框选截取屏幕区域。PNG 保存后路径自动粘贴到活动终端（同时复制到剪贴板），供 Claude Code 引用图片。仅 Windows 生效。',
+      hint: '在任意界面按下快捷键即可框选截取屏幕区域。截图自动粘贴进活动终端（Claude Code 识别为图片附件）；图片文件同时复制到剪贴板。仅 Windows 生效。',
       shortcut: {
         label: '快捷键',
         recording: '按下新的组合键（Esc 退出）…',

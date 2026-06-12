@@ -12,9 +12,10 @@ export interface UseScreenshotBridgeResult {
 }
 
 // 截图快捷键闭环桥（比 cc-pane 多走的一步）：订阅后端 screenshot:saved，把已落盘 PNG 的
-// 路径直接写进当前活跃终端（claude/codex 整段识别路径 token，容忍内部空格）；无活跃会话 /
-// SSH 会话（远端读不到本机文件）时仅提示「已复制到剪贴板」（后端已兜底写剪贴板）。
-// 桌面专属：ScreenshotService.onSaved 在 viewer 端是 no-op。
+// 路径写进当前活跃终端。CLI 会话（claude/reclaude/codex）须包 bracketed-paste 序列——
+// 它们只在「真粘贴事件」里把图片路径转成 [Image #N] 附件，裸写会留成路径字符串（实测）；
+// 非 CLI 会话写裸路径。无活跃会话 / SSH 会话（远端读不到本机文件）时仅提示「已复制到
+// 剪贴板」（后端已把图片文件 CF_HDROP 写入剪贴板）。桌面专属：onSaved 在 viewer 端 no-op。
 export const useScreenshotBridge = (): UseScreenshotBridgeResult => {
   const { rootPane, activePaneId } = useTerminal();
   const [notice, setNotice] = useState<ScreenshotNotice | null>(null);
@@ -39,10 +40,13 @@ export const useScreenshotBridge = (): UseScreenshotBridgeResult => {
         setNotice('copied');
         return;
       }
-      // 裸路径写入 PTY（与 cc-pane 粘贴流同格式，不加引号——claude/codex 均整段识别）。
-      TerminalService.write(sessionId, filePath)
+      // CLI 会话包 bracketed-paste（等价 cc-pane 的 term.paste()），触发其粘贴管线把
+      // 图片路径转 [Image #N] 附件；裸 shell 不包（避免 ESC 序列当垃圾字符进 readline）。
+      const isCliSession = !!tab?.cliTool && tab.cliTool !== 'none';
+      const text = isCliSession ? `\x1b[200~${filePath}\x1b[201~` : filePath;
+      TerminalService.write(sessionId, text)
         .then(() => setNotice('pasted'))
-        .catch(() => setNotice('copied')); // 写入失败时剪贴板仍有路径可手动粘贴
+        .catch(() => setNotice('copied')); // 写入失败时剪贴板仍有图片文件可手动粘贴
     });
   }, []);
 

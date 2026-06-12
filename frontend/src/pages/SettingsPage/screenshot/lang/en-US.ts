@@ -4,7 +4,7 @@ export const screenshotEnUS: Messages = {
   settings: {
     screenshot: {
       title: 'Screenshot shortcut',
-      hint: 'Press the shortcut anywhere to capture a screen region. The saved PNG path is pasted into the active terminal (and copied to clipboard) so Claude Code can reference the image. Windows only.',
+      hint: 'Press the shortcut anywhere to capture a screen region. The screenshot is pasted into the active terminal (Claude Code attaches it as an image) and the image file is copied to the clipboard. Windows only.',
       shortcut: {
         label: 'Shortcut',
         recording: 'Press a new combination (Esc to exit)…',

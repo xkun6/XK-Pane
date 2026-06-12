@@ -38,9 +38,8 @@ const (
 type Service struct {
 	holder *storage.Holder
 
-	emit      func(name string, payload any) // 装配处注入（mirrorEmit）
-	protect   func(on bool)                  // 主窗口 SetContentProtection（截图期间排除自身）
-	clipboard func(text string) bool         // app.Clipboard.SetText
+	emit    func(name string, payload any) // 装配处注入（mirrorEmit）
+	protect func(on bool)                  // 主窗口 SetContentProtection（截图期间排除自身）
 
 	capturing atomic.Bool // 防重入（对齐 cc-pane CAPTURING）
 
@@ -59,10 +58,10 @@ func (s *Service) SetEmitter(fn func(name string, payload any)) {
 	s.emit = fn
 }
 
-// SetWindowHooks 注入主窗口捕获排除与剪贴板写入（解耦 service 与 Wails 窗口/app 对象）。
-func (s *Service) SetWindowHooks(protect func(on bool), clipboardSet func(text string) bool) {
+// SetWindowHooks 注入主窗口捕获排除钩子（解耦 service 与 Wails 窗口对象）。
+// 剪贴板不走 Wails（仅文本 API）：截图以 CF_HDROP 文件对象自接 Win32 写入。
+func (s *Service) SetWindowHooks(protect func(on bool)) {
 	s.protect = protect
-	s.clipboard = clipboardSet
 }
 
 // Start 读取持久化的快捷键并注册全局热键。注册失败（键位冲突等）返回 error，

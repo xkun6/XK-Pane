@@ -96,8 +96,10 @@ func (s *Service) trigger() {
 		}
 		logFor().Info("截图已保存", "path", path, "size", sel.String())
 
-		if s.clipboard != nil && !s.clipboard(path) {
-			logFor().Warn("截图路径写剪贴板失败")
+		// 剪贴板放图片文件本身（CF_HDROP，同 Explorer「复制文件」），不放路径字符串——
+		// 粘贴到聊天工具/资源管理器拿到的是图。
+		if err := copyFileToClipboard(path); err != nil {
+			logFor().Warn("截图文件写剪贴板失败", "err", err)
 		}
 		if s.emit != nil {
 			s.emit(events.ScreenshotSaved, events.ScreenshotSavedPayload{
