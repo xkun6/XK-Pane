@@ -1,7 +1,9 @@
 // Package screenshotsvc 实现「截图快捷键」（参照 cc-pane trigger_screenshot 全链路）：
 // 系统级全局热键 → 主窗口排除捕获（SetContentProtection，底层 WDA_EXCLUDEFROMCAPTURE）→
 // 截光标所在显示器 → Win32 GDI 选区遮罩（拖拽选择 / 松开确认 / ESC 取消）→ 裁剪存 PNG →
-// 路径写剪贴板 + Emit screenshot:saved（前端把路径写进活跃终端，闭环"粘贴进 Claude Code"）。
+// 双格式写剪贴板（CF_HDROP 文件 + CF_DIB 位图）+ Emit screenshot:saved（前端把路径写进
+// 活跃终端，闭环"粘贴进 Claude Code"）。另提供 ClipboardPastePaths 供终端 Ctrl+V
+// 把剪贴板文件/图片粘成路径。
 //
 // 仅 Windows 实现热键与截屏（对齐 cc-pane #[cfg(target_os = "windows")]）；其余平台 Start
 // 为 no-op（fail-open，不阻断应用启动）。
@@ -59,7 +61,7 @@ func (s *Service) SetEmitter(fn func(name string, payload any)) {
 }
 
 // SetWindowHooks 注入主窗口捕获排除钩子（解耦 service 与 Wails 窗口对象）。
-// 剪贴板不走 Wails（仅文本 API）：截图以 CF_HDROP 文件对象自接 Win32 写入。
+// 剪贴板不走 Wails（仅文本 API）：截图以 CF_HDROP 文件 + CF_DIB 位图自接 Win32 写入。
 func (s *Service) SetWindowHooks(protect func(on bool)) {
 	s.protect = protect
 }
@@ -83,6 +85,13 @@ func (s *Service) UpdateShortcut(_ context.Context, shortcut string) error {
 		return err
 	}
 	return s.platformReregister(mods, vk)
+}
+
+// ClipboardPastePaths 读剪贴板供终端 Ctrl+V「文件/图片 → 路径」粘贴（前端在 paste 事件
+// 无文本时调用，对译 cc-pane terminalClipboard ②流）：CF_HDROP 返回文件路径列表；只有
+// 位图时落盘 screenshots 目录、返回该 PNG 路径；都没有返回空。非 Windows 恒空。
+func (s *Service) ClipboardPastePaths(_ context.Context) ([]string, error) {
+	return s.platformClipboardPastePaths()
 }
 
 // shortcutPref 读取持久化键位；缺失 / 解析失败回默认值。

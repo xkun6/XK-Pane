@@ -9,8 +9,8 @@
 //   - 写入流控（Windows 高吞吐防卡）
 //   - agent CLI 输出剥离 alternate-buffer 切屏序列（输出留 normal buffer，滚轮滚历史）
 //   - Ctrl/Cmd+V 粘贴（拦掉 xterm 默认 ^V，交浏览器原生 paste 写一份）/ 有选区时 Ctrl/Cmd+C 复制（无选区透传 SIGINT）
-// 仍刻意延后：内层分屏、reconnect/restore、wheel→方向键、
-//   剪贴板文件路径/图片粘贴（Tauri 专有，依赖未移植能力）。
+//   - 剪贴板文件/图片粘贴（cc-pane terminalClipboard ②流）：paste 无文本时问后端换路径再 term.paste
+// 仍刻意延后：内层分屏、reconnect/restore、wheel→方向键。
 //
 // MVVM：本 hook 不返回 JSX，只创建并返回 hostRef + 管理副作用；经 services/TerminalService
 //   与后端通信，绝不直接 import @bindings（xterm 为第三方库，允许直接 import）。
@@ -20,8 +20,8 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { Terminal, type ITheme } from '@xterm/xterm';
-import { TerminalService, attachSessionOutput } from '@/services';
-import { lifecycleRole } from '@/services/transport';
+import { ScreenshotService, TerminalService, attachSessionOutput } from '@/services';
+import { isDesktop, lifecycleRole } from '@/services/transport';
 import { isMac, isWindows } from '@/shared/platform';
 import {
   createTerminalLayoutScheduler,
@@ -320,6 +320,25 @@ export function useTerminalView({
     const focusOnTap = () => termRef.current?.focus();
     host.addEventListener('pointerup', focusOnTap);
 
+    // 文件/图片粘贴（对译 cc-pane terminalClipboard ②流）：剪贴板是文件对象（Explorer 复制
+    // 的文件、XK 截图的 CF_HDROP）或纯位图（截图工具「复制图像」）时，浏览器 paste 事件的
+    // text/plain 为空 → xterm 默认什么都不写。capture 阶段截获后问后端：文件取路径 / 位图
+    // 落盘 screenshots 目录换路径，再经 term.paste() 写入 —— xterm 会按应用是否开启
+    // bracketed-paste 自动包 \x1b[200~（claude/codex 据此识别图片路径为附件）。有文本时不拦，
+    // 照走 xterm 原生单份粘贴（见上方 Ctrl/Cmd+V 注释）。仅桌面端（viewer 没有该 binding）。
+    const onHostPaste = (event: ClipboardEvent) => {
+      if (!isDesktop) return;
+      if (event.clipboardData?.getData('text/plain')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void ScreenshotService.clipboardPastePaths()
+        .then((paths) => {
+          if (paths.length > 0) termRef.current?.paste(paths.join(' '));
+        })
+        .catch(() => {});
+    };
+    host.addEventListener('paste', onHostPaste, true);
+
     // 首次布局：非活动 tab 会留 pending，切回可见时 flush。
     scheduler.schedule('initial.fit');
 
@@ -345,6 +364,7 @@ export function useTerminalView({
     return () => {
       onData.dispose();
       for (const d of disposables) d.dispose();
+      host.removeEventListener('paste', onHostPaste, true);
       host.removeEventListener('pointerup', focusOnTap);
       observer.disconnect();
       scheduler.dispose();

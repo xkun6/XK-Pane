@@ -19,3 +19,7 @@ func (s *Service) platformStop() {}
 func (s *Service) platformReregister(uint32, uint32) error {
 	return errors.New("截图快捷键仅支持 Windows")
 }
+
+func (s *Service) platformClipboardPastePaths() ([]string, error) {
+	return nil, nil
+}

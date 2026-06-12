@@ -32,4 +32,11 @@ export const ScreenshotService = {
     if (!isDesktop) return () => {};
     return eventTransport.on<ScreenshotSavedPayload>(AppEvents.ScreenshotSaved, handler);
   },
+
+  // 终端 Ctrl+V 文件/图片粘贴（对译 cc-pane terminalClipboard ②流）：paste 事件无文本时
+  // 调用。CF_HDROP 返回文件路径列表；剪贴板只有位图时由后端落盘 screenshots 目录、返回该
+  // PNG 路径；都没有返回空数组。仅 Windows 有内容，其余平台 / viewer 恒空。
+  async clipboardPastePaths(): Promise<string[]> {
+    return (await Binding.ClipboardPastePaths()) ?? [];
+  },
 } as const;
