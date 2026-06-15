@@ -134,9 +134,11 @@ export const ConfigPanel = ({ pkg }: { pkg: MCPackage }) => {
   };
 
   const addIncludedDir = async () => {
-    const dirs = await NativeDialogs.openFiles({ title: t('mcpe.config.pickModDir') }); // 注：多选目录暂用 openFiles
-    if (!dirs || dirs.length === 0) return;
-    setLocal((l) => ({ ...l, includedModDirs: Array.from(new Set([...l.includedModDirs, ...dirs])) }));
+    // 这一栏后端按目录扫描行为包/资源包（service.go parsePack 入口即 isDir 校验），必须选目录而非文件。
+    // 单次选一个目录；点多次累加、Set 去重。Wails v3 的选目录对话框本就只支持单选（dialogs_windows.go）。
+    const dir = await NativeDialogs.openDirectory({ title: t('mcpe.config.pickModDir') });
+    if (!dir) return;
+    setLocal((l) => ({ ...l, includedModDirs: Array.from(new Set([...l.includedModDirs, dir])) }));
   };
 
   const removeIncludedDir = (dir: string) =>
