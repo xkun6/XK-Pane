@@ -42,6 +42,12 @@ const (
 	PacketReloadAllShaders   PacketType = 6
 	PacketReloadSingleShader PacketType = 7
 	PacketReloadAddonAndGame PacketType = 8
+
+	// PacketLogLine 是反向帧（游戏内桥模组 → XK-Pane）：桥模组把每行 client stdout 经
+	// STD_OUT_WRAPPER tee 过来，payload=UTF-8 单行。Route A 最小验证：证明 MC Studio
+	// 劫持 stdout 时，mod 日志仍能在进程内截获并经本桥送回。原桥是单向（XK→游戏），
+	// 这是第一个游戏→XK 方向的帧类型。
+	PacketLogLine PacketType = 100
 )
 
 // Packet IPC 数据帧。

@@ -31,6 +31,7 @@ class STD_OUT_WRAPPER(object):
                 self.baseIO.write("\n")
             else:
                 self.baseIO.write("[Python] " + line + "\n")
+                _TEE_LOG(line)
 
     def close(self):
         return self.baseIO.close()
@@ -48,6 +49,16 @@ stderr = sys.stderr
 def REST_STDOUT():
     sys.stdout = stdout
     sys.stderr = stderr
+
+def _TEE_LOG(line):
+    # Route A 最小验证：把每行 client stdout 顺 IPC 桥推回 XK-Pane，证明 MC Studio 劫持
+    # stdout 时仍能在进程内截获 mod 日志。静默吞异常；绝不在此 print（会递归回本 wrapper）。
+    # 懒导入 IPCSystem 避开 modMain 装载早期的循环导入；未连接时 sendFrame 自身 no-op。
+    try:
+        from . import IPCSystem
+        IPCSystem.SEND_LOG_LINE(line)
+    except Exception:
+        pass
 
 sys.stdout = STD_OUT_WRAPPER(sys.stdout)
 sys.stderr = STD_OUT_WRAPPER(sys.stderr)

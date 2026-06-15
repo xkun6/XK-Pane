@@ -44,6 +44,17 @@ type Service struct {
 	nextID     uint64
 	listenPort int
 	log        *slog.Logger
+
+	logHandlerMu sync.RWMutex
+	logHandler   func(line string) // 游戏内桥模组反向日志帧（PacketLogLine）的接收回调，可 nil
+}
+
+// SetLogHandler 注入反向日志帧回调（mcpe.Service 装配时调）。每收到一帧 PacketLogLine
+// 就以 payload 字符串回调一次。回调在 readDrain goroutine 上同步执行，实现方应自己不阻塞。
+func (s *Service) SetLogHandler(fn func(line string)) {
+	s.logHandlerMu.Lock()
+	s.logHandler = fn
+	s.logHandlerMu.Unlock()
 }
 
 // New 构造未启动的桥（端口在 Start 后才确定）。
@@ -152,14 +163,37 @@ func (s *Service) acceptLoop(ln net.Listener) {
 }
 
 // readDrain 读 socket 直到 EOF / error / 被顶替（conn 被关），然后（若仍是 active）清状态。
-// Mod 实际不发任何数据，读到的内容直接丢弃。
+// 累积入站字节、按帧解码：PacketLogLine 帧（游戏内桥模组反向 tee 的 stdout 日志）交给
+// logHandler；其余入站帧丢弃。读到 EOF 仍负责清 active。
 func (s *Service) readDrain(conn net.Conn, myID uint64) {
-	buf := make([]byte, 1024)
+	buf := make([]byte, 4096)
+	var acc []byte
 	for {
-		if _, err := conn.Read(buf); err != nil {
+		n, err := conn.Read(buf)
+		if n > 0 {
+			acc = append(acc, buf[:n]...)
+			for {
+				pkt, consumed, derr := Decode(acc)
+				if derr != nil {
+					break // 帧不完整，等更多字节再解
+				}
+				acc = acc[consumed:]
+				if pkt.Type == PacketLogLine {
+					s.logHandlerMu.RLock()
+					h := s.logHandler
+					s.logHandlerMu.RUnlock()
+					if h != nil {
+						h(string(pkt.Payload))
+					}
+				}
+			}
+			if len(acc) == 0 {
+				acc = nil // 整批耗尽，释放底层数组，避免长会话累积偏移
+			}
+		}
+		if err != nil {
 			break // EOF / 被顶替关闭 / 错误
 		}
-		// 丢弃保险
 	}
 	_ = conn.Close()
 

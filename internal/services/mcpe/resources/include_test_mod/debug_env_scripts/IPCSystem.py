@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import socket
 import threading
+import collections
 import mod.client.extraClientApi as clientApi
 from .Config import GET_DEBUG_IPC_PORT
 
@@ -16,6 +17,9 @@ def U32_BE(b):
         return (b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]
     return (ord(b[0]) << 24) | (ord(b[1]) << 16) | (ord(b[2]) << 8) | ord(b[3])
 
+# Route A 最小验证：反向日志帧类型（与后端 mcdkbridge.PacketLogLine 一致）。
+LOG_TYPE_ID = 100
+
 class IPCSystem:
     def __init__(self, port=None):
         # type: (int | None) -> None
@@ -23,6 +27,14 @@ class IPCSystem:
         self.sock = None
         self.mLock = threading.Lock()
         self.handers = {}
+        # 反向日志发送：有界队列 + 独立发送线程。
+        # 为什么不在 STD_OUT_WRAPPER.write 里直接 sendall——那是游戏主线程，socket 发送缓冲
+        # 满会阻塞主线程拖卡游戏。改为入队（非阻塞、满则丢最旧），由 _senderLoop 异步发。
+        # _connected 前不入队（丢弃）：连上那刻起才 tee，避免回放 stdout 已显示过的早期行
+        # 在后端与 stdout 来源重复（MC Studio 关着的常见场景）。代价是损失连上前的少量启动行。
+        self._sendQ = collections.deque(maxlen=4000)
+        self._sendCv = threading.Condition()
+        self._connected = False
 
     def registerHandler(self, typeID, handler):
         # type: (int, callable) -> None
@@ -42,14 +54,71 @@ class IPCSystem:
         with self.mLock:
             sock = self.sock
             self.sock = None
+        self._connected = False
+        with self._sendCv:
+            self._sendCv.notify_all()  # 唤醒发送线程，让它看到 sock=None 后退出
         if sock:
             sock.close()
+
+    def enqueueLog(self, payload):
+        # type: (bytes) -> None
+        # 把一帧日志 payload 入队（非阻塞、满则 deque 自动丢最旧），唤醒发送线程。
+        # 未连上前直接丢弃（见 _connected 说明）。绝不在此 print / sendall（游戏主线程调用）。
+        if not self._connected:
+            return
+        try:
+            with self._sendCv:
+                self._sendQ.append(payload)
+                self._sendCv.notify()
+        except Exception:
+            pass
+
+    def _senderLoop(self):
+        # 独立发送线程：阻塞式 sendall 只发生在这里，不波及游戏主线程。
+        while 1:
+            payload = None
+            with self._sendCv:
+                while not self._sendQ:
+                    if not self.sock:
+                        return
+                    self._sendCv.wait(0.5)
+                if not self.sock:
+                    return
+                payload = self._sendQ.popleft()
+            if payload is not None:
+                self.sendFrame(LOG_TYPE_ID, payload)
+
+    def sendFrame(self, typeID, payload):
+        # type: (int, bytes) -> None
+        # 反向发一帧 [2B TypeID][4B DataLength][payload]（与后端 protocol.go Decode 对称）。
+        # 仅由 _senderLoop（发送线程）调用——故无需 mLock，sendall 阻塞也只阻塞发送线程。
+        # 未连/出错一律静默吞，绝不 print（会经 STD_OUT_WRAPPER 递归回来）。
+        sock = self.sock
+        if not sock:
+            return
+        try:
+            n = len(payload)
+            frame = bytearray(6)
+            frame[0] = (typeID >> 8) & 0xFF
+            frame[1] = typeID & 0xFF
+            frame[2] = (n >> 24) & 0xFF
+            frame[3] = (n >> 16) & 0xFF
+            frame[4] = (n >> 8) & 0xFF
+            frame[5] = n & 0xFF
+            frame.extend(bytearray(payload))
+            sock.sendall(bytes(frame))
+        except Exception:
+            pass
 
     def _threadListenLoop(self):
         with self.mLock:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock = self.sock
         sock.connect(("localhost", self.port))
+        # 连上后开闸 + 起发送线程，自此 stdout 每行经队列异步发往 XK-Pane。
+        self._connected = True
+        threading.Thread(target=self._senderLoop).start()
+        self.enqueueLog(b"[MCDK-BRIDGE] log tee online")  # 连通标记（诊断用）
         # [2B TypeID][4B DataLength][Data]
         def _recvAll(sock, length):
             # type: (socket.socket, int) -> bytearray
@@ -159,6 +228,19 @@ _IPCSYSTEM.updateHandlers(
         8: RELOAD_ADDON_AND_GAME_WORLD,  # cc-panes mcp__reload_mc kind=addon_and_game
     }
 )
+
+def SEND_LOG_LINE(line):
+    # type: (str) -> None
+    # 把一行 stdout 经 IPC 桥 tee 回 XK-Pane（PacketLogLine=100）：非阻塞入队，发送线程异步发。
+    # 静默吞一切异常、绝不 print（由 STD_OUT_WRAPPER.write 调用，print 会无限递归）。
+    try:
+        if isinstance(line, unicode):
+            data = line.encode("utf-8", "replace")
+        else:
+            data = line
+        _IPCSYSTEM.enqueueLog(data)
+    except Exception:
+        pass
 
 def ON_CLIENT_INIT():
     global GAME_COMP

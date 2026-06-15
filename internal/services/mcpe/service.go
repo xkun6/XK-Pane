@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"xkpane/internal/events"
@@ -30,6 +31,9 @@ const mcLogBufferCap = 2000
 type runtimeRun struct {
 	session *runSession
 	logs    *logBuffer
+	// useBridge：本 run 的日志一旦开始从 MCDK 桥（游戏内 tee）进来就置 true，
+	// 此后 stdout/ConPTY 来源的日志被抑制以防重复（桥日志是 Python 层超集且不受 MC Studio 抢占）。
+	useBridge atomic.Bool
 }
 
 // Service 是 MC PE 总编排服务（注册为 Wails service，前端可调）。
@@ -58,8 +62,60 @@ func (s *Service) SetEmitter(fn func(name string, payload any)) {
 	s.emitMu.Unlock()
 }
 
-// SetBridge 注入 MCDK 调试桥（用于取端口注入 env + 查状态）。
-func (s *Service) SetBridge(b *mcdkbridge.Service) { s.bridge = b }
+// SetBridge 注入 MCDK 调试桥（用于取端口注入 env + 查状态），并注册反向日志回调：
+// 游戏内桥模组 tee 回来的 stdout 经 handleBridgeLog 进面板/环形缓冲。
+func (s *Service) SetBridge(b *mcdkbridge.Service) {
+	s.bridge = b
+	if b != nil {
+		b.SetLogHandler(s.handleBridgeLog)
+	}
+}
+
+// handleBridgeLog 处理一行经 MCDK 桥反向 tee 回来的游戏内 stdout（在桥 readDrain goroutine 上）。
+// 走与 stdout 同一套白名单过滤（parseStdoutLine）后 emit + 入缓冲，并把活跃 run 标记为 useBridge
+// 以抑制其 stdout 来源、防重复。无活跃 run 时丢弃。
+func (s *Service) handleBridgeLog(line string) {
+	s.runsMu.RLock()
+	var rt *runtimeRun
+	var runID string
+	for id, r := range s.runs {
+		if rt == nil {
+			rt, runID = r, id
+		}
+		if r.session != nil && r.session.alive() {
+			rt, runID = r, id
+			break
+		}
+	}
+	s.runsMu.RUnlock()
+	if rt == nil {
+		return
+	}
+	// 收到任何一帧桥日志即认定桥已接管本 run（即便本行被白名单丢弃，如连通标记 / [INFO][Engine]）→
+	// 立刻 latch，让 stdout 来源尽早被抑制。切换点缩到「桥连上的第一帧」，几乎消除切换瞬间的重复
+	// （stdout 本地更快、桥绕一圈慢几 ms，翻闸越早，被双显的窗口越小）。
+	rt.useBridge.Store(true)
+	parsed, ok := parseStdoutLine(line)
+	if !ok {
+		return
+	}
+	pkgID := ""
+	if rt.session != nil {
+		pkgID = rt.session.packageID
+	}
+	if formatted, ok := formatLogLine(parsed.Display, parsed.Timestamp, parsed.Category, parsed.Level); ok {
+		rt.logs.push(formatted)
+	}
+	s.emitEvent(events.MCPeOutput, events.MCOutputPayload{
+		RunID:     runID,
+		PackageID: pkgID,
+		Line:      parsed.Display,
+		Severity:  string(parsed.Severity),
+		Timestamp: strPtr(parsed.Timestamp),
+		Category:  strPtr(parsed.Category),
+		Level:     strPtr(parsed.Level),
+	})
+}
 
 func (s *Service) emitEvent(name string, payload any) {
 	s.emitMu.RLock()
@@ -507,10 +563,14 @@ func (s *Service) Launch(id string) (storage.MCRunSessionInfo, error) {
 	args := []string{"config=" + cppconfigPath}
 	runID := uuid.NewString()
 	buf := newLogBuffer(mcLogBufferCap)
+	rt := &runtimeRun{logs: buf}
 	capturingEmit := func(name string, payload any) {
 		switch name {
 		case events.MCPeOutput:
 			if op, ok := payload.(events.MCOutputPayload); ok && op.RunID == runID {
+				if rt.useBridge.Load() {
+					return // 桥已接管本 run 日志（游戏内 tee）→ 丢弃 stdout 来源，防重复
+				}
 				if line, ok := formatLogLine(op.Line, derefStr(op.Timestamp), derefStr(op.Category), derefStr(op.Level)); ok {
 					buf.push(line)
 				}
@@ -527,9 +587,10 @@ func (s *Service) Launch(id string) (storage.MCRunSessionInfo, error) {
 	if err != nil {
 		return storage.MCRunSessionInfo{}, err
 	}
+	rt.session = session
 
 	s.runsMu.Lock()
-	s.runs[runID] = &runtimeRun{session: session, logs: buf}
+	s.runs[runID] = rt
 	s.runsMu.Unlock()
 
 	s.emitEvent(events.MCPeLaunched, events.MCLaunchedPayload{RunID: runID, PackageID: pkg.ID})
