@@ -46,6 +46,13 @@ type runSession struct {
 	pty       *ptyx.PTY // wait goroutine 完成或 kill 后置 nil
 }
 
+// alive 报告进程是否仍在运行（wait goroutine 在进程退出后把 pty 置 nil）。
+func (s *runSession) alive() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.pty != nil
+}
+
 // kill 通知进程退出；Wait + Close + emit exited 由 wait goroutine 负责。
 func (s *runSession) kill() {
 	s.mu.Lock()

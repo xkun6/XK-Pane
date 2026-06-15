@@ -93,7 +93,7 @@ func (s *Service) ActiveRunPIDs() []int {
 	return pids
 }
 
-// RecentLogs 读最近 N 行日志（已格式化）。runID="" 时取任意活跃 run（MC PE 单实例）。供 get_mc_pe_logs。
+// RecentLogs 读最近 N 行日志（已格式化）。runID="" 时取当前活跃 run（MC PE 单实例）。供 get_mc_pe_logs。
 func (s *Service) RecentLogs(runID string, lines int) []string {
 	s.runsMu.RLock()
 	defer s.runsMu.RUnlock()
@@ -101,15 +101,32 @@ func (s *Service) RecentLogs(runID string, lines int) []string {
 	if runID != "" {
 		rt = s.runs[runID]
 	} else {
+		// 优先选进程仍存活的 run：避免退出宽限窗内选到正在退出的 run、把旧日志当现役返回。
+		// 死 run 会在 mc_pe:exited 时被 removeRun 驱逐，正常不会与活 run 共存（兜底取任一）。
 		for _, r := range s.runs {
-			rt = r
-			break
+			if rt == nil {
+				rt = r
+			}
+			if r.session != nil && r.session.alive() {
+				rt = r
+				break
+			}
 		}
 	}
 	if rt == nil {
 		return nil
 	}
 	return rt.logs.tail(lines)
+}
+
+// removeRun 把一个 run 从注册表移除。进程自然退出（MC PE 自身重启 / 崩溃 / 外部关闭——
+// 只走 mc_pe:exited 不经 Stop）时由 capturingEmit 调用：否则死 run 的冻结日志缓冲长留，
+// get_mc_pe_logs 会把旧日志当现役返回（「卡在旧日志」），ActiveRunPIDs 也会把死进程 PID
+// 误算进活跃、害 capture/click 定位到死窗口。
+func (s *Service) removeRun(runID string) {
+	s.runsMu.Lock()
+	delete(s.runs, runID)
+	s.runsMu.Unlock()
 }
 
 // ─────────────────────── CRUD（Wails 方法） ───────────────────────
@@ -491,11 +508,17 @@ func (s *Service) Launch(id string) (storage.MCRunSessionInfo, error) {
 	runID := uuid.NewString()
 	buf := newLogBuffer(mcLogBufferCap)
 	capturingEmit := func(name string, payload any) {
-		if name == events.MCPeOutput {
+		switch name {
+		case events.MCPeOutput:
 			if op, ok := payload.(events.MCOutputPayload); ok && op.RunID == runID {
 				if line, ok := formatLogLine(op.Line, derefStr(op.Timestamp), derefStr(op.Category), derefStr(op.Level)); ok {
 					buf.push(line)
 				}
+			}
+		case events.MCPeExited:
+			// 进程退出即驱逐本 run，别让冻结的旧日志缓冲被 get_mc_pe_logs 当现役返回（见 removeRun）。
+			if ep, ok := payload.(events.MCExitedPayload); ok && ep.RunID == runID {
+				s.removeRun(runID)
 			}
 		}
 		s.emitEvent(name, payload)
