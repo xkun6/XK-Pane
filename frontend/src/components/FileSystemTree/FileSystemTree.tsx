@@ -7,6 +7,8 @@ import {
   MenuItem,
   Typography,
   useTheme,
+  type SxProps,
+  type Theme,
 } from '@mui/material';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
@@ -23,7 +25,7 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import LinkRoundedIcon from '@mui/icons-material/LinkRounded';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
-import { useState, type MouseEvent, type ReactNode } from 'react';
+import { useRef, useState, type DragEvent, type MouseEvent, type ReactNode } from 'react';
 import { useT } from '@/i18n';
 import { FileService, NativeDialogs, type FileEntry } from '@/services';
 import { InputDialog } from '@/components/InputDialog';
@@ -79,6 +81,10 @@ export const FileSystemTree = ({
 
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [dialog, setDialog] = useState<DialogState | null>(null);
+  // 拖拽移动：dragSrcRef 持当前被拖条目（dragover 阶段读不到 dataTransfer，故用 ref）；
+  // dragOverPath 为正悬停的目录路径（驱动放置高亮）。
+  const dragSrcRef = useRef<FileEntry | null>(null);
+  const [dragOverPath, setDragOverPath] = useState<string | null>(null);
 
   // —— 模糊过滤（仅作用于已加载子树）——
   const q = searchQuery.trim().toLowerCase();
@@ -120,6 +126,57 @@ export const FileSystemTree = ({
     } else {
       onSelectFile(entry);
     }
+  };
+
+  // —— 拖拽移动到文件夹 ——
+  // 仅用于「是否拖入自身/子孙」的判定，归一仅作比较（不改实际移动用的原始路径，遵守 D7）。
+  const normCmp = (p: string): string => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  const isInside = (srcPath: string, targetDir: string): boolean => {
+    const a = normCmp(srcPath);
+    const b = normCmp(targetDir);
+    return b === a || b.startsWith(a + '/');
+  };
+  const performDrop = (targetDir: string): void => {
+    const src = dragSrcRef.current;
+    dragSrcRef.current = null;
+    setDragOverPath(null);
+    if (!src || isInside(src.path, targetDir)) return; // 拖入自身/子孙：忽略
+    void runOp(() => vm.moveEntryInto(src, targetDir));
+  };
+  const onRowDragStart = (e: DragEvent, entry: FileEntry): void => {
+    dragSrcRef.current = entry;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', entry.path); // Firefox 需 setData 才能发起拖拽
+  };
+  const onRowDragEnd = (): void => {
+    dragSrcRef.current = null;
+    setDragOverPath(null);
+  };
+  const onDirDragOver = (e: DragEvent, dir: FileEntry): void => {
+    if (!dragSrcRef.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const blocked = isInside(dragSrcRef.current.path, dir.path);
+    e.dataTransfer.dropEffect = blocked ? 'none' : 'move';
+    setDragOverPath(blocked ? null : dir.path);
+  };
+  const onDirDragLeave = (dir: FileEntry): void => {
+    setDragOverPath((p) => (p === dir.path ? null : p));
+  };
+  const onDirDrop = (e: DragEvent, dir: FileEntry): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    performDrop(dir.path);
+  };
+  // 根容器：拖到空白/非目录处 = 移动到根目录（目录行的 drop 已 stopPropagation 不会到这）。
+  const onRootDragOver = (e: DragEvent): void => {
+    if (!dragSrcRef.current) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+  const onRootDrop = (e: DragEvent): void => {
+    e.preventDefault();
+    performDrop(rootPath);
   };
 
   const openRowMenu = (e: MouseEvent, entry: FileEntry): void => {
@@ -203,13 +260,25 @@ export const FileSystemTree = ({
       const kidsMatch = filtering && entry.isDir && !!kids && kids.some(subtreeMatches);
       const isExpanded = filtering ? kidsMatch : vm.expanded.has(entry.path);
       const isSelected = entry.path === selectedPath;
+      const isDropTarget = entry.isDir && dragOverPath === entry.path;
       return (
         <Box key={entry.path}>
           <Box
-            sx={isSelected ? styles.rowActive : styles.row}
+            sx={
+              [
+                isSelected ? styles.rowActive : styles.row,
+                isDropTarget && styles.rowDropOverlay,
+              ] as SxProps<Theme>
+            }
             style={{ paddingLeft: depth * 14 + 6 }}
             onClick={() => handleRow(entry)}
             onContextMenu={(e) => openRowMenu(e, entry)}
+            draggable
+            onDragStart={(e) => onRowDragStart(e, entry)}
+            onDragEnd={onRowDragEnd}
+            onDragOver={entry.isDir ? (e) => onDirDragOver(e, entry) : undefined}
+            onDragLeave={entry.isDir ? () => onDirDragLeave(entry) : undefined}
+            onDrop={entry.isDir ? (e) => onDirDrop(e, entry) : undefined}
             role="treeitem"
             aria-selected={isSelected}
             aria-expanded={entry.isDir ? isExpanded : undefined}
@@ -350,6 +419,8 @@ export const FileSystemTree = ({
       role="tree"
       aria-label={t('files.tree.ariaLabel')}
       onContextMenu={openBlankMenu}
+      onDragOver={onRootDragOver}
+      onDrop={onRootDrop}
     >
       {vm.rootLoading && <Box sx={styles.hint}>{t('files.tree.loading')}</Box>}
       {vm.rootErrored && <Box sx={styles.errorHint}>{t('files.tree.error')}</Box>}

@@ -34,6 +34,12 @@ export const fileSystemTreeStyles = (theme: Theme): Record<string, SxProps<Theme
       color: fp.text.primary,
       backgroundColor: fp.bg.active,
     },
+    // 拖拽悬停到目录上的放置高亮（叠加在 row/rowActive 之上）。
+    rowDropOverlay: {
+      backgroundColor: fp.bg.active,
+      outline: `1px solid ${fp.accent}`,
+      outlineOffset: '-1px',
+    },
     chevron: {
       display: 'flex',
       flexShrink: 0,
