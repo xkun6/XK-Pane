@@ -135,6 +135,97 @@ func TestMoveAndDuplicate(t *testing.T) {
 	}
 }
 
+func TestCopy(t *testing.T) {
+	s := &Service{}
+	root := t.TempDir()
+	ctx := context.Background()
+
+	src := filepath.Join(root, "f.txt")
+	if err := os.WriteFile(src, []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dst := filepath.Join(root, "dir")
+	if err := os.Mkdir(dst, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 复制文件到子目录：副本存在，源保留。
+	cp, err := s.Copy(ctx, src, dst)
+	if err != nil {
+		t.Fatalf("Copy: %v", err)
+	}
+	if filepath.Dir(cp) != dst {
+		t.Errorf("副本目录不符: %s", cp)
+	}
+	if _, err := os.Stat(src); err != nil {
+		t.Errorf("源应保留: %v", err)
+	}
+	if b, _ := os.ReadFile(cp); string(b) != "data" {
+		t.Errorf("副本内容不符: %q", b)
+	}
+
+	// 同名复制加序号。
+	cp2, err := s.Copy(ctx, src, dst)
+	if err != nil {
+		t.Fatalf("Copy2: %v", err)
+	}
+	if cp2 == cp || !strings.Contains(filepath.Base(cp2), "-2") {
+		t.Errorf("同名复制应加 -2 序号，得 %s", cp2)
+	}
+
+	// 递归复制目录。
+	tree := filepath.Join(root, "tree")
+	if err := os.MkdirAll(filepath.Join(tree, "a"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tree, "a", "leaf.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dcp, err := s.Copy(ctx, tree, dst)
+	if err != nil {
+		t.Fatalf("Copy dir: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dcp, "a", "leaf.txt")); err != nil {
+		t.Errorf("递归副本缺文件: %v", err)
+	}
+
+	// 目录复制进自身/子孙 → 报错。
+	if _, err := s.Copy(ctx, tree, filepath.Join(tree, "a")); err != errInvalidTarget {
+		t.Errorf("复制进子孙期望 errInvalidTarget，得 %v", err)
+	}
+}
+
+func TestMoveGuards(t *testing.T) {
+	s := &Service{}
+	root := t.TempDir()
+	ctx := context.Background()
+
+	// 移回原所在目录 → 无操作（不被 uniqueTarget 改成副本）。
+	f := filepath.Join(root, "f.txt")
+	if err := os.WriteFile(f, []byte("d"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Move(ctx, f, root)
+	if err != nil {
+		t.Fatalf("Move 原目录: %v", err)
+	}
+	if got != f {
+		t.Errorf("移回原目录应原样返回 %s，得 %s", f, got)
+	}
+	if _, err := os.Stat(f); err != nil {
+		t.Errorf("文件不应被改名/移走: %v", err)
+	}
+
+	// 目录移入自身子孙 → 报错。
+	d := filepath.Join(root, "d")
+	if err := os.MkdirAll(filepath.Join(d, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Move(ctx, d, filepath.Join(d, "sub")); err != errInvalidTarget {
+		t.Errorf("目录移入子孙期望 errInvalidTarget，得 %v", err)
+	}
+}
+
 func TestSearchContent(t *testing.T) {
 	s := &Service{}
 	root := t.TempDir()
