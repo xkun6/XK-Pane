@@ -47,6 +47,10 @@ export const fileSystemTreeStyles = (theme: Theme): Record<string, SxProps<Theme
       outline: `1px solid ${fp.accent}`,
       outlineOffset: '-1px',
     },
+    // 已剪切待粘贴的行（压暗，仿资源管理器剪切态视觉反馈）。
+    rowCut: {
+      opacity: 0.5,
+    },
     // 内联新建/重命名输入框（替代模态对话框）。
     inlineInput: {
       flex: 1,

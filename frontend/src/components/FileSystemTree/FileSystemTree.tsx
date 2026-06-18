@@ -275,6 +275,32 @@ export const FileSystemTree = ({
     const effPath = focusedPath ?? rows[0]?.path ?? null;
     const idx = effPath ? rows.findIndex((r) => r.path === effPath) : -1;
     const cur = idx >= 0 ? rows[idx] : null;
+
+    // Ctrl/Cmd + C/X/V：对聚焦项复制 / 剪切 / 粘贴（行内 userSelect:none，不抢文本复制）。
+    // 粘贴目标 = 聚焦目录本身 / 聚焦文件的父目录 / 无聚焦时落树根。
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+      const k = e.key.toLowerCase();
+      if (k === 'c' && cur) {
+        e.preventDefault();
+        vm.copyEntry(cur);
+        return;
+      }
+      if (k === 'x' && cur) {
+        e.preventDefault();
+        vm.cutEntry(cur);
+        return;
+      }
+      if (k === 'v') {
+        if (!vm.clipboard) return; // 无可粘贴：不拦截浏览器默认 Ctrl+V
+        e.preventDefault();
+        const dir = cur ? (cur.isDir ? cur.path : dirOf(cur.path)) : rootPath;
+        // 剪切到自身/子孙：与拖拽一致静默忽略（避免后端 pathContains 兜底弹错误框）。
+        if (vm.clipboard.mode === 'cut' && isInside(vm.clipboard.entry.path, dir)) return;
+        void runOp(() => vm.pasteInto(dir));
+        return;
+      }
+    }
+
     const focusAt = (i: number): void => {
       const r = rows[Math.max(0, Math.min(i, rows.length - 1))];
       if (r) setFocusedPath(r.path);
@@ -523,6 +549,7 @@ export const FileSystemTree = ({
       const isDropTarget = entry.isDir && dragOverPath === entry.path;
       const isRenaming = editing?.kind === 'rename' && editing.entry.path === entry.path;
       const isFocused = entry.path === focusedPath;
+      const isCut = vm.clipboard?.mode === 'cut' && vm.clipboard.entry.path === entry.path;
       const fileDeco = entry.isDir ? undefined : gitDeco.fileDeco(entry.path);
       const dirHasChanges = entry.isDir && gitDeco.dirChanged(entry.path);
       return (
@@ -537,6 +564,7 @@ export const FileSystemTree = ({
                 isSelected ? styles.rowActive : styles.row,
                 isDropTarget && styles.rowDropOverlay,
                 isFocused && styles.rowFocusRing,
+                isCut && styles.rowCut,
               ] as SxProps<Theme>
             }
             style={{ paddingLeft: depth * 14 + 6 }}
