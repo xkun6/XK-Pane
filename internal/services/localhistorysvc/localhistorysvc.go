@@ -218,9 +218,18 @@ func (s *Service) GetVersionsDiff(ctx context.Context, projectPath, filePath, ol
 	return st.GetVersionsDiff(ctx, filePath, oldVersionID, newVersionID)
 }
 
+// maxDiffTextBytes 是 DiffText 单侧字节上限。ComputeDiff 仅按行数(10000)截断，不挡「行数不多但
+// 单行极长」的输入——其 inline 阶段对每对改动行各跑一次 DiffMain（含 O(n²) 清理），超大文本会同步
+// 卡死 binding goroutine。与既有路径（GetVersionDiff 输入受文件读约束）不同，剪贴板文本无界，故在此设防。
+const maxDiffTextBytes = 2 << 20 // 2MB/侧
+
 // DiffText 计算两段任意文本的行级 + 字符级 diff（纯函数，不落库 / 不需 projectPath）。
 // 供文件页「与剪贴板比较」等就地比对复用 ComputeDiff，输出同 DiffView 数据模型。
+// 任一侧超 maxDiffTextBytes 直接返回 Truncated（前端渲染「文件过大，已截断」），避免卡死。
 func (s *Service) DiffText(_ context.Context, oldText, newText string) localhistory.DiffResult {
+	if len(oldText) > maxDiffTextBytes || len(newText) > maxDiffTextBytes {
+		return localhistory.DiffResult{Truncated: true}
+	}
 	return localhistory.ComputeDiff(oldText, newText)
 }
 

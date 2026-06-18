@@ -80,7 +80,7 @@ export const filesPageEnUS: Messages = {
     },
     diff: {
       view: 'View changes (vs HEAD)',
-      compareClipboard: 'Compare with clipboard',
+      compareClipboard: 'Compare with clipboard (red = current, green = clipboard)',
       clipboardEmpty: 'Clipboard is empty or not text.',
       loading: 'Computing changes…',
       notRepo: 'This file is not in a Git repository.',

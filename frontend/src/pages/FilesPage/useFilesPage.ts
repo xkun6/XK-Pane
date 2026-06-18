@@ -385,6 +385,10 @@ export const useFilesPage = (): UseFilesPageResult => {
         setOpenFilePath(m.newPath);
         setCurrentFile(m.newPath);
         setCurrentDir(dirOf(m.newPath));
+        // 移动即退出 diff 视图：旧路径的 Git diff 已对不上新路径，按钮也不应残留激活。
+        setDiffMode(false);
+        setDiffSource(null);
+        setGitDiff(null);
         return;
       }
       if ((m.kind === 'trash' || m.kind === 'rename') && m.oldPath === open) {

@@ -80,7 +80,7 @@ export const filesPageZhCN: Messages = {
     },
     diff: {
       view: '查看改动（相对 HEAD）',
-      compareClipboard: '与剪贴板比较',
+      compareClipboard: '与剪贴板比较（红＝当前内容，绿＝剪贴板）',
       clipboardEmpty: '剪贴板为空或非文本内容。',
       loading: '正在计算改动…',
       notRepo: '该文件不在 Git 仓库中。',
