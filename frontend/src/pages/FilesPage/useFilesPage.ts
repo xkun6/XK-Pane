@@ -27,6 +27,8 @@ export interface UseFilesPageResult {
   fileError: string | null;
   isBinary: boolean;
   isMarkdown: boolean;
+  // 图片就地预览：非空时右栏渲染 <img>（data URI），不进文本编辑器。
+  imageDataUri: string | null;
   viewMode: FilesViewMode;
   // 选中（驱动树高亮）
   selectedFile: string | null;
@@ -52,6 +54,7 @@ export interface UseFilesPageResult {
 const dirOf = (p: string): string => p.replace(/[\\/][^\\/]*$/, '');
 const baseOf = (p: string): string => p.replace(/\\/g, '/').split('/').pop() ?? p;
 const isMd = (p: string): boolean => /\.(md|markdown)$/i.test(p);
+const isImg = (p: string): boolean => /\.(png|jpe?g|gif|webp|bmp|svg|ico|avif)$/i.test(p);
 
 export const useFilesPage = (): UseFilesPageResult => {
   const t = useT();
@@ -66,6 +69,7 @@ export const useFilesPage = (): UseFilesPageResult => {
   const [loadingFile, setLoadingFile] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isBinary, setIsBinary] = useState(false);
+  const [imageDataUri, setImageDataUri] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<FilesViewMode>('source');
   const [treeQuery, setTreeQuery] = useState('');
 
@@ -93,6 +97,7 @@ export const useFilesPage = (): UseFilesPageResult => {
     setEditValueState('');
     setOriginalValue('');
     setIsBinary(false);
+    setImageDataUri(null);
     setFileError(null);
     setTreeQuery('');
   }, [rootDir]);
@@ -119,16 +124,28 @@ export const useFilesPage = (): UseFilesPageResult => {
       setFileError(null);
       setCurrentFile(entry.path);
       setCurrentDir(dirOf(entry.path));
+      setImageDataUri(null);
       try {
-        const fc = await FileService.readFile(entry.path);
-        setOpenFilePath(entry.path);
-        setIsBinary(fc.isBinary);
-        setEditValueState(fc.content);
-        setOriginalValue(fc.content);
+        if (isImg(entry.path)) {
+          // 图片：读 data URI 就地预览，不进文本编辑器。
+          const uri = await FileService.readFileBase64(entry.path);
+          setOpenFilePath(entry.path);
+          setIsBinary(true);
+          setImageDataUri(uri);
+          setEditValueState('');
+          setOriginalValue('');
+        } else {
+          const fc = await FileService.readFile(entry.path);
+          setOpenFilePath(entry.path);
+          setIsBinary(fc.isBinary);
+          setEditValueState(fc.content);
+          setOriginalValue(fc.content);
+        }
         setViewMode('source'); // 打开默认看源码（markdown 可在工具栏切预览）
       } catch (err) {
         setOpenFilePath(entry.path);
         setIsBinary(false);
+        setImageDataUri(null);
         setEditValueState('');
         setOriginalValue('');
         setFileError(err instanceof Error ? err.message : String(err));
@@ -182,6 +199,7 @@ export const useFilesPage = (): UseFilesPageResult => {
         setEditValueState('');
         setOriginalValue('');
         setIsBinary(false);
+        setImageDataUri(null);
         setFileError(null);
         setCurrentFile(null);
       }
@@ -202,6 +220,7 @@ export const useFilesPage = (): UseFilesPageResult => {
     fileError,
     isBinary,
     isMarkdown: openFilePath ? isMd(openFilePath) : false,
+    imageDataUri,
     viewMode,
     selectedFile: currentFile,
     treeQuery,

@@ -33,9 +33,11 @@ export const FileEditorPane = ({ vm }: { vm: UseFilesPageResult }) => {
           {filesPathBase(vm.openFilePath)}
         </Typography>
         {vm.dirty && <Box sx={styles.dirtyDot} aria-label={t('files.editor.dirty')} />}
-        <Box component="span" sx={styles.langChip}>
-          {lang}
-        </Box>
+        {!vm.imageDataUri && (
+          <Box component="span" sx={styles.langChip}>
+            {lang}
+          </Box>
+        )}
         <Box sx={styles.spacer} />
         {vm.isMarkdown && !vm.isBinary && (
           <ToggleButtonGroup
@@ -68,6 +70,15 @@ export const FileEditorPane = ({ vm }: { vm: UseFilesPageResult }) => {
       <Box sx={styles.editorBody}>
         {vm.fileError ? (
           <Box sx={styles.errorHint}>{t('files.editor.loadError')}</Box>
+        ) : vm.imageDataUri ? (
+          <Box sx={styles.imageWrap}>
+            <Box
+              component="img"
+              src={vm.imageDataUri}
+              alt={filesPathBase(vm.openFilePath)}
+              sx={styles.image}
+            />
+          </Box>
         ) : vm.isBinary ? (
           <Box sx={styles.binaryHint}>{t('files.editor.binary')}</Box>
         ) : vm.isMarkdown && vm.viewMode === 'preview' ? (

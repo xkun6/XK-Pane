@@ -232,6 +232,24 @@ export const filesPageStyles = (theme: Theme): Record<string, SxProps<Theme>> =>
       color: fp.text.muted,
       fontSize: 13,
     },
+    // —— 图片就地预览 ——
+    imageWrap: {
+      flex: 1,
+      minHeight: 0,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'auto',
+      p: 2,
+      backgroundColor: fp.bg.content,
+    },
+    image: {
+      maxWidth: '100%',
+      maxHeight: '100%',
+      objectFit: 'contain',
+      borderRadius: 8,
+      boxShadow: '0 2px 12px rgba(0,0,0,0.18)',
+    },
     errorHint: {
       flex: 1,
       display: 'flex',
