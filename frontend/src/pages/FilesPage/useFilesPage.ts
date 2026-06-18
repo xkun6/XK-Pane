@@ -313,11 +313,19 @@ export const useFilesPage = (): UseFilesPageResult => {
     }
   }, [diffMode]);
 
-  // 文件树写操作回调：当前打开的文件被删除 / 改名 → 清空编辑器与选中态（改名后路径已变）。
+  // 文件树写操作回调：
+  //   - 删除 / 改名当前打开的文件 → 清空编辑器与选中态（路径已不可用）。
+  //   - 移动当前打开的文件 → 内容不变，仅跟随到新路径（保留未保存的编辑）。
   const onTreeMutate = useCallback(
     (m: FileTreeMutation) => {
       const open = openFileRef.current;
       if (!open) return;
+      if (m.kind === 'move' && m.oldPath === open && m.newPath) {
+        setOpenFilePath(m.newPath);
+        setCurrentFile(m.newPath);
+        setCurrentDir(dirOf(m.newPath));
+        return;
+      }
       if ((m.kind === 'trash' || m.kind === 'rename') && m.oldPath === open) {
         setOpenFilePath(null);
         setEditValueState('');
@@ -330,7 +338,7 @@ export const useFilesPage = (): UseFilesPageResult => {
         setCurrentFile(null);
       }
     },
-    [setCurrentFile],
+    [setCurrentFile, setCurrentDir],
   );
 
   return {

@@ -36,8 +36,9 @@ var (
 	errEmptyName   = errors.New("empty name")
 	errNameTooLong = errors.New("name too long")
 	errBadName     = errors.New("invalid name")
-	errExists      = errors.New("target already exists")
-	errTooLarge    = errors.New("file too large to preview")
+	errExists        = errors.New("target already exists")
+	errTooLarge      = errors.New("file too large to preview")
+	errInvalidTarget = errors.New("cannot move or copy a directory into itself")
 )
 
 // maxReadBytes 是 ReadFile 的单文件上限（编辑器场景，超大文件不适合内联编辑）。
@@ -283,6 +284,14 @@ func (s *Service) Move(ctx context.Context, src, dstDir string) (string, error) 
 	if !dfi.IsDir() {
 		return "", errNotDir
 	}
+	// 移到自身所在目录：无操作（否则会被 uniqueTarget 改成 -2 副本，拖回原处不该改名）。
+	if filepath.Clean(filepath.Dir(src)) == filepath.Clean(dstDir) {
+		return src, nil
+	}
+	// 目录不能移入自身或其子孙。
+	if sfi.IsDir() && pathContains(src, dstDir) {
+		return "", errInvalidTarget
+	}
 	target := uniqueTarget(filepath.Join(dstDir, filepath.Base(src)))
 	if err := os.Rename(src, target); err != nil {
 		var le *os.LinkError
@@ -295,6 +304,34 @@ func (s *Service) Move(ctx context.Context, src, dstDir string) (string, error) 
 			}
 			return target, nil
 		}
+		return "", err
+	}
+	return target, nil
+}
+
+// Copy 把 src 复制到目标目录 dstDir 下（保持文件名，同名自动加 -2/-3 序号防覆盖）。
+// 用于「复制 / 粘贴」：与 Move 不同源保留；粘贴到源所在目录即等价于「复制副本」。返回副本路径。
+func (s *Service) Copy(ctx context.Context, src, dstDir string) (string, error) {
+	if src == "" || dstDir == "" {
+		return "", errEmptyPath
+	}
+	sfi, err := os.Stat(src)
+	if err != nil {
+		return "", err
+	}
+	dfi, err := os.Stat(dstDir)
+	if err != nil {
+		return "", err
+	}
+	if !dfi.IsDir() {
+		return "", errNotDir
+	}
+	// 目录不能复制进自身或其子孙（否则 WalkDir 会无限递归）。
+	if sfi.IsDir() && pathContains(src, dstDir) {
+		return "", errInvalidTarget
+	}
+	target := uniqueTarget(filepath.Join(dstDir, filepath.Base(src)))
+	if err := copyPath(src, target, sfi.IsDir()); err != nil {
 		return "", err
 	}
 	return target, nil
@@ -359,6 +396,18 @@ func validName(name string) error {
 	default:
 		return nil
 	}
+}
+
+// pathContains 判断 dstDir 是否为 src 本身或其子孙（用于阻止把目录移入/复制进自身导致递归）。
+func pathContains(src, dstDir string) bool {
+	rel, err := filepath.Rel(src, dstDir)
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // uniqueTarget 若 p 已存在，则在扩展名前追加 -2/-3… 直到不冲突。

@@ -16,6 +16,9 @@ import CreateNewFolderRoundedIcon from '@mui/icons-material/CreateNewFolderRound
 import NoteAddRoundedIcon from '@mui/icons-material/NoteAddRounded';
 import DriveFileRenameOutlineRoundedIcon from '@mui/icons-material/DriveFileRenameOutlineRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
+import ContentCutRoundedIcon from '@mui/icons-material/ContentCutRounded';
+import ContentPasteRoundedIcon from '@mui/icons-material/ContentPasteRounded';
+import FileCopyRoundedIcon from '@mui/icons-material/FileCopyRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import LinkRoundedIcon from '@mui/icons-material/LinkRounded';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
@@ -146,6 +149,18 @@ export const FileSystemTree = ({
     closeMenu();
     void runOp(() => vm.duplicateEntry(entry));
   };
+  const onCopy = (entry: FileEntry): void => {
+    closeMenu();
+    vm.copyEntry(entry);
+  };
+  const onCut = (entry: FileEntry): void => {
+    closeMenu();
+    vm.cutEntry(entry);
+  };
+  const onPaste = (dir: string): void => {
+    closeMenu();
+    void runOp(() => vm.pasteInto(dir));
+  };
   const onTrash = async (entry: FileEntry): Promise<void> => {
     closeMenu();
     if (entry.isDir) {
@@ -259,7 +274,7 @@ export const FileSystemTree = ({
       </MenuItem>
     );
 
-    // 空白处：仅新建 + 刷新（作用于根目录）。
+    // 空白处：新建 + 粘贴（剪贴板非空时，粘贴到根目录）+ 刷新。
     if (menu.entry === null) {
       return [
         item('nd', <CreateNewFolderRoundedIcon fontSize="small" />, t('files.menu.newDir'), () => {
@@ -270,6 +285,13 @@ export const FileSystemTree = ({
           closeMenu();
           setDialog({ mode: 'newFile', dir: rootPath });
         }),
+        ...(vm.clipboard
+          ? [
+              item('pst', <ContentPasteRoundedIcon fontSize="small" />, t('files.menu.paste'), () =>
+                onPaste(rootPath),
+              ),
+            ]
+          : []),
         <Divider key="d" sx={styles.menuDivider} />,
         item('rf', <RefreshRoundedIcon fontSize="small" />, t('files.menu.refresh'), () => {
           closeMenu();
@@ -290,6 +312,13 @@ export const FileSystemTree = ({
               closeMenu();
               setDialog({ mode: 'newFile', dir: en.path });
             }),
+            ...(vm.clipboard
+              ? [
+                  item('pst', <ContentPasteRoundedIcon fontSize="small" />, t('files.menu.paste'), () =>
+                    onPaste(en.path),
+                  ),
+                ]
+              : []),
             <Divider key="d0" sx={styles.menuDivider} />,
           ]
         : []),
@@ -297,7 +326,9 @@ export const FileSystemTree = ({
         closeMenu();
         setDialog({ mode: 'rename', dir: '', entry: en });
       }),
-      item('dup', <ContentCopyRoundedIcon fontSize="small" />, t('files.menu.duplicate'), () =>
+      item('cpy', <ContentCopyRoundedIcon fontSize="small" />, t('files.menu.copy'), () => onCopy(en)),
+      item('cut', <ContentCutRoundedIcon fontSize="small" />, t('files.menu.cut'), () => onCut(en)),
+      item('dup', <FileCopyRoundedIcon fontSize="small" />, t('files.menu.duplicate'), () =>
         onDuplicate(en),
       ),
       item(

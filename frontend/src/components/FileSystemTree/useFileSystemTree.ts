@@ -6,10 +6,16 @@ type ChildrenMap = Record<string, FileEntry[]>;
 
 // 一次文件树写操作的结果通知（供上层同步编辑器选中态等）。
 export interface FileTreeMutation {
-  kind: 'create' | 'rename' | 'duplicate' | 'trash';
+  kind: 'create' | 'rename' | 'duplicate' | 'trash' | 'move';
   parentDir: string;
   oldPath?: string;
   newPath?: string;
+}
+
+// 剪贴板：复制 / 剪切的待粘贴条目。空表示无可粘贴内容。
+export interface FileClipboard {
+  entry: FileEntry;
+  mode: 'copy' | 'cut';
 }
 
 export interface UseFileSystemTreeResult {
@@ -28,6 +34,13 @@ export interface UseFileSystemTreeResult {
   renameEntry: (entry: FileEntry, newName: string) => Promise<void>;
   duplicateEntry: (entry: FileEntry) => Promise<void>;
   trashEntry: (entry: FileEntry) => Promise<void>;
+  // 移动 entry 到 dstDir（拖拽 / 剪切粘贴共用）：刷新源与目标目录，移动的若是打开文件经 mutation 跟随。
+  moveEntryInto: (entry: FileEntry, dstDir: string) => Promise<void>;
+  // 剪贴板：复制 / 剪切登记 + 粘贴到目标目录。
+  clipboard: FileClipboard | null;
+  copyEntry: (entry: FileEntry) => void;
+  cutEntry: (entry: FileEntry) => void;
+  pasteInto: (dir: string) => Promise<void>;
 }
 
 const dirOf = (p: string): string => p.replace(/[\\/][^\\/]*$/, '');
@@ -41,6 +54,7 @@ export const useFileSystemTree = (
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState<Set<string>>(() => new Set());
   const [errored, setErrored] = useState<Set<string>>(() => new Set());
+  const [clipboard, setClipboard] = useState<FileClipboard | null>(null);
 
   // silent=true：刷新已加载目录时不动 loading/errored 态（避免「加载中」闪屏），
   // 失败保留旧数据。供自动刷新(file:changed)与写操作后的刷新使用。
@@ -180,6 +194,42 @@ export const useFileSystemTree = (
     [loadChildren, onAfterMutate],
   );
 
+  // 移动 entry 到 dstDir：刷新目标目录与原父目录；后端对「移回原目录」为无操作（target===src）。
+  const moveEntryInto = useCallback(
+    async (entry: FileEntry, dstDir: string) => {
+      const srcParent = dirOf(entry.path);
+      const target = await FileService.move(entry.path, dstDir);
+      setExpanded((s) => new Set(s).add(dstDir));
+      await loadChildren(dstDir, true);
+      if (srcParent !== dstDir) await loadChildren(srcParent, true);
+      if (target !== entry.path) {
+        onAfterMutate?.({ kind: 'move', parentDir: dstDir, oldPath: entry.path, newPath: target });
+      }
+    },
+    [loadChildren, onAfterMutate],
+  );
+
+  const copyEntry = useCallback((entry: FileEntry) => setClipboard({ entry, mode: 'copy' }), []);
+  const cutEntry = useCallback((entry: FileEntry) => setClipboard({ entry, mode: 'cut' }), []);
+
+  // 粘贴到 dir：复制走 FileService.copy（源保留），剪切走 moveEntryInto 并清空剪贴板。
+  const pasteInto = useCallback(
+    async (dir: string) => {
+      const clip = clipboard;
+      if (!clip) return;
+      if (clip.mode === 'cut') {
+        await moveEntryInto(clip.entry, dir);
+        setClipboard(null);
+      } else {
+        await FileService.copy(clip.entry.path, dir);
+        setExpanded((s) => new Set(s).add(dir));
+        await loadChildren(dir, true);
+        onAfterMutate?.({ kind: 'create', parentDir: dir });
+      }
+    },
+    [clipboard, moveEntryInto, loadChildren, onAfterMutate],
+  );
+
   return {
     rootEntries: childrenByPath[rootPath] ?? [],
     childrenByPath,
@@ -195,5 +245,10 @@ export const useFileSystemTree = (
     renameEntry,
     duplicateEntry,
     trashEntry,
+    moveEntryInto,
+    clipboard,
+    copyEntry,
+    cutEntry,
+    pasteInto,
   };
 };

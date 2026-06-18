@@ -143,10 +143,16 @@ export const FileService = {
     return Binding.Rename(path, newName);
   },
 
-  // 移动到目标目录（同名自动加序号）；返回最终路径。
+  // 移动到目标目录（同名自动加序号；移回原目录为无操作）；返回最终路径。
   async move(src: string, dstDir: string): Promise<string> {
     assertDesktop();
     return Binding.Move(src, dstDir);
+  },
+
+  // 复制到目标目录（源保留，同名自动加序号）；返回副本路径。
+  async copy(src: string, dstDir: string): Promise<string> {
+    assertDesktop();
+    return Binding.Copy(src, dstDir);
   },
 
   // 在同目录复制副本（名字加序号）；返回副本路径。
