@@ -74,5 +74,40 @@ export const fileSystemTreeStyles = (theme: Theme): Record<string, SxProps<Theme
       fontSize: 12,
       color: fp.status.danger,
     },
+    // —— 右键上下文菜单 ——
+    menuPaper: {
+      borderRadius: 8,
+      backgroundColor: fp.bg.elevated,
+      border: `1px solid ${fp.divider}`,
+      minWidth: 184,
+      boxShadow: theme.shadows[4],
+    },
+    menuItem: {
+      fontSize: 13,
+      py: 0.5,
+      color: fp.text.primary,
+      '&:hover': { backgroundColor: fp.bg.hover },
+    },
+    menuItemDanger: {
+      fontSize: 13,
+      py: 0.5,
+      color: fp.status.danger,
+      '&:hover': { backgroundColor: fp.bg.hover },
+    },
+    menuIcon: {
+      minWidth: 30,
+      color: fp.text.secondary,
+    },
+    menuIconDanger: {
+      minWidth: 30,
+      color: fp.status.danger,
+    },
+    menuLabel: {
+      fontSize: 13,
+    },
+    menuDivider: {
+      borderColor: fp.divider,
+      my: 0.5,
+    },
   };
 };

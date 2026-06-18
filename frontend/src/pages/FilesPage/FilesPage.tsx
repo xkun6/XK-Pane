@@ -96,6 +96,7 @@ export const FilesPage = () => {
             selectedPath={vm.selectedFile}
             onSelectFile={(e) => void vm.selectFile(e)}
             onActivateDir={vm.activateDir}
+            onAfterMutate={vm.onTreeMutate}
           />
         ) : (
           <Box sx={styles.empty}>

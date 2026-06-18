@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useT } from '@/i18n';
 import { useCurrentDir } from '@/currentdir';
 import { useRightPanel, type RightPanelId } from '@/rightpanel';
+import type { FileTreeMutation } from '@/components/FileSystemTree';
 import {
   FileService,
   NativeDialogs,
@@ -41,6 +42,8 @@ export interface UseFilesPageResult {
   // 右侧 Git / 本地历史抽屉开关（入口在本页头部工具栏，绑定当前目录）
   activePanel: RightPanelId | null;
   togglePanel: (id: RightPanelId) => void;
+  // 文件树写操作通知：当前打开的文件被删除 / 改名时同步清空编辑器。
+  onTreeMutate: (m: FileTreeMutation) => void;
 }
 
 const dirOf = (p: string): string => p.replace(/[\\/][^\\/]*$/, '');
@@ -61,6 +64,12 @@ export const useFilesPage = (): UseFilesPageResult => {
   const [fileError, setFileError] = useState<string | null>(null);
   const [isBinary, setIsBinary] = useState(false);
   const [viewMode, setViewMode] = useState<FilesViewMode>('source');
+
+  // 用 ref 追踪当前打开文件，使 onTreeMutate 回调保持稳定（不随每次 open 重建）。
+  const openFileRef = useRef<string | null>(null);
+  useEffect(() => {
+    openFileRef.current = openFilePath;
+  }, [openFilePath]);
 
   const refreshRecent = useCallback(() => {
     if (!isDesktop) return;
@@ -158,6 +167,23 @@ export const useFilesPage = (): UseFilesPageResult => {
     });
   }, [currentFile, rootDir]);
 
+  // 文件树写操作回调：当前打开的文件被删除 / 改名 → 清空编辑器与选中态（改名后路径已变）。
+  const onTreeMutate = useCallback(
+    (m: FileTreeMutation) => {
+      const open = openFileRef.current;
+      if (!open) return;
+      if ((m.kind === 'trash' || m.kind === 'rename') && m.oldPath === open) {
+        setOpenFilePath(null);
+        setEditValueState('');
+        setOriginalValue('');
+        setIsBinary(false);
+        setFileError(null);
+        setCurrentFile(null);
+      }
+    },
+    [setCurrentFile],
+  );
+
   return {
     isDesktop,
     rootDir,
@@ -183,6 +209,7 @@ export const useFilesPage = (): UseFilesPageResult => {
     reveal,
     activePanel,
     togglePanel,
+    onTreeMutate,
   };
 };
 
