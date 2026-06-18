@@ -25,6 +25,7 @@ import FileCopyRoundedIcon from '@mui/icons-material/FileCopyRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import LinkRoundedIcon from '@mui/icons-material/LinkRounded';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
+import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import {
   useEffect,
@@ -49,6 +50,8 @@ export interface FileSystemTreeProps {
   onActivateDir?: (path: string) => void;
   // 文件树写操作（新建/改名/删除等）完成后的通知（上层据此同步编辑器选中态）。
   onAfterMutate?: (m: FileTreeMutation) => void;
+  // 在集成终端打开某目录（目录用自身、文件用所在目录）。缺省则不显该菜单项。
+  onOpenInTerminal?: (dir: string) => void;
   // 模糊过滤词（仅过滤「已加载」节点；命中字符高亮，命中目录自动展开）。空 = 不过滤。
   searchQuery?: string;
 }
@@ -152,6 +155,7 @@ export const FileSystemTree = ({
   onSelectFile,
   onActivateDir,
   onAfterMutate,
+  onOpenInTerminal,
   searchQuery = '',
 }: FileSystemTreeProps) => {
   const theme = useTheme();
@@ -357,6 +361,10 @@ export const FileSystemTree = ({
     void FileService.revealInOS(entry.path).catch(() => {
       /* reveal 失败静默 */
     });
+  };
+  const onOpenTerminal = (entry: FileEntry): void => {
+    closeMenu();
+    onOpenInTerminal?.(entry.isDir ? entry.path : dirOf(entry.path));
   };
 
   // 触发内联新建：先确保目标目录展开，再进入编辑态（幽灵行渲染在该目录子项顶部）。
@@ -576,6 +584,13 @@ export const FileSystemTree = ({
         onCopyRelPath(en),
       ),
       item('rv', <OpenInNewRoundedIcon fontSize="small" />, t('files.menu.reveal'), () => onReveal(en)),
+      ...(onOpenInTerminal
+        ? [
+            item('term', <TerminalRoundedIcon fontSize="small" />, t('files.menu.openInTerminal'), () =>
+              onOpenTerminal(en),
+            ),
+          ]
+        : []),
     ];
   };
 

@@ -161,6 +161,7 @@ export const FilesPage = () => {
                 onSelectFile={(e) => void vm.selectFile(e)}
                 onActivateDir={vm.activateDir}
                 onAfterMutate={vm.onTreeMutate}
+                onOpenInTerminal={vm.openInTerminal}
                 searchQuery={vm.treeQuery}
               />
             )}

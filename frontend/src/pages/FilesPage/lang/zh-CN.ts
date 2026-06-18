@@ -59,6 +59,7 @@ export const filesPageZhCN: Messages = {
       copyPath: '复制路径',
       copyRelPath: '复制相对路径',
       reveal: '在系统文件管理器中显示',
+      openInTerminal: '在终端打开',
       refresh: '刷新',
       trashTitle: '移到回收站',
       trashDirConfirm: '确定把文件夹「{{name}}」移到回收站吗？可从回收站恢复。',

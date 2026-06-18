@@ -59,6 +59,7 @@ export const filesPageEnUS: Messages = {
       copyPath: 'Copy path',
       copyRelPath: 'Copy relative path',
       reveal: 'Reveal in file manager',
+      openInTerminal: 'Open in terminal',
       refresh: 'Refresh',
       trashTitle: 'Move to Trash',
       trashDirConfirm: 'Move the folder “{{name}}” to the Trash? It can be restored from the Trash.',

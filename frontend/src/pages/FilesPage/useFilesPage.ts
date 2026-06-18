@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useT } from '@/i18n';
 import { useCurrentDir } from '@/currentdir';
 import { useRightPanel, type RightPanelId } from '@/rightpanel';
+import { useTerminal } from '@/terminal';
+import { useRouter } from '@/router';
 import type { FileTreeMutation } from '@/components/FileSystemTree';
 import {
   FileService,
@@ -60,6 +62,8 @@ export interface UseFilesPageResult {
   openRecent: (path: string) => void;
   selectFile: (entry: FileEntry) => Promise<void>;
   activateDir: (path: string) => void;
+  // 在集成终端打开某目录：新建本地裸 shell 会话（cwd=该目录）并跳到终端页。
+  openInTerminal: (path: string) => void;
   setEditValue: (v: string) => void;
   save: () => Promise<void>;
   setViewMode: (m: FilesViewMode) => void;
@@ -80,6 +84,8 @@ export const useFilesPage = (): UseFilesPageResult => {
   const t = useT();
   const { rootDir, currentFile, setCurrentDir, setCurrentFile, openInBrowser } = useCurrentDir();
   const { active: activePanel, toggle: togglePanel } = useRightPanel();
+  const { launchProject } = useTerminal();
+  const { navigate } = useRouter();
 
   const [recent, setRecent] = useState<RecentDirectory[]>([]);
   const [openFilePath, setOpenFilePath] = useState<string | null>(null);
@@ -215,6 +221,21 @@ export const useFilesPage = (): UseFilesPageResult => {
       setCurrentDir(path);
     },
     [setCurrentDir],
+  );
+
+  // 在集成终端打开目录：复用 launchProject（cliTool='none' 裸 shell，projectPath=cwd）后跳终端页。
+  // 非注册的临时目录也能开——后端建会话只用 cwd，不强制项目注册（参照 SshPage connect）。
+  const openInTerminal = useCallback(
+    (path: string) => {
+      launchProject({
+        projectId: `dir:${path}`,
+        projectName: baseOf(path),
+        projectPath: path,
+        cliTool: 'none',
+      });
+      navigate('terminal');
+    },
+    [launchProject, navigate],
   );
 
   const setEditValue = useCallback((v: string) => setEditValueState(v), []);
@@ -376,6 +397,7 @@ export const useFilesPage = (): UseFilesPageResult => {
     openRecent,
     selectFile,
     activateDir,
+    openInTerminal,
     setEditValue,
     save,
     setViewMode,
