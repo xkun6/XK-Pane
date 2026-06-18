@@ -9,6 +9,8 @@ export const fileSystemTreeStyles = (theme: Theme): Record<string, SxProps<Theme
       overflowY: 'auto',
       overflowX: 'hidden',
       py: 0.5,
+      // 容器自身不显焦点框：键盘游标由聚焦行的 rowFocusRing 指示。
+      '&:focus, &:focus-visible': { outline: 'none' },
     },
     row: {
       display: 'flex',
@@ -37,6 +39,11 @@ export const fileSystemTreeStyles = (theme: Theme): Record<string, SxProps<Theme
     // 拖拽悬停到目录上的放置高亮（叠加在 row/rowActive 之上）。
     rowDropOverlay: {
       backgroundColor: fp.bg.active,
+      outline: `1px solid ${fp.accent}`,
+      outlineOffset: '-1px',
+    },
+    // 键盘导航焦点游标（叠加在 row 上；≠ 选中态的填充背景）。
+    rowFocusRing: {
       outline: `1px solid ${fp.accent}`,
       outlineOffset: '-1px',
     },

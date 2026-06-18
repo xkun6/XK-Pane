@@ -32,6 +32,7 @@ import {
   useRef,
   useState,
   type DragEvent,
+  type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
 } from 'react';
@@ -169,6 +170,13 @@ export const FileSystemTree = ({
   // dragOverPath 为正悬停的目录路径（驱动放置高亮）。
   const dragSrcRef = useRef<FileEntry | null>(null);
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
+  // 键盘导航游标（≠ selectedPath：焦点是「键盘当前行」，选中是「已打开文件」）。
+  const [focusedPath, setFocusedPath] = useState<string | null>(null);
+  const rowRefs = useRef(new Map<string, HTMLDivElement>());
+  // 焦点变化时把该行滚进视野（不抢 DOM 焦点——键由树容器统一接收）。
+  useEffect(() => {
+    if (focusedPath) rowRefs.current.get(focusedPath)?.scrollIntoView({ block: 'nearest' });
+  }, [focusedPath]);
 
   const dirOf = (p: string): string => p.replace(/[\\/][^\\/]*$/, '');
   // 确保目录已展开（新建时让幽灵输入行可见）；已展开则不动。
@@ -230,6 +238,88 @@ export const FileSystemTree = ({
       onActivateDir?.(entry.path);
     } else {
       onSelectFile(entry);
+    }
+  };
+
+  // —— 键盘导航（单选）——
+  // 按渲染顺序拍平「可见行」（与 renderNodes 同一过滤/展开判定），驱动 ↑↓ 移动游标。
+  const flattenVisible = (entries: FileEntry[], out: FileEntry[] = []): FileEntry[] => {
+    for (const e of filtering ? entries.filter(subtreeMatches) : entries) {
+      out.push(e);
+      const kids = vm.childrenByPath[e.path];
+      const kidsMatch = filtering && e.isDir && !!kids && kids.some(subtreeMatches);
+      const isExpanded = filtering ? kidsMatch : vm.expanded.has(e.path);
+      if (e.isDir && isExpanded && kids) flattenVisible(kids, out);
+    }
+    return out;
+  };
+  const onTreeKeyDown = (e: KeyboardEvent): void => {
+    if (editing) return; // 编辑态：按键交给输入框
+    const rows = flattenVisible(vm.rootEntries);
+    if (rows.length === 0) return;
+    const effPath = focusedPath ?? rows[0]?.path ?? null;
+    const idx = effPath ? rows.findIndex((r) => r.path === effPath) : -1;
+    const cur = idx >= 0 ? rows[idx] : null;
+    const focusAt = (i: number): void => {
+      const r = rows[Math.max(0, Math.min(i, rows.length - 1))];
+      if (r) setFocusedPath(r.path);
+    };
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        focusAt(idx < 0 ? 0 : idx + 1);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        focusAt(idx < 0 ? 0 : idx - 1);
+        break;
+      case 'Home':
+        e.preventDefault();
+        focusAt(0);
+        break;
+      case 'End':
+        e.preventDefault();
+        focusAt(rows.length - 1);
+        break;
+      case 'ArrowRight':
+        if (!cur) {
+          focusAt(0);
+          break;
+        }
+        e.preventDefault();
+        if (cur.isDir) {
+          if (!vm.expanded.has(cur.path)) vm.toggle(cur.path);
+          else {
+            const kids = vm.childrenByPath[cur.path];
+            if (kids && kids.length > 0 && kids[0]) setFocusedPath(kids[0].path);
+          }
+        }
+        break;
+      case 'ArrowLeft':
+        if (!cur) break;
+        e.preventDefault();
+        if (cur.isDir && vm.expanded.has(cur.path)) {
+          vm.toggle(cur.path);
+        } else {
+          const parent = dirOf(cur.path);
+          if (rows.some((r) => r.path === parent)) setFocusedPath(parent);
+        }
+        break;
+      case 'Enter':
+        if (!cur) break;
+        e.preventDefault();
+        handleRow(cur);
+        break;
+      case 'F2':
+        if (!cur) break;
+        e.preventDefault();
+        startRename(cur);
+        break;
+      case 'Delete':
+        if (!cur) break;
+        e.preventDefault();
+        void onTrash(cur);
+        break;
     }
   };
 
@@ -415,17 +505,24 @@ export const FileSystemTree = ({
       const isSelected = entry.path === selectedPath;
       const isDropTarget = entry.isDir && dragOverPath === entry.path;
       const isRenaming = editing?.kind === 'rename' && editing.entry.path === entry.path;
+      const isFocused = entry.path === focusedPath;
       return (
         <Box key={entry.path}>
           <Box
+            ref={(el: HTMLDivElement | null) => {
+              if (el) rowRefs.current.set(entry.path, el);
+              else rowRefs.current.delete(entry.path);
+            }}
             sx={
               [
                 isSelected ? styles.rowActive : styles.row,
                 isDropTarget && styles.rowDropOverlay,
+                isFocused && styles.rowFocusRing,
               ] as SxProps<Theme>
             }
             style={{ paddingLeft: depth * 14 + 6 }}
             onClick={() => {
+              setFocusedPath(entry.path);
               if (!isRenaming) handleRow(entry);
             }}
             onContextMenu={(e) => openRowMenu(e, entry)}
@@ -598,7 +695,16 @@ export const FileSystemTree = ({
     <Box
       sx={styles.root}
       role="tree"
+      tabIndex={0}
       aria-label={t('files.tree.ariaLabel')}
+      onKeyDown={onTreeKeyDown}
+      onFocus={(e) => {
+        // 直接聚焦容器（Tab 进入）且尚无游标时，落到第一可见行。
+        if (e.target === e.currentTarget && !focusedPath) {
+          const first = flattenVisible(vm.rootEntries)[0];
+          if (first) setFocusedPath(first.path);
+        }
+      }}
       onContextMenu={openBlankMenu}
       onDragOver={onRootDragOver}
       onDrop={onRootDrop}
