@@ -109,4 +109,46 @@ export const FileService = {
     const rows = await Binding.ListRecent(limit);
     return (rows ?? []).map(toRecent);
   },
+
+  // 读文件为 data URI（图片等非文本就地预览；超 16MB 后端报错）。
+  async readFileBase64(path: string): Promise<string> {
+    assertDesktop();
+    return Binding.ReadFileBase64(path);
+  },
+
+  // 在 dir 下新建空文件；返回新文件绝对路径（已存在则报错）。
+  async createFile(dir: string, name: string): Promise<string> {
+    assertDesktop();
+    return Binding.CreateFile(dir, name);
+  },
+
+  // 在 dir 下新建子目录；返回新目录绝对路径（已存在则报错）。
+  async createDir(dir: string, name: string): Promise<string> {
+    assertDesktop();
+    return Binding.CreateDir(dir, name);
+  },
+
+  // 重命名为同目录下的 newName；返回新路径。
+  async rename(path: string, newName: string): Promise<string> {
+    assertDesktop();
+    return Binding.Rename(path, newName);
+  },
+
+  // 移动到目标目录（同名自动加序号）；返回最终路径。
+  async move(src: string, dstDir: string): Promise<string> {
+    assertDesktop();
+    return Binding.Move(src, dstDir);
+  },
+
+  // 在同目录复制副本（名字加序号）；返回副本路径。
+  async duplicate(path: string): Promise<string> {
+    assertDesktop();
+    return Binding.Duplicate(path);
+  },
+
+  // 移到系统回收站（可恢复）。
+  async trash(path: string): Promise<void> {
+    assertDesktop();
+    await Binding.Trash(path);
+  },
 } as const;

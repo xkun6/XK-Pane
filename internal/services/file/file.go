@@ -11,10 +11,15 @@ package file
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
+	"io"
+	"io/fs"
+	"mime"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,13 +30,21 @@ import (
 )
 
 var (
-	errEmptyPath = errors.New("empty path")
-	errNotDir    = errors.New("path is not a directory")
-	errIsDir     = errors.New("path is a directory")
+	errEmptyPath   = errors.New("empty path")
+	errNotDir      = errors.New("path is not a directory")
+	errIsDir       = errors.New("path is a directory")
+	errEmptyName   = errors.New("empty name")
+	errNameTooLong = errors.New("name too long")
+	errBadName     = errors.New("invalid name")
+	errExists      = errors.New("target already exists")
+	errTooLarge    = errors.New("file too large to preview")
 )
 
 // maxReadBytes 是 ReadFile 的单文件上限（编辑器场景，超大文件不适合内联编辑）。
 const maxReadBytes = 8 << 20 // 8MB
+
+// maxPreviewBytes 是 ReadFileBase64 的上限（图片等就地预览，超大不内联，让前端降级为系统打开）。
+const maxPreviewBytes = 16 << 20 // 16MB
 
 // FileEntry 是目录下一个条目的展示用 DTO（os.DirEntry 是接口，无法经 Wails 序列化）。
 type FileEntry struct {
@@ -178,6 +191,254 @@ func (s *Service) ListRecent(ctx context.Context, limit int) ([]storage.RecentDi
 		return nil, err
 	}
 	return out, nil
+}
+
+// ReadFileBase64 读取文件并返回 data URI（用于图片等非文本就地预览）。
+// 超过 maxPreviewBytes 报错（让前端降级为「用系统打开」）。入参不规范化（D7）。
+func (s *Service) ReadFileBase64(ctx context.Context, path string) (string, error) {
+	if path == "" {
+		return "", errEmptyPath
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	if fi.IsDir() {
+		return "", errIsDir
+	}
+	if fi.Size() > maxPreviewBytes {
+		return "", errTooLarge
+	}
+	data, err := filex.ReadLimit(path, maxPreviewBytes)
+	if err != nil {
+		return "", err
+	}
+	return "data:" + mimeForPath(path) + ";base64," + base64.StdEncoding.EncodeToString(data), nil
+}
+
+// CreateFile 在 dir 下新建空文件 name（O_EXCL：已存在则报错，绝不覆盖）。返回新文件绝对路径。
+func (s *Service) CreateFile(ctx context.Context, dir, name string) (string, error) {
+	target, err := newChildPath(dir, name)
+	if err != nil {
+		return "", err
+	}
+	f, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		return "", err
+	}
+	_ = f.Close()
+	return target, nil
+}
+
+// CreateDir 在 dir 下新建子目录 name（已存在则报错）。返回新目录绝对路径。
+func (s *Service) CreateDir(ctx context.Context, dir, name string) (string, error) {
+	target, err := newChildPath(dir, name)
+	if err != nil {
+		return "", err
+	}
+	if err := os.Mkdir(target, 0o755); err != nil {
+		return "", err
+	}
+	return target, nil
+}
+
+// Rename 把 path 重命名为同目录下的 newName。返回新路径。
+// 仅当不是「纯大小写改名」时才查同名冲突（大小写不敏感卷上 Foo→foo 合法）。
+func (s *Service) Rename(ctx context.Context, path, newName string) (string, error) {
+	if path == "" {
+		return "", errEmptyPath
+	}
+	if err := validName(newName); err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(path); err != nil {
+		return "", err
+	}
+	target := filepath.Join(filepath.Dir(path), newName)
+	if !strings.EqualFold(filepath.Base(path), newName) {
+		if _, err := os.Stat(target); err == nil {
+			return "", errExists
+		}
+	}
+	if err := os.Rename(path, target); err != nil {
+		return "", err
+	}
+	return target, nil
+}
+
+// Move 把 src 移动到目标目录 dstDir 下（保持文件名，同名自动加 -2/-3 序号防覆盖）。
+// 同卷走 os.Rename（快），跨卷（*os.LinkError，EXDEV）回退 copy + 删除。返回最终目标路径。
+func (s *Service) Move(ctx context.Context, src, dstDir string) (string, error) {
+	if src == "" || dstDir == "" {
+		return "", errEmptyPath
+	}
+	sfi, err := os.Stat(src)
+	if err != nil {
+		return "", err
+	}
+	dfi, err := os.Stat(dstDir)
+	if err != nil {
+		return "", err
+	}
+	if !dfi.IsDir() {
+		return "", errNotDir
+	}
+	target := uniqueTarget(filepath.Join(dstDir, filepath.Base(src)))
+	if err := os.Rename(src, target); err != nil {
+		var le *os.LinkError
+		if errors.As(err, &le) { // 跨卷：copy + 删除
+			if cerr := copyPath(src, target, sfi.IsDir()); cerr != nil {
+				return "", cerr
+			}
+			if rerr := os.RemoveAll(src); rerr != nil {
+				return "", rerr
+			}
+			return target, nil
+		}
+		return "", err
+	}
+	return target, nil
+}
+
+// Duplicate 在同目录复制 path 为副本（名字加 -2/-3 序号防覆盖）。返回副本路径。
+func (s *Service) Duplicate(ctx context.Context, path string) (string, error) {
+	if path == "" {
+		return "", errEmptyPath
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	target := uniqueTarget(path)
+	if err := copyPath(path, target, fi.IsDir()); err != nil {
+		return "", err
+	}
+	return target, nil
+}
+
+// Trash 把 path 移到系统回收站（可恢复，非永久删除）。平台实现见 trash_<os>.go。
+func (s *Service) Trash(ctx context.Context, path string) error {
+	if path == "" {
+		return errEmptyPath
+	}
+	if _, err := os.Stat(path); err != nil {
+		return err
+	}
+	return trashPath(ctx, path)
+}
+
+// newChildPath 校验 name 并拼出 dir 下的目标路径（dir 必须是已存在目录）。
+func newChildPath(dir, name string) (string, error) {
+	if dir == "" {
+		return "", errEmptyPath
+	}
+	if err := validName(name); err != nil {
+		return "", err
+	}
+	fi, err := os.Stat(dir)
+	if err != nil {
+		return "", err
+	}
+	if !fi.IsDir() {
+		return "", errNotDir
+	}
+	return filepath.Join(dir, name), nil
+}
+
+// validName 校验文件/目录名：非空、≤255、不是 . 或 ..、不含路径分隔符或 NUL（照搬 fanbox validName）。
+func validName(name string) error {
+	switch {
+	case name == "":
+		return errEmptyName
+	case len(name) > 255:
+		return errNameTooLong
+	case name == "." || name == "..":
+		return errBadName
+	case strings.ContainsAny(name, `/\`+"\x00"):
+		return errBadName
+	default:
+		return nil
+	}
+}
+
+// uniqueTarget 若 p 已存在，则在扩展名前追加 -2/-3… 直到不冲突。
+func uniqueTarget(p string) string {
+	if _, err := os.Stat(p); errors.Is(err, os.ErrNotExist) {
+		return p
+	}
+	ext := filepath.Ext(p)
+	base := strings.TrimSuffix(p, ext)
+	for i := 2; ; i++ {
+		cand := base + "-" + strconv.Itoa(i) + ext
+		if _, err := os.Stat(cand); errors.Is(err, os.ErrNotExist) {
+			return cand
+		}
+	}
+}
+
+// copyPath 递归复制文件或目录 src 到 dst。
+func copyPath(src, dst string, isDir bool) error {
+	if !isDir {
+		return copyFile(src, dst)
+	}
+	return filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, rerr := filepath.Rel(src, p)
+		if rerr != nil {
+			return rerr
+		}
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		return copyFile(p, target)
+	})
+}
+
+// copyFile 复制单个文件（覆盖目标）。
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
+}
+
+// mimeForPath 按扩展名推断 MIME（图片优先用内置表，避免依赖系统注册表的不确定性）。
+func mimeForPath(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".bmp":
+		return "image/bmp"
+	case ".svg":
+		return "image/svg+xml"
+	case ".ico":
+		return "image/x-icon"
+	case ".avif":
+		return "image/avif"
+	}
+	if m := mime.TypeByExtension(filepath.Ext(path)); m != "" {
+		return m
+	}
+	return "application/octet-stream"
 }
 
 // isBinary 用「首 8KB 是否含 NUL 字节」粗判二进制，避免把二进制塞进文本编辑器。
