@@ -135,6 +135,57 @@ func TestMoveAndDuplicate(t *testing.T) {
 	}
 }
 
+func TestSearchContent(t *testing.T) {
+	s := &Service{}
+	root := t.TempDir()
+	ctx := context.Background()
+
+	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("hello world\nfoo BAR baz"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sub := filepath.Join(root, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "b.go"), []byte("package x\n// bar here"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// 忽略目录里的命中不应出现
+	nm := filepath.Join(root, "node_modules")
+	if err := os.Mkdir(nm, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nm, "c.txt"), []byte("bar in node_modules"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// 二进制文件应被跳过
+	if err := os.WriteFile(filepath.Join(root, "bin.dat"), []byte{0x00, 'b', 'a', 'r'}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 不区分大小写匹配 "bar"：命中 a.txt(BAR) 与 sub/b.go(bar)，不含 node_modules 与二进制。
+	res, err := s.SearchContent(ctx, root, "bar")
+	if err != nil {
+		t.Fatalf("SearchContent: %v", err)
+	}
+	if len(res) != 2 {
+		t.Fatalf("命中数 = %d，期望 2：%+v", len(res), res)
+	}
+	for _, m := range res {
+		if strings.Contains(m.Path, "node_modules") || strings.Contains(m.Path, "bin.dat") {
+			t.Errorf("不应命中忽略/二进制：%s", m.Path)
+		}
+		if m.Line < 1 {
+			t.Errorf("行号应 ≥1：%+v", m)
+		}
+	}
+
+	// 空 query 返回空
+	if r, _ := s.SearchContent(ctx, root, "   "); len(r) != 0 {
+		t.Errorf("空 query 期望 0 命中，得 %d", len(r))
+	}
+}
+
 func TestReadFileBase64(t *testing.T) {
 	s := &Service{}
 	root := t.TempDir()

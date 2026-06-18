@@ -7,6 +7,7 @@ import {
   FileService,
   GitService,
   NativeDialogs,
+  type ContentMatch,
   type DiffResult,
   type FileEntry,
   type RecentDirectory,
@@ -14,6 +15,7 @@ import {
 import { isDesktop } from '@/services/transport';
 
 export type FilesViewMode = 'source' | 'preview';
+export type SearchMode = 'name' | 'content';
 
 export interface UseFilesPageResult {
   isDesktop: boolean;
@@ -40,9 +42,17 @@ export interface UseFilesPageResult {
   toggleDiff: () => Promise<void>;
   // 选中（驱动树高亮）
   selectedFile: string | null;
-  // 文件树内模糊过滤词（仅过滤已加载节点）
+  // 文件树内模糊过滤词（名称模式过滤已加载节点；内容模式作为全文搜索词）
   treeQuery: string;
   setTreeQuery: (q: string) => void;
+  // 搜索模式：'name' 过滤已加载文件名 / 'content' 全文内容搜索（回车触发）
+  searchMode: SearchMode;
+  setSearchMode: (m: SearchMode) => void;
+  contentResults: ContentMatch[];
+  contentLoading: boolean;
+  contentSearched: boolean;
+  runContentSearch: () => Promise<void>;
+  openContentResult: (m: ContentMatch) => void;
   // 动作
   openFolder: () => Promise<void>;
   openRecent: (path: string) => void;
@@ -80,6 +90,10 @@ export const useFilesPage = (): UseFilesPageResult => {
   const [imageDataUri, setImageDataUri] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<FilesViewMode>('source');
   const [treeQuery, setTreeQuery] = useState('');
+  const [searchMode, setSearchModeState] = useState<SearchMode>('name');
+  const [contentResults, setContentResults] = useState<ContentMatch[]>([]);
+  const [contentLoading, setContentLoading] = useState(false);
+  const [contentSearched, setContentSearched] = useState(false);
   const [diffMode, setDiffMode] = useState(false);
   const [gitDiff, setGitDiff] = useState<DiffResult | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
@@ -115,6 +129,9 @@ export const useFilesPage = (): UseFilesPageResult => {
     setDiffError(null);
     setFileError(null);
     setTreeQuery('');
+    setSearchModeState('name');
+    setContentResults([]);
+    setContentSearched(false);
   }, [rootDir]);
 
   const openFolder = useCallback(async () => {
@@ -207,6 +224,49 @@ export const useFilesPage = (): UseFilesPageResult => {
     });
   }, [currentFile, rootDir]);
 
+  // 切换搜索模式（名称过滤 / 全文内容）：切换即清空上一次内容搜索结果。
+  const setSearchMode = useCallback((m: SearchMode) => {
+    setSearchModeState(m);
+    setContentResults([]);
+    setContentSearched(false);
+  }, []);
+
+  // 全文内容搜索（内容模式回车触发）：用当前搜索词在 rootDir 下 grep。
+  const runContentSearch = useCallback(async () => {
+    if (!rootDir) return;
+    const q = treeQuery.trim();
+    if (!q) {
+      setContentResults([]);
+      setContentSearched(false);
+      return;
+    }
+    setContentLoading(true);
+    setContentSearched(true);
+    try {
+      setContentResults(await FileService.searchContent(rootDir, q));
+    } catch {
+      setContentResults([]);
+    } finally {
+      setContentLoading(false);
+    }
+  }, [rootDir, treeQuery]);
+
+  // 打开一条内容命中（复用 selectFile，构造最小 FileEntry）。
+  const openContentResult = useCallback(
+    (m: ContentMatch) => {
+      void selectFile({ name: baseOf(m.path), path: m.path, isDir: false, size: 0, modTime: 0 });
+    },
+    [selectFile],
+  );
+
+  // 内容模式下清空搜索词即清空结果。
+  useEffect(() => {
+    if (searchMode === 'content' && treeQuery.trim() === '') {
+      setContentResults([]);
+      setContentSearched(false);
+    }
+  }, [searchMode, treeQuery]);
+
   // 切换「查看改动」：开启时拉取该文件 HEAD vs 工作树 diff（读盘内容，未保存的编辑不计入）。
   const toggleDiff = useCallback(async () => {
     const open = openFileRef.current;
@@ -273,6 +333,13 @@ export const useFilesPage = (): UseFilesPageResult => {
     selectedFile: currentFile,
     treeQuery,
     setTreeQuery,
+    searchMode,
+    setSearchMode,
+    contentResults,
+    contentLoading,
+    contentSearched,
+    runContentSearch,
+    openContentResult,
     openFolder,
     openRecent,
     selectFile,

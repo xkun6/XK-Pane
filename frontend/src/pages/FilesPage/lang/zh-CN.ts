@@ -28,6 +28,16 @@ export const filesPageZhCN: Messages = {
       clear: '清除过滤',
       noMatch: '无匹配项（仅搜索已展开/已加载的范围）',
     },
+    content: {
+      placeholder: '全文搜索内容，回车执行…',
+      modeToggle: '切换搜索模式',
+      toContent: '切换为全文内容搜索',
+      toName: '切换为文件名过滤',
+      hint: '输入关键词后按回车，在当前目录下全文搜索文件内容。',
+      searching: '正在搜索…',
+      noMatch: '未找到匹配内容。',
+      count: '{{n}} 处命中',
+    },
     editor: {
       selectFile: '从左侧选择一个文件以查看 / 编辑',
       save: '保存',

@@ -7,11 +7,14 @@ import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
+import TextFieldsRoundedIcon from '@mui/icons-material/TextFieldsRounded';
+import ManageSearchRoundedIcon from '@mui/icons-material/ManageSearchRounded';
 import { useT } from '@/i18n';
 import { FileSystemTree } from '@/components/FileSystemTree';
 import { filesPageStyles } from './FilesPage.styles';
 import { useFilesPage, filesPathBase } from './useFilesPage';
 import { FileEditorPane } from './FileEditorPane';
+import { ContentSearchResults } from './ContentSearchResults';
 
 // 「文件」页：左文件树 + 右 Monaco 编辑器（markdown 可切预览）。桌面专属；Web 端降级提示。
 // 选目录/文件会写入共享「当前目录/文件」上下文，供右侧 Git / 历史抽屉绑定。
@@ -95,13 +98,42 @@ export const FilesPage = () => {
         {vm.rootDir ? (
           <>
             <Box sx={styles.searchRow}>
+              <Tooltip
+                title={vm.searchMode === 'content' ? t('files.content.toName') : t('files.content.toContent')}
+                arrow
+              >
+                <IconButton
+                  size="small"
+                  sx={styles.searchModeBtn}
+                  onClick={() => vm.setSearchMode(vm.searchMode === 'content' ? 'name' : 'content')}
+                  aria-label={t('files.content.modeToggle')}
+                >
+                  {vm.searchMode === 'content' ? (
+                    <ManageSearchRoundedIcon fontSize="small" />
+                  ) : (
+                    <TextFieldsRoundedIcon fontSize="small" />
+                  )}
+                </IconButton>
+              </Tooltip>
               <SearchRoundedIcon fontSize="small" sx={styles.searchIcon} />
               <InputBase
                 value={vm.treeQuery}
                 onChange={(e) => vm.setTreeQuery(e.target.value)}
-                placeholder={t('files.search.placeholder')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && vm.searchMode === 'content') void vm.runContentSearch();
+                }}
+                placeholder={
+                  vm.searchMode === 'content'
+                    ? t('files.content.placeholder')
+                    : t('files.search.placeholder')
+                }
                 sx={styles.searchInput}
-                inputProps={{ 'aria-label': t('files.search.placeholder') }}
+                inputProps={{
+                  'aria-label':
+                    vm.searchMode === 'content'
+                      ? t('files.content.placeholder')
+                      : t('files.search.placeholder'),
+                }}
               />
               {vm.treeQuery && (
                 <IconButton
@@ -114,14 +146,24 @@ export const FilesPage = () => {
                 </IconButton>
               )}
             </Box>
-            <FileSystemTree
-              rootPath={vm.rootDir}
-              selectedPath={vm.selectedFile}
-              onSelectFile={(e) => void vm.selectFile(e)}
-              onActivateDir={vm.activateDir}
-              onAfterMutate={vm.onTreeMutate}
-              searchQuery={vm.treeQuery}
-            />
+            {vm.searchMode === 'content' ? (
+              <ContentSearchResults
+                results={vm.contentResults}
+                loading={vm.contentLoading}
+                searched={vm.contentSearched}
+                selectedPath={vm.selectedFile}
+                onOpen={vm.openContentResult}
+              />
+            ) : (
+              <FileSystemTree
+                rootPath={vm.rootDir}
+                selectedPath={vm.selectedFile}
+                onSelectFile={(e) => void vm.selectFile(e)}
+                onActivateDir={vm.activateDir}
+                onAfterMutate={vm.onTreeMutate}
+                searchQuery={vm.treeQuery}
+              />
+            )}
           </>
         ) : (
           <Box sx={styles.empty}>

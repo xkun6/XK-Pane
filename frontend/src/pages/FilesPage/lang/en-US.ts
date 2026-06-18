@@ -28,6 +28,16 @@ export const filesPageEnUS: Messages = {
       clear: 'Clear filter',
       noMatch: 'No matches (searches only expanded / loaded items)',
     },
+    content: {
+      placeholder: 'Search file contents, press Enter…',
+      modeToggle: 'Toggle search mode',
+      toContent: 'Switch to full-text content search',
+      toName: 'Switch to filename filter',
+      hint: 'Type a keyword and press Enter to search file contents under this folder.',
+      searching: 'Searching…',
+      noMatch: 'No matching content found.',
+      count: '{{n}} matches',
+    },
     editor: {
       selectFile: 'Select a file on the left to view / edit',
       save: 'Save',

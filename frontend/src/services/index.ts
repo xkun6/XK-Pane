@@ -3,6 +3,7 @@ export {
   type FileEntry,
   type FileContent,
   type RecentDirectory,
+  type ContentMatch,
 } from './file/FileService';
 export { FilewatchService } from './filewatch/FilewatchService';
 export {

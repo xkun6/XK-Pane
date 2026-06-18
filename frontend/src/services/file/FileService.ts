@@ -7,6 +7,7 @@ import { Service as Binding } from '@bindings/xkpane/internal/services/file';
 import type {
   FileEntry as RawEntry,
   FileContent as RawContent,
+  ContentMatch as RawMatch,
 } from '@bindings/xkpane/internal/services/file/models';
 import type { RecentDirectory as RawRecent } from '@bindings/xkpane/internal/storage/models';
 import { isDesktop } from '@/services/transport';
@@ -34,6 +35,14 @@ export interface RecentDirectory {
   path: string;
   openCount: number;
   lastOpenedAt: string; // ISO 时间串
+}
+
+// 一条全文内容命中（文件 + 行号 + 行预览）。
+export interface ContentMatch {
+  path: string; // 绝对路径
+  rel: string; // 相对 root 的展示路径
+  line: number; // 1-based 行号
+  text: string; // 命中行内容
 }
 
 // Web 端误用守卫：抛错而非静默失败。
@@ -150,5 +159,17 @@ export const FileService = {
   async trash(path: string): Promise<void> {
     assertDesktop();
     await Binding.Trash(path);
+  },
+
+  // 全文内容搜索（grep 式，不区分大小写；三重预算限制，跳过忽略目录与二进制）。
+  async searchContent(root: string, query: string): Promise<ContentMatch[]> {
+    assertDesktop();
+    const rows = await Binding.SearchContent(root, query);
+    return (rows ?? []).map((m: RawMatch) => ({
+      path: m.path ?? '',
+      rel: m.rel ?? '',
+      line: m.line ?? 0,
+      text: m.text ?? '',
+    }));
   },
 } as const;
