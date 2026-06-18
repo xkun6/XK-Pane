@@ -6,8 +6,10 @@ import { useTerminal } from '@/terminal';
 import { useRouter } from '@/router';
 import type { FileTreeMutation } from '@/components/FileSystemTree';
 import {
+  ClipboardService,
   FileService,
   GitService,
+  LocalHistoryService,
   NativeDialogs,
   type ContentMatch,
   type DiffResult,
@@ -36,12 +38,15 @@ export interface UseFilesPageResult {
   // 图片就地预览：非空时右栏渲染 <img>（data URI），不进文本编辑器。
   imageDataUri: string | null;
   viewMode: FilesViewMode;
-  // Git diff 就地（HEAD vs 工作树）：diffMode=true 时右栏渲染 DiffView。
+  // 就地 diff（diffMode=true 时右栏渲染 DiffView）；diffSource 标明来源以区分工具栏按钮激活态。
   diffMode: boolean;
+  diffSource: 'git' | 'clipboard' | null;
   gitDiff: DiffResult | null;
   diffLoading: boolean;
-  diffError: 'notRepo' | 'generic' | null;
+  diffError: 'notRepo' | 'generic' | 'clipboardEmpty' | null;
   toggleDiff: () => Promise<void>;
+  // 与系统剪贴板文本比较（当前编辑器内容 vs 剪贴板）；空剪贴板友好提示。
+  compareWithClipboard: () => Promise<void>;
   // 选中（驱动树高亮）
   selectedFile: string | null;
   // 编辑器跳转目标（内容搜索点击结果时定位行 + 高亮命中）；普通打开为 null。
@@ -110,15 +115,18 @@ export const useFilesPage = (): UseFilesPageResult => {
   } | null>(null);
   const revealNonceRef = useRef(0);
   const [diffMode, setDiffMode] = useState(false);
+  const [diffSource, setDiffSource] = useState<'git' | 'clipboard' | null>(null);
   const [gitDiff, setGitDiff] = useState<DiffResult | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
-  const [diffError, setDiffError] = useState<'notRepo' | 'generic' | null>(null);
+  const [diffError, setDiffError] = useState<'notRepo' | 'generic' | 'clipboardEmpty' | null>(null);
 
-  // 用 ref 追踪当前打开文件，使 onTreeMutate 回调保持稳定（不随每次 open 重建）。
+  // 用 ref 追踪当前打开文件 / 编辑器内容，使依赖它们的回调保持稳定（不随每次输入重建）。
   const openFileRef = useRef<string | null>(null);
   useEffect(() => {
     openFileRef.current = openFilePath;
   }, [openFilePath]);
+  const editValueRef = useRef(editValue);
+  editValueRef.current = editValue;
 
   const refreshRecent = useCallback(() => {
     if (!isDesktop) return;
@@ -140,6 +148,7 @@ export const useFilesPage = (): UseFilesPageResult => {
     setIsBinary(false);
     setImageDataUri(null);
     setDiffMode(false);
+    setDiffSource(null);
     setGitDiff(null);
     setDiffError(null);
     setFileError(null);
@@ -173,6 +182,7 @@ export const useFilesPage = (): UseFilesPageResult => {
       setCurrentDir(dirOf(entry.path));
       setImageDataUri(null);
       setDiffMode(false);
+      setDiffSource(null);
       setGitDiff(null);
       setDiffError(null);
       setEditorReveal(null); // 默认清除跳转；命中结果在加载成功后再设
@@ -312,14 +322,17 @@ export const useFilesPage = (): UseFilesPageResult => {
   }, [searchMode, treeQuery]);
 
   // 切换「查看改动」：开启时拉取该文件 HEAD vs 工作树 diff（读盘内容，未保存的编辑不计入）。
+  // 已在 Git diff 态再点 = 关闭；在剪贴板 diff 态点 = 切到 Git diff。
   const toggleDiff = useCallback(async () => {
     const open = openFileRef.current;
     if (!open) return;
-    if (diffMode) {
+    if (diffMode && diffSource === 'git') {
       setDiffMode(false);
+      setDiffSource(null);
       return;
     }
     setDiffMode(true);
+    setDiffSource('git');
     setDiffLoading(true);
     setDiffError(null);
     setGitDiff(null);
@@ -332,7 +345,34 @@ export const useFilesPage = (): UseFilesPageResult => {
     } finally {
       setDiffLoading(false);
     }
-  }, [diffMode]);
+  }, [diffMode, diffSource]);
+
+  // 与系统剪贴板文本比较：编辑器当前内容(old) vs 剪贴板文本(new)；空剪贴板友好提示。
+  // 剪贴板读取走 Wails runtime（ClipboardService），diff 走后端 ComputeDiff（DiffText）。
+  const compareWithClipboard = useCallback(async () => {
+    if (diffMode && diffSource === 'clipboard') {
+      setDiffMode(false);
+      setDiffSource(null);
+      return;
+    }
+    setDiffMode(true);
+    setDiffSource('clipboard');
+    setDiffLoading(true);
+    setDiffError(null);
+    setGitDiff(null);
+    try {
+      const clip = await ClipboardService.readText();
+      if (!clip.trim()) {
+        setDiffError('clipboardEmpty');
+        return;
+      }
+      setGitDiff(await LocalHistoryService.diffText(editValueRef.current, clip));
+    } catch {
+      setDiffError('generic');
+    } finally {
+      setDiffLoading(false);
+    }
+  }, [diffMode, diffSource]);
 
   // 文件树写操作回调：
   //   - 删除 / 改名当前打开的文件 → 清空编辑器与选中态（路径已不可用）。
@@ -354,6 +394,7 @@ export const useFilesPage = (): UseFilesPageResult => {
         setIsBinary(false);
         setImageDataUri(null);
         setDiffMode(false);
+        setDiffSource(null);
         setGitDiff(null);
         setFileError(null);
         setCurrentFile(null);
@@ -378,10 +419,12 @@ export const useFilesPage = (): UseFilesPageResult => {
     imageDataUri,
     viewMode,
     diffMode,
+    diffSource,
     gitDiff,
     diffLoading,
     diffError,
     toggleDiff,
+    compareWithClipboard,
     selectedFile: currentFile,
     editorReveal,
     treeQuery,

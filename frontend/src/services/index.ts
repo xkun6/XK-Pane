@@ -85,6 +85,7 @@ export {
   SCREENSHOT_DEFAULT_RETENTION_DAYS,
   type ScreenshotSavedPayload,
 } from './screenshot/ScreenshotService';
+export { ClipboardService } from './clipboard/ClipboardService';
 export {
   AppSettingsService,
   type AppSettingsSnapshot,

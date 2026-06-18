@@ -218,6 +218,12 @@ func (s *Service) GetVersionsDiff(ctx context.Context, projectPath, filePath, ol
 	return st.GetVersionsDiff(ctx, filePath, oldVersionID, newVersionID)
 }
 
+// DiffText 计算两段任意文本的行级 + 字符级 diff（纯函数，不落库 / 不需 projectPath）。
+// 供文件页「与剪贴板比较」等就地比对复用 ComputeDiff，输出同 DiffView 数据模型。
+func (s *Service) DiffText(_ context.Context, oldText, newText string) localhistory.DiffResult {
+	return localhistory.ComputeDiff(oldText, newText)
+}
+
 // ListLabels 列出所有标签（timestamp 倒序），含各自文件快照。
 func (s *Service) ListLabels(ctx context.Context, projectPath string) ([]localhistory.HistoryLabel, error) {
 	st, err := s.store(projectPath)

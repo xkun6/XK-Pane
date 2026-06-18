@@ -9,6 +9,7 @@ import {
 } from '@mui/material';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import DifferenceRoundedIcon from '@mui/icons-material/DifferenceRounded';
+import ContentPasteSearchRoundedIcon from '@mui/icons-material/ContentPasteSearchRounded';
 import { useT } from '@/i18n';
 import { CodeEditor, languageForPath } from '@/components/CodeEditor';
 import { MarkdownView } from '@/components/MarkdownView';
@@ -69,12 +70,27 @@ export const FileEditorPane = ({ vm }: { vm: UseFilesPageResult }) => {
             <span>
               <IconButton
                 size="small"
-                sx={vm.diffMode ? styles.toolBtnActive : styles.toolBtn}
+                sx={vm.diffSource === 'git' ? styles.toolBtnActive : styles.toolBtn}
                 onClick={() => void vm.toggleDiff()}
                 aria-label={t('files.diff.view')}
-                aria-pressed={vm.diffMode}
+                aria-pressed={vm.diffSource === 'git'}
               >
                 <DifferenceRoundedIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
+        {canDiff && (
+          <Tooltip title={t('files.diff.compareClipboard')} arrow>
+            <span>
+              <IconButton
+                size="small"
+                sx={vm.diffSource === 'clipboard' ? styles.toolBtnActive : styles.toolBtn}
+                onClick={() => void vm.compareWithClipboard()}
+                aria-label={t('files.diff.compareClipboard')}
+                aria-pressed={vm.diffSource === 'clipboard'}
+              >
+                <ContentPasteSearchRoundedIcon fontSize="small" />
               </IconButton>
             </span>
           </Tooltip>
@@ -101,6 +117,8 @@ export const FileEditorPane = ({ vm }: { vm: UseFilesPageResult }) => {
             <Box sx={styles.binaryHint}>{t('files.diff.loading')}</Box>
           ) : vm.diffError === 'notRepo' ? (
             <Box sx={styles.binaryHint}>{t('files.diff.notRepo')}</Box>
+          ) : vm.diffError === 'clipboardEmpty' ? (
+            <Box sx={styles.binaryHint}>{t('files.diff.clipboardEmpty')}</Box>
           ) : vm.diffError ? (
             <Box sx={styles.errorHint}>{t('files.diff.error')}</Box>
           ) : vm.gitDiff ? (

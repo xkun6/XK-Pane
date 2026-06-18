@@ -276,6 +276,11 @@ export const LocalHistoryService = {
     return toDiff(await Binding.GetVersionsDiff(projectPath, filePath, oldVersionId, newVersionId));
   },
 
+  // 任意两段文本的 diff（纯函数，复用 ComputeDiff）；供「与剪贴板比较」等就地比对。
+  async diffText(oldText: string, newText: string): Promise<DiffResult> {
+    return toDiff(await Binding.DiffText(oldText, newText));
+  },
+
   // 某文件有版本记录的所有分支（分支筛选下拉数据源）；无历史 → 空数组。
   async getFileBranches(projectPath: string, filePath: string): Promise<string[]> {
     const rows = await Binding.GetFileBranches(projectPath, filePath);
