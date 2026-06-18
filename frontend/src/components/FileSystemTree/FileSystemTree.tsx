@@ -12,7 +12,6 @@ import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import FolderRoundedIcon from '@mui/icons-material/FolderRounded';
 import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
-import InsertDriveFileRoundedIcon from '@mui/icons-material/InsertDriveFileRounded';
 import CreateNewFolderRoundedIcon from '@mui/icons-material/CreateNewFolderRounded';
 import NoteAddRoundedIcon from '@mui/icons-material/NoteAddRounded';
 import DriveFileRenameOutlineRoundedIcon from '@mui/icons-material/DriveFileRenameOutlineRounded';
@@ -25,6 +24,7 @@ import { useState, type MouseEvent, type ReactNode } from 'react';
 import { useT } from '@/i18n';
 import { FileService, NativeDialogs, type FileEntry } from '@/services';
 import { InputDialog } from '@/components/InputDialog';
+import { FileTypeIcon } from '@/components/FileTypeIcon';
 import { fileSystemTreeStyles } from './FileSystemTree.styles';
 import { useFileSystemTree, type FileTreeMutation } from './useFileSystemTree';
 
@@ -218,7 +218,7 @@ export const FileSystemTree = ({
                   <FolderRoundedIcon fontSize="small" />
                 )
               ) : (
-                <InsertDriveFileRoundedIcon fontSize="small" />
+                <FileTypeIcon name={entry.name} />
               )}
             </Box>
             <Typography component="span" sx={styles.name} title={entry.name}>
