@@ -127,6 +127,9 @@ export const FileEditorPane = ({ vm }: { vm: UseFilesPageResult }) => {
             value={vm.editValue}
             onChange={vm.setEditValue}
             onSave={() => void vm.save()}
+            revealLine={vm.editorReveal?.line}
+            revealTerm={vm.editorReveal?.term}
+            revealNonce={vm.editorReveal?.nonce}
           />
         )}
       </Box>

@@ -42,6 +42,8 @@ export interface UseFilesPageResult {
   toggleDiff: () => Promise<void>;
   // 选中（驱动树高亮）
   selectedFile: string | null;
+  // 编辑器跳转目标（内容搜索点击结果时定位行 + 高亮命中）；普通打开为 null。
+  editorReveal: { line: number; term: string; nonce: number } | null;
   // 文件树内模糊过滤词（名称模式过滤已加载节点；内容模式作为全文搜索词）
   treeQuery: string;
   setTreeQuery: (q: string) => void;
@@ -94,6 +96,13 @@ export const useFilesPage = (): UseFilesPageResult => {
   const [contentResults, setContentResults] = useState<ContentMatch[]>([]);
   const [contentLoading, setContentLoading] = useState(false);
   const [contentSearched, setContentSearched] = useState(false);
+  const [contentTerm, setContentTerm] = useState(''); // 产出当前结果集的搜索词（高亮用）
+  const [editorReveal, setEditorReveal] = useState<{
+    line: number;
+    term: string;
+    nonce: number;
+  } | null>(null);
+  const revealNonceRef = useRef(0);
   const [diffMode, setDiffMode] = useState(false);
   const [gitDiff, setGitDiff] = useState<DiffResult | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
@@ -150,7 +159,7 @@ export const useFilesPage = (): UseFilesPageResult => {
   );
 
   const selectFile = useCallback(
-    async (entry: FileEntry) => {
+    async (entry: FileEntry, revealTarget?: { line: number; term: string }) => {
       if (entry.isDir) return;
       setLoadingFile(true);
       setFileError(null);
@@ -160,6 +169,7 @@ export const useFilesPage = (): UseFilesPageResult => {
       setDiffMode(false);
       setGitDiff(null);
       setDiffError(null);
+      setEditorReveal(null); // 默认清除跳转；命中结果在加载成功后再设
       try {
         if (isImg(entry.path)) {
           // 图片：读 data URI 就地预览，不进文本编辑器。
@@ -175,6 +185,15 @@ export const useFilesPage = (): UseFilesPageResult => {
           setIsBinary(fc.isBinary);
           setEditValueState(fc.content);
           setOriginalValue(fc.content);
+          // 文本加载成功且来自内容搜索结果：定位行 + 高亮命中。
+          if (revealTarget && !fc.isBinary) {
+            revealNonceRef.current += 1;
+            setEditorReveal({
+              line: revealTarget.line,
+              term: revealTarget.term,
+              nonce: revealNonceRef.current,
+            });
+          }
         }
         setViewMode('source'); // 打开默认看源码（markdown 可在工具栏切预览）
       } catch (err) {
@@ -242,6 +261,7 @@ export const useFilesPage = (): UseFilesPageResult => {
     }
     setContentLoading(true);
     setContentSearched(true);
+    setContentTerm(q); // 记下产出此结果集的词，供点击结果时高亮命中
     try {
       setContentResults(await FileService.searchContent(rootDir, q));
     } catch {
@@ -251,12 +271,15 @@ export const useFilesPage = (): UseFilesPageResult => {
     }
   }, [rootDir, treeQuery]);
 
-  // 打开一条内容命中（复用 selectFile，构造最小 FileEntry）。
+  // 打开一条内容命中（复用 selectFile，构造最小 FileEntry）：带上行号 + 命中词定位高亮。
   const openContentResult = useCallback(
     (m: ContentMatch) => {
-      void selectFile({ name: baseOf(m.path), path: m.path, isDir: false, size: 0, modTime: 0 });
+      void selectFile(
+        { name: baseOf(m.path), path: m.path, isDir: false, size: 0, modTime: 0 },
+        { line: m.line, term: contentTerm },
+      );
     },
-    [selectFile],
+    [selectFile, contentTerm],
   );
 
   // 内容模式下清空搜索词即清空结果。
@@ -331,6 +354,7 @@ export const useFilesPage = (): UseFilesPageResult => {
     diffError,
     toggleDiff,
     selectedFile: currentFile,
+    editorReveal,
     treeQuery,
     setTreeQuery,
     searchMode,
