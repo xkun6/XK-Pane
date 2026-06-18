@@ -72,6 +72,11 @@ export const filesPageZhCN: Messages = {
       newDir: { title: '新建文件夹', label: '文件夹名' },
       rename: { title: '重命名', label: '新名称' },
     },
+    quickOpen: {
+      placeholder: '按名称模糊查找文件，可用 “路径:行号” 跳转…',
+      hint: '输入文件名片段以快速打开；支持子序列模糊匹配。',
+      noMatch: '无匹配文件。',
+    },
     inline: {
       illegalChar: '名称不能包含 / \\ 或空字符',
       dotName: '名称不能为 . 或 ..',

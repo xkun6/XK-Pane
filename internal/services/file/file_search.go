@@ -97,6 +97,48 @@ func (s *Service) SearchContent(_ context.Context, root, query string) ([]Conten
 	return out, nil
 }
 
+const (
+	maxListedFiles = 8000            // Ctrl+P 文件清单条数上限（超大仓库截断）
+	listDeadline   = 4 * time.Second // 遍历时间上限
+)
+
+// ListedFile 是 Ctrl+P 快速打开的一条文件项（绝对路径 + 相对展示路径）。
+type ListedFile struct {
+	Path string `json:"path"` // 绝对路径（打开用）
+	Rel  string `json:"rel"`  // 相对 root 正斜杠路径（展示 + 模糊匹配）
+}
+
+// ListFiles 递归列出 root 下所有文件（供 Ctrl+P 快速打开模糊匹配）。跳过高噪声目录；
+// 条数 / 时间双预算防超大仓库卡死。入参不规范化（D7）；不读文件内容，故无二进制过滤。
+func (s *Service) ListFiles(_ context.Context, root string) ([]ListedFile, error) {
+	if root == "" {
+		return nil, errEmptyPath
+	}
+	out := make([]ListedFile, 0, 256)
+	start := time.Now()
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, werr error) error {
+		if werr != nil {
+			return nil // 无法访问的项跳过
+		}
+		if len(out) >= maxListedFiles || time.Since(start) > listDeadline {
+			return filepath.SkipAll
+		}
+		if d.IsDir() {
+			if path != root && searchIgnoreDirs[d.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		rel, _ := filepath.Rel(root, path)
+		out = append(out, ListedFile{Path: path, Rel: filepath.ToSlash(rel)})
+		return nil
+	})
+	if err != nil {
+		return out, err
+	}
+	return out, nil
+}
+
 // clipRunes 把 s 截断到至多 n 个 rune（避免超长行撑爆传输 / UI）。
 func clipRunes(s string, n int) string {
 	r := []rune(s)

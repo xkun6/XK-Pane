@@ -8,6 +8,7 @@ import type {
   FileEntry as RawEntry,
   FileContent as RawContent,
   ContentMatch as RawMatch,
+  ListedFile as RawListed,
 } from '@bindings/xkpane/internal/services/file/models';
 import type { RecentDirectory as RawRecent } from '@bindings/xkpane/internal/storage/models';
 import { isDesktop } from '@/services/transport';
@@ -43,6 +44,12 @@ export interface ContentMatch {
   rel: string; // 相对 root 的展示路径
   line: number; // 1-based 行号
   text: string; // 命中行内容
+}
+
+// Ctrl+P 快速打开的一条文件项（绝对路径 + 相对展示路径）。
+export interface ListedFile {
+  path: string; // 绝对路径
+  rel: string; // 相对 root 的展示路径
 }
 
 // Web 端误用守卫：抛错而非静默失败。
@@ -177,5 +184,12 @@ export const FileService = {
       line: m.line ?? 0,
       text: m.text ?? '',
     }));
+  },
+
+  // 递归列出 root 下所有文件（Ctrl+P 快速打开模糊匹配用；条数 / 时间双预算截断）。
+  async listFiles(root: string): Promise<ListedFile[]> {
+    assertDesktop();
+    const rows = await Binding.ListFiles(root);
+    return (rows ?? []).map((f: RawListed) => ({ path: f.path ?? '', rel: f.rel ?? '' }));
   },
 } as const;

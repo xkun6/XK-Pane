@@ -72,6 +72,11 @@ export const filesPageEnUS: Messages = {
       newDir: { title: 'New folder', label: 'Folder name' },
       rename: { title: 'Rename', label: 'New name' },
     },
+    quickOpen: {
+      placeholder: 'Fuzzy-find a file by name; use “path:line” to jump…',
+      hint: 'Type part of a file name to open quickly; subsequence fuzzy match.',
+      noMatch: 'No matching files.',
+    },
     inline: {
       illegalChar: 'Name cannot contain / \\ or null characters',
       dotName: 'Name cannot be . or ..',

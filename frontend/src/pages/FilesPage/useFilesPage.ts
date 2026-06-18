@@ -78,6 +78,11 @@ export interface UseFilesPageResult {
   togglePanel: (id: RightPanelId) => void;
   // 文件树写操作通知：当前打开的文件被删除 / 改名时同步清空编辑器。
   onTreeMutate: (m: FileTreeMutation) => void;
+  // Ctrl+P 快速打开浮层（仅文件页内触发，避让终端 Ctrl+P）。
+  quickOpenOpen: boolean;
+  closeQuickOpen: () => void;
+  // 按绝对路径打开文件（QuickOpen 选中），可带 :line 跳转。
+  openFileByPath: (path: string, line?: number) => void;
 }
 
 const dirOf = (p: string): string => p.replace(/[\\/][^\\/]*$/, '');
@@ -90,7 +95,7 @@ export const useFilesPage = (): UseFilesPageResult => {
   const { rootDir, currentFile, setCurrentDir, setCurrentFile, openInBrowser } = useCurrentDir();
   const { active: activePanel, toggle: togglePanel } = useRightPanel();
   const { launchProject } = useTerminal();
-  const { navigate } = useRouter();
+  const { navigate, active } = useRouter();
 
   const [recent, setRecent] = useState<RecentDirectory[]>([]);
   const [openFilePath, setOpenFilePath] = useState<string | null>(null);
@@ -119,6 +124,13 @@ export const useFilesPage = (): UseFilesPageResult => {
   const [gitDiff, setGitDiff] = useState<DiffResult | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<'notRepo' | 'generic' | 'clipboardEmpty' | null>(null);
+  const [quickOpenOpen, setQuickOpenOpen] = useState(false);
+
+  // Ctrl+P 全局监听用 ref 取最新的根目录 / 当前路由，避免重复绑定 / 闭包陈旧。
+  const rootDirRef = useRef<string | null>(rootDir);
+  rootDirRef.current = rootDir;
+  const activeIdRef = useRef(active.id);
+  activeIdRef.current = active.id;
 
   // 用 ref 追踪当前打开文件 / 编辑器内容，使依赖它们的回调保持稳定（不随每次输入重建）。
   const openFileRef = useRef<string | null>(null);
@@ -226,12 +238,36 @@ export const useFilesPage = (): UseFilesPageResult => {
     [setCurrentDir, setCurrentFile],
   );
 
+  // 按绝对路径打开文件（QuickOpen 选中）：合成 FileEntry 走 selectFile；带 line 时定位行。
+  const openFileByPath = useCallback(
+    (path: string, line?: number) => {
+      const entry: FileEntry = { name: baseOf(path), path, isDir: false, size: 0, modTime: 0 };
+      void selectFile(entry, line ? { line, term: '' } : undefined);
+    },
+    [selectFile],
+  );
+
   const activateDir = useCallback(
     (path: string) => {
       setCurrentDir(path);
     },
     [setCurrentDir],
   );
+
+  // Ctrl/Cmd+P 在文件页内打开快速检索浮层（仅当前路由为 files 且已打开根目录时；避让终端 Ctrl+P）。
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (activeIdRef.current !== 'files' || !rootDirRef.current) return;
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'p' || e.key === 'P')) {
+        e.preventDefault();
+        setQuickOpenOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const closeQuickOpen = useCallback(() => setQuickOpenOpen(false), []);
 
   // 在集成终端打开目录：复用 launchProject（cliTool='none' 裸 shell，projectPath=cwd）后跳终端页。
   // 非注册的临时目录也能开——后端建会话只用 cwd，不强制项目注册（参照 SshPage connect）。
@@ -452,6 +488,9 @@ export const useFilesPage = (): UseFilesPageResult => {
     activePanel,
     togglePanel,
     onTreeMutate,
+    quickOpenOpen,
+    closeQuickOpen,
+    openFileByPath,
   };
 };
 

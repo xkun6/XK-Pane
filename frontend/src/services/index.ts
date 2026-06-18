@@ -4,6 +4,7 @@ export {
   type FileContent,
   type RecentDirectory,
   type ContentMatch,
+  type ListedFile,
 } from './file/FileService';
 export { FilewatchService } from './filewatch/FilewatchService';
 export {

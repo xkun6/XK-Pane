@@ -15,6 +15,7 @@ import { filesPageStyles } from './FilesPage.styles';
 import { useFilesPage, filesPathBase } from './useFilesPage';
 import { FileEditorPane } from './FileEditorPane';
 import { ContentSearchResults } from './ContentSearchResults';
+import { QuickOpen } from './QuickOpen';
 
 // 「文件」页：左文件树 + 右 Monaco 编辑器（markdown 可切预览）。桌面专属；Web 端降级提示。
 // 选目录/文件会写入共享「当前目录/文件」上下文，供右侧 Git / 历史抽屉绑定。
@@ -198,6 +199,13 @@ export const FilesPage = () => {
       </Box>
 
       <FileEditorPane vm={vm} />
+
+      <QuickOpen
+        open={vm.quickOpenOpen}
+        rootPath={vm.rootDir}
+        onClose={vm.closeQuickOpen}
+        onPick={vm.openFileByPath}
+      />
     </Box>
   );
 };
