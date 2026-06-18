@@ -24,4 +24,6 @@ export const AppEvents = {
   NavigateSettings: 'app:navigate-settings',
   // 截图快捷键保存 PNG 成功（后端 screenshotsvc → 前端把路径写进活跃终端 + snackbar）。桌面专属。
   ScreenshotSaved: 'screenshot:saved',
+  // 文件浏览器根目录内发生外部增删改（后端 filewatch → 前端文件树自动刷新受影响目录）。桌面专属。
+  FileChanged: 'file:changed',
 } as const;

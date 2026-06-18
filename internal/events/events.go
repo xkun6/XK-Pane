@@ -40,6 +40,10 @@ const (
 	// ScreenshotSaved 截图快捷键流程保存 PNG 成功（后端 screenshotsvc → 前端把路径写进活跃终端 +
 	// snackbar）。payload 见 ScreenshotSavedPayload；桌面专属，不进 Web 镜像白名单。
 	ScreenshotSaved = "screenshot:saved"
+
+	// FileChanged 文件浏览器根目录内发生外部增删改（后端 filewatch → 前端文件树自动刷新受影响目录）。
+	// payload 见 FileChangedPayload；桌面专属（本地文件系统），不进 Web 镜像白名单。
+	FileChanged = "file:changed"
 )
 
 // TerminalOutputPayload 是 TerminalOutput 事件载荷。
@@ -162,6 +166,13 @@ type ScreenshotSavedPayload struct {
 	Height   int    `json:"height"`
 }
 
+// FileChangedPayload 是 FileChanged 事件载荷。Root 是当前监听根（绝对路径）；
+// Dirs 是发生增删改的目录绝对路径集（= 变更项的父目录，已去重）。前端按已加载目录匹配后刷新。
+type FileChangedPayload struct {
+	Root string   `json:"root"`
+	Dirs []string `json:"dirs"`
+}
+
 // Register 在 application 初始化前注册所有强类型事件，
 // Wails 的 binding 生成器会据此为前端生成类型化 API。
 func Register() {
@@ -176,4 +187,5 @@ func Register() {
 	application.RegisterEvent[MCExitedPayload](MCPeExited)
 	application.RegisterEvent[BedrockDocSyncProgressPayload](BedrockDocSyncProgress)
 	application.RegisterEvent[ScreenshotSavedPayload](ScreenshotSaved)
+	application.RegisterEvent[FileChangedPayload](FileChanged)
 }

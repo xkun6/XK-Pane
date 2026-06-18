@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
-import { FileService, type FileEntry } from '@/services';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { FileService, FilewatchService, type FileEntry } from '@/services';
+import { useFileChangeEvent } from '@/shared/hooks/useFileChangeEvent';
 
 type ChildrenMap = Record<string, FileEntry[]>;
 
@@ -62,13 +63,35 @@ export const useFileSystemTree = (
     }
   }, []);
 
-  // rootPath 变化：清空缓存与展开态，重新加载根目录直接子项。
+  // rootPath 变化：清空缓存与展开态，重新加载根目录直接子项，并切换磁盘变更监听到新根。
   useEffect(() => {
     setChildrenByPath({});
     setExpanded(new Set());
     setErrored(new Set());
-    if (rootPath) void loadChildren(rootPath);
+    if (rootPath) {
+      void loadChildren(rootPath);
+      void FilewatchService.watch(rootPath);
+    }
+    return () => {
+      void FilewatchService.unwatch();
+    };
   }, [rootPath, loadChildren]);
+
+  // 外部磁盘变更（agent 写文件等）：刷新「已加载」且命中变更目录集的目录（分隔符/大小写归一比较）。
+  const childrenRef = useRef(childrenByPath);
+  childrenRef.current = childrenByPath;
+  useFileChangeEvent(
+    useCallback(
+      (dirs: string[]) => {
+        const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+        const changed = new Set(dirs.map(norm));
+        for (const key of Object.keys(childrenRef.current)) {
+          if (changed.has(norm(key))) void loadChildren(key);
+        }
+      },
+      [loadChildren],
+    ),
+  );
 
   const toggle = useCallback(
     (path: string) => {

@@ -4,6 +4,7 @@ export {
   type FileContent,
   type RecentDirectory,
 } from './file/FileService';
+export { FilewatchService } from './filewatch/FilewatchService';
 export {
   LaunchHistoryService,
   type RecordSpec,

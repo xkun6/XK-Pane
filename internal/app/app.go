@@ -19,6 +19,7 @@ import (
 	"xkpane/internal/services/cliadapters"
 	"xkpane/internal/services/clitools"
 	"xkpane/internal/services/file"
+	"xkpane/internal/services/filewatch"
 	"xkpane/internal/services/gitsvc"
 	"xkpane/internal/services/launchhistory"
 	"xkpane/internal/services/lhwatcher"
@@ -113,6 +114,8 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	transcriptSvc := transcriptsvc.New(termSvc, scanSvc)
 	// Local History 自动捕获 watcher（决策 D4-1 独立包）。依赖 lhSvc（窄接口 Saver：读配置 + 保存）。
 	lhWatcher := lhwatcher.New(lhSvc)
+	// 文件浏览器的通用磁盘变更监听（单活动根，发 file:changed 让文件树自动刷新；与 lhwatcher 独立）。
+	fileWatchSvc := filewatch.New()
 	// 桌面通知（P6d-4）：Wails 通知 service 单例（须注册进 Services 跑 Windows ServiceStartup，
 	// 注册 toast GUID/激活器）+ XK notification 服务（读 app_settings 开关 + 去重 + 聚焦判定）。
 	wailsNotifier := notifications.New()
@@ -186,6 +189,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(storagesvc.New(holder, cfgMgr)),
 			application.NewService(projSvc),
 			application.NewService(file.New(holder)), // 文件浏览器：列目录/读写文件/RevealInOS/最近目录
+			application.NewService(fileWatchSvc),     // 文件浏览器磁盘变更监听（Watch/Unwatch → file:changed）
 			application.NewService(lhHistSvc),
 			application.NewService(todoSvc), // 待办 CRUD（结合 ccpane；orchestrator 复用同实例）
 			application.NewService(tbSvc),   // 编排任务绑定 CRUD（结合 ccpane；orchestrator 复用同实例）
@@ -198,7 +202,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(wsSvc),
 			application.NewService(wtSvc), // 自动 worktree（在隔离 worktree 中启动会话）
 			application.NewService(scanSvc),
-			application.NewService(transcriptSvc), // 结构化时间线（桌面卡片视图取数）
+			application.NewService(transcriptSvc),     // 结构化时间线（桌面卡片视图取数）
 			application.NewService(wailsNotifier),     // Wails 通知 service（跑 ServiceStartup 注册 toast）
 			application.NewService(webAccessSvc),      // Web 网关门面（GetAccessInfo → 配对二维码）
 			application.NewService(mcpeSvc),           // MC PE 控制（包管理 / 启动 / 日志 / 桥状态）
@@ -238,7 +242,9 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	mcpeSvc.SetEmitter(mirrorEmit)           // MC PE 日志/退出事件双路（桌面 webview + Web 网关）
 	mcpeSvc.SetBridge(mcdkBridge)            // 取桥端口注入 MCDEV_DEBUG_IPC_PORT + 查桥状态
 	bedrockDocSyncSvc.SetEmitter(mirrorEmit) // OTA 同步进度事件双路（桌面 webview + Web 网关）
-	lhWatcher.AttachApp(app) // watcher 经此向前端 Emit localhistory:changed（live 刷新）
+	lhWatcher.AttachApp(app)                 // watcher 经此向前端 Emit localhistory:changed（live 刷新）
+	// 文件树 watcher 向桌面前端发 file:changed（桌面专属，不进 Web 镜像，故用 app.Event.Emit 而非 mirrorEmit）。
+	fileWatchSvc.SetEmitter(func(name string, payload any) { app.Event.Emit(name, payload) })
 	// Local History 启停补启接线（决策 D4-4）：
 	//   - SaveConfig(enabled=true) 即时启 / (false) 即时停该项目 watcher；
 	//   - 启动项目（terminal.CreateSession）时若已启用本地历史则补启 watcher。
