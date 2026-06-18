@@ -50,6 +50,37 @@ export const filesPageStyles = (theme: Theme): Record<string, SxProps<Theme>> =>
       backgroundColor: fp.bg.active,
       '&:hover': { backgroundColor: fp.bg.active, color: fp.accent },
     },
+    // —— 左栏搜索行（树内模糊过滤）——
+    searchRow: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 0.5,
+      height: 34,
+      px: 1,
+      mx: 1,
+      my: 0.75,
+      borderRadius: 6,
+      backgroundColor: fp.bg.content,
+      border: `1px solid ${fp.divider}`,
+      flexShrink: 0,
+    },
+    searchIcon: {
+      color: fp.text.muted,
+      flexShrink: 0,
+    },
+    searchInput: {
+      flex: 1,
+      minWidth: 0,
+      fontSize: 13,
+      color: fp.text.primary,
+      '& input::placeholder': { color: fp.text.muted, opacity: 1 },
+    },
+    searchClear: {
+      borderRadius: 6,
+      p: 0.25,
+      color: fp.text.muted,
+      '&:hover': { backgroundColor: fp.bg.hover, color: fp.text.primary },
+    },
     // —— 左栏空态：无打开目录 ——
     empty: {
       flex: 1,

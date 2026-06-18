@@ -30,6 +30,9 @@ export interface UseFilesPageResult {
   viewMode: FilesViewMode;
   // 选中（驱动树高亮）
   selectedFile: string | null;
+  // 文件树内模糊过滤词（仅过滤已加载节点）
+  treeQuery: string;
+  setTreeQuery: (q: string) => void;
   // 动作
   openFolder: () => Promise<void>;
   openRecent: (path: string) => void;
@@ -64,6 +67,7 @@ export const useFilesPage = (): UseFilesPageResult => {
   const [fileError, setFileError] = useState<string | null>(null);
   const [isBinary, setIsBinary] = useState(false);
   const [viewMode, setViewMode] = useState<FilesViewMode>('source');
+  const [treeQuery, setTreeQuery] = useState('');
 
   // 用 ref 追踪当前打开文件，使 onTreeMutate 回调保持稳定（不随每次 open 重建）。
   const openFileRef = useRef<string | null>(null);
@@ -90,6 +94,7 @@ export const useFilesPage = (): UseFilesPageResult => {
     setOriginalValue('');
     setIsBinary(false);
     setFileError(null);
+    setTreeQuery('');
   }, [rootDir]);
 
   const openFolder = useCallback(async () => {
@@ -199,6 +204,8 @@ export const useFilesPage = (): UseFilesPageResult => {
     isMarkdown: openFilePath ? isMd(openFilePath) : false,
     viewMode,
     selectedFile: currentFile,
+    treeQuery,
+    setTreeQuery,
     openFolder,
     openRecent,
     selectFile,

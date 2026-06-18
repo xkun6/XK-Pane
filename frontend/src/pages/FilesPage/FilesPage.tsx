@@ -1,10 +1,12 @@
-import { Box, Button, IconButton, Tooltip, Typography, useTheme } from '@mui/material';
+import { Box, Button, IconButton, InputBase, Tooltip, Typography, useTheme } from '@mui/material';
 import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
 import FolderRoundedIcon from '@mui/icons-material/FolderRounded';
 import FolderOffRoundedIcon from '@mui/icons-material/FolderOffRounded';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import { useT } from '@/i18n';
 import { FileSystemTree } from '@/components/FileSystemTree';
 import { filesPageStyles } from './FilesPage.styles';
@@ -91,13 +93,36 @@ export const FilesPage = () => {
         </Box>
 
         {vm.rootDir ? (
-          <FileSystemTree
-            rootPath={vm.rootDir}
-            selectedPath={vm.selectedFile}
-            onSelectFile={(e) => void vm.selectFile(e)}
-            onActivateDir={vm.activateDir}
-            onAfterMutate={vm.onTreeMutate}
-          />
+          <>
+            <Box sx={styles.searchRow}>
+              <SearchRoundedIcon fontSize="small" sx={styles.searchIcon} />
+              <InputBase
+                value={vm.treeQuery}
+                onChange={(e) => vm.setTreeQuery(e.target.value)}
+                placeholder={t('files.search.placeholder')}
+                sx={styles.searchInput}
+                inputProps={{ 'aria-label': t('files.search.placeholder') }}
+              />
+              {vm.treeQuery && (
+                <IconButton
+                  size="small"
+                  sx={styles.searchClear}
+                  onClick={() => vm.setTreeQuery('')}
+                  aria-label={t('files.search.clear')}
+                >
+                  <CloseRoundedIcon fontSize="small" />
+                </IconButton>
+              )}
+            </Box>
+            <FileSystemTree
+              rootPath={vm.rootDir}
+              selectedPath={vm.selectedFile}
+              onSelectFile={(e) => void vm.selectFile(e)}
+              onActivateDir={vm.activateDir}
+              onAfterMutate={vm.onTreeMutate}
+              searchQuery={vm.treeQuery}
+            />
+          </>
         ) : (
           <Box sx={styles.empty}>
             <Typography sx={styles.emptyTitle}>{t('files.empty.title')}</Typography>

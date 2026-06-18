@@ -62,6 +62,11 @@ export const fileSystemTreeStyles = (theme: Theme): Record<string, SxProps<Theme
       textOverflow: 'ellipsis',
       whiteSpace: 'nowrap',
     },
+    // 模糊过滤命中字符高亮
+    matchHL: {
+      color: fp.accent,
+      fontWeight: 700,
+    },
     hint: {
       px: 1.5,
       py: 1,

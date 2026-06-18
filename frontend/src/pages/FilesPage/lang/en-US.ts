@@ -23,6 +23,11 @@ export const filesPageEnUS: Messages = {
       error: 'Failed to read directory',
       empty: 'Empty directory',
     },
+    search: {
+      placeholder: 'Filter loaded files…',
+      clear: 'Clear filter',
+      noMatch: 'No matches (searches only expanded / loaded items)',
+    },
     editor: {
       selectFile: 'Select a file on the left to view / edit',
       save: 'Save',

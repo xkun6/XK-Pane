@@ -23,6 +23,11 @@ export const filesPageZhCN: Messages = {
       error: '读取目录失败',
       empty: '空目录',
     },
+    search: {
+      placeholder: '过滤已加载文件…',
+      clear: '清除过滤',
+      noMatch: '无匹配项（仅搜索已展开/已加载的范围）',
+    },
     editor: {
       selectFile: '从左侧选择一个文件以查看 / 编辑',
       save: '保存',

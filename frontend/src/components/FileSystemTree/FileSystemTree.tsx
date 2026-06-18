@@ -37,10 +37,26 @@ export interface FileSystemTreeProps {
   onActivateDir?: (path: string) => void;
   // 文件树写操作（新建/改名/删除等）完成后的通知（上层据此同步编辑器选中态）。
   onAfterMutate?: (m: FileTreeMutation) => void;
+  // 模糊过滤词（仅过滤「已加载」节点；命中字符高亮，命中目录自动展开）。空 = 不过滤。
+  searchQuery?: string;
 }
 
 type MenuState = { x: number; y: number; entry: FileEntry | null };
 type DialogState = { mode: 'newFile' | 'newDir' | 'rename'; dir: string; entry?: FileEntry };
+
+// fuzzyIndices 子序列匹配：返回 query 各字符在 name 中命中的下标（用于高亮）；不匹配返回 null。
+const fuzzyIndices = (name: string, query: string): number[] | null => {
+  const n = name.toLowerCase();
+  const idx: number[] = [];
+  let qi = 0;
+  for (let i = 0; i < n.length && qi < query.length; i++) {
+    if (n[i] === query[qi]) {
+      idx.push(i);
+      qi += 1;
+    }
+  }
+  return qi === query.length ? idx : null;
+};
 
 // 懒加载文件系统目录树：根目录直接子项常驻，展开子目录时按需拉取并缓存。
 // 目录在前、文件在后（后端已排序）。点目录设为当前上下文 + 展开，点文件打开。
@@ -51,6 +67,7 @@ export const FileSystemTree = ({
   onSelectFile,
   onActivateDir,
   onAfterMutate,
+  searchQuery = '',
 }: FileSystemTreeProps) => {
   const theme = useTheme();
   const styles = fileSystemTreeStyles(theme);
@@ -59,6 +76,39 @@ export const FileSystemTree = ({
 
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [dialog, setDialog] = useState<DialogState | null>(null);
+
+  // —— 模糊过滤（仅作用于已加载子树）——
+  const q = searchQuery.trim().toLowerCase();
+  const filtering = q !== '';
+  const matchCache = new Map<string, boolean>();
+  // 节点自身命中、或任一「已加载」后代命中 → 该节点应显示（保留通往命中项的路径）。
+  const subtreeMatches = (entry: FileEntry): boolean => {
+    const cached = matchCache.get(entry.path);
+    if (cached !== undefined) return cached;
+    let res = fuzzyIndices(entry.name, q) !== null;
+    if (!res && entry.isDir) {
+      const kids = vm.childrenByPath[entry.path];
+      if (kids) res = kids.some(subtreeMatches);
+    }
+    matchCache.set(entry.path, res);
+    return res;
+  };
+  // 渲染文件名：过滤态下高亮命中字符。
+  const renderName = (name: string): ReactNode => {
+    if (!filtering) return name;
+    const idx = fuzzyIndices(name, q);
+    if (!idx) return name;
+    const hit = new Set(idx);
+    return Array.from(name).map((ch, i) =>
+      hit.has(i) ? (
+        <Box component="span" key={i} sx={styles.matchHL}>
+          {ch}
+        </Box>
+      ) : (
+        ch
+      ),
+    );
+  };
 
   const handleRow = (entry: FileEntry): void => {
     if (entry.isDir) {
@@ -132,10 +182,12 @@ export const FileSystemTree = ({
   };
 
   const renderNodes = (entries: FileEntry[], depth: number): ReactNode =>
-    entries.map((entry) => {
-      const isExpanded = vm.expanded.has(entry.path);
-      const isSelected = entry.path === selectedPath;
+    (filtering ? entries.filter(subtreeMatches) : entries).map((entry) => {
       const kids = vm.childrenByPath[entry.path];
+      // 过滤态：有命中后代的目录强制展开（显示通往命中项的路径）。
+      const kidsMatch = filtering && entry.isDir && !!kids && kids.some(subtreeMatches);
+      const isExpanded = filtering ? kidsMatch : vm.expanded.has(entry.path);
+      const isSelected = entry.path === selectedPath;
       return (
         <Box key={entry.path}>
           <Box
@@ -170,17 +222,17 @@ export const FileSystemTree = ({
               )}
             </Box>
             <Typography component="span" sx={styles.name} title={entry.name}>
-              {entry.name}
+              {renderName(entry.name)}
             </Typography>
           </Box>
           {entry.isDir && isExpanded && (
             <>
-              {vm.loading.has(entry.path) && (
+              {!filtering && vm.loading.has(entry.path) && (
                 <Box sx={styles.hint} style={{ paddingLeft: (depth + 1) * 14 + 6 }}>
                   {t('files.tree.loading')}
                 </Box>
               )}
-              {vm.errored.has(entry.path) && (
+              {!filtering && vm.errored.has(entry.path) && (
                 <Box sx={styles.errorHint} style={{ paddingLeft: (depth + 1) * 14 + 6 }}>
                   {t('files.tree.error')}
                 </Box>
@@ -272,6 +324,9 @@ export const FileSystemTree = ({
       {vm.rootErrored && <Box sx={styles.errorHint}>{t('files.tree.error')}</Box>}
       {!vm.rootLoading && !vm.rootErrored && vm.rootEntries.length === 0 && (
         <Box sx={styles.hint}>{t('files.tree.empty')}</Box>
+      )}
+      {filtering && vm.rootEntries.length > 0 && !vm.rootEntries.some(subtreeMatches) && (
+        <Box sx={styles.hint}>{t('files.search.noMatch')}</Box>
       )}
       {renderNodes(vm.rootEntries, 0)}
 
