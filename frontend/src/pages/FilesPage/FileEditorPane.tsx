@@ -4,7 +4,6 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
-  Typography,
   useTheme,
 } from '@mui/material';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
@@ -16,6 +15,7 @@ import { MarkdownView } from '@/components/MarkdownView';
 import { DiffView } from '@/components/DiffView';
 import { filesPageStyles } from './FilesPage.styles';
 import { filesPathBase, type FilesViewMode, type UseFilesPageResult } from './useFilesPage';
+import { FileBreadcrumbs } from './FileBreadcrumbs';
 
 // 右栏编辑器面板：工具栏（文件名 + 脏标记 + 语言 + markdown 源/预览切换 + 保存）+ 编辑器主体。
 export const FileEditorPane = ({ vm }: { vm: UseFilesPageResult }) => {
@@ -41,9 +41,7 @@ export const FileEditorPane = ({ vm }: { vm: UseFilesPageResult }) => {
   return (
     <Box sx={styles.right}>
       <Box sx={styles.toolbar}>
-        <Typography sx={styles.fileName} title={vm.openFilePath}>
-          {filesPathBase(vm.openFilePath)}
-        </Typography>
+        <FileBreadcrumbs rootDir={vm.rootDir} filePath={vm.openFilePath} onOpenFile={vm.openFileByPath} />
         {vm.dirty && <Box sx={styles.dirtyDot} aria-label={t('files.editor.dirty')} />}
         {!vm.imageDataUri && (
           <Box component="span" sx={styles.langChip}>

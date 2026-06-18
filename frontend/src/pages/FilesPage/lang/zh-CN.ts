@@ -77,6 +77,9 @@ export const filesPageZhCN: Messages = {
       hint: '输入文件名片段以快速打开；支持子序列模糊匹配。',
       noMatch: '无匹配文件。',
     },
+    breadcrumb: {
+      ariaLabel: '文件路径导航',
+    },
     inline: {
       illegalChar: '名称不能包含 / \\ 或空字符',
       dotName: '名称不能为 . 或 ..',

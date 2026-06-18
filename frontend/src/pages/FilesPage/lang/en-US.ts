@@ -77,6 +77,9 @@ export const filesPageEnUS: Messages = {
       hint: 'Type part of a file name to open quickly; subsequence fuzzy match.',
       noMatch: 'No matching files.',
     },
+    breadcrumb: {
+      ariaLabel: 'File path navigation',
+    },
     inline: {
       illegalChar: 'Name cannot contain / \\ or null characters',
       dotName: 'Name cannot be . or ..',
