@@ -40,6 +40,23 @@ export const fileSystemTreeStyles = (theme: Theme): Record<string, SxProps<Theme
       outline: `1px solid ${fp.accent}`,
       outlineOffset: '-1px',
     },
+    // 内联新建/重命名输入框（替代模态对话框）。
+    inlineInput: {
+      flex: 1,
+      minWidth: 0,
+      fontSize: 13,
+      color: fp.text.primary,
+      lineHeight: 1.4,
+      px: 0.5,
+      borderRadius: 4,
+      backgroundColor: fp.bg.elevated,
+      border: `1px solid ${fp.accent}`,
+      '& input': { p: 0, height: 20 },
+    },
+    // 校验失败时输入框红框。
+    inlineInputError: {
+      border: `1px solid ${fp.status.danger}`,
+    },
     chevron: {
       display: 'flex',
       flexShrink: 0,

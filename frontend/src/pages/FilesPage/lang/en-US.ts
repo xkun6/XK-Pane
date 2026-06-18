@@ -70,6 +70,12 @@ export const filesPageEnUS: Messages = {
       newDir: { title: 'New folder', label: 'Folder name' },
       rename: { title: 'Rename', label: 'New name' },
     },
+    inline: {
+      illegalChar: 'Name cannot contain / \\ or null characters',
+      dotName: 'Name cannot be . or ..',
+      tooLong: 'Name too long (255 characters max)',
+      exists: 'A file with this name already exists',
+    },
     diff: {
       view: 'View changes (vs HEAD)',
       loading: 'Computing changes…',

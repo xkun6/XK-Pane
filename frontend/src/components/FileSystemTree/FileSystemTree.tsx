@@ -1,6 +1,7 @@
 import {
   Box,
   Divider,
+  InputBase,
   ListItemIcon,
   ListItemText,
   Menu,
@@ -25,10 +26,16 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import LinkRoundedIcon from '@mui/icons-material/LinkRounded';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
-import { useRef, useState, type DragEvent, type MouseEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type DragEvent,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 import { useT } from '@/i18n';
 import { FileService, NativeDialogs, type FileEntry } from '@/services';
-import { InputDialog } from '@/components/InputDialog';
 import { FileTypeIcon } from '@/components/FileTypeIcon';
 import { fileSystemTreeStyles } from './FileSystemTree.styles';
 import { useFileSystemTree, type FileTreeMutation } from './useFileSystemTree';
@@ -47,7 +54,80 @@ export interface FileSystemTreeProps {
 }
 
 type MenuState = { x: number; y: number; entry: FileEntry | null };
-type DialogState = { mode: 'newFile' | 'newDir' | 'rename'; dir: string; entry?: FileEntry };
+// 行内编辑态：新建（在 dir 下插幽灵输入行）或重命名（替换某行 name）。替代旧的模态对话框。
+type EditingState =
+  | { kind: 'newFile' | 'newDir'; dir: string }
+  | { kind: 'rename'; entry: FileEntry };
+
+// 模块级稳定组件：行内输入框（新建/重命名共用）。定义在组件外避免每次父渲染 remount 丢焦点。
+// 挂载即聚焦并选区（重命名文件默认只选主干）；Enter 提交（校验通过时）/Esc 取消/blur 提交；
+// 校验失败红框 + title 提示，不弹独立错误行（保持紧凑）。
+interface InlineInputProps {
+  initial: string;
+  selectBasename: boolean;
+  placeholder: string;
+  validate: (name: string) => string | null; // 返回 i18n 后错误文案或 null
+  onSubmit: (name: string) => void;
+  onCancel: () => void;
+  baseSx: SxProps<Theme> | undefined;
+  errSx: SxProps<Theme> | undefined;
+}
+const InlineInput = ({
+  initial,
+  selectBasename,
+  placeholder,
+  validate,
+  onSubmit,
+  onCancel,
+  baseSx,
+  errSx,
+}: InlineInputProps) => {
+  const [val, setVal] = useState(initial);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const doneRef = useRef(false);
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    if (selectBasename) {
+      const dot = initial.lastIndexOf('.');
+      el.setSelectionRange(0, dot > 0 ? dot : initial.length);
+    } else {
+      el.select();
+    }
+    // 仅挂载时聚焦选区
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const err = val.trim() ? validate(val.trim()) : null;
+  const finish = (commit: boolean): void => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    if (commit && val.trim() && !err) onSubmit(val.trim());
+    else onCancel();
+  };
+  return (
+    <InputBase
+      inputRef={inputRef}
+      value={val}
+      placeholder={placeholder}
+      title={err ?? undefined}
+      onChange={(e) => setVal(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (val.trim() && !err) finish(true);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          finish(false);
+        }
+      }}
+      onBlur={() => finish(true)}
+      onClick={(e) => e.stopPropagation()}
+      spellCheck={false}
+      sx={err ? ([baseSx, errSx] as SxProps<Theme>) : baseSx}
+    />
+  );
+};
 
 // fuzzyIndices 子序列匹配：返回 query 各字符在 name 中命中的下标（用于高亮）；不匹配返回 null。
 const fuzzyIndices = (name: string, query: string): number[] | null => {
@@ -80,11 +160,32 @@ export const FileSystemTree = ({
   const vm = useFileSystemTree(rootPath, onAfterMutate);
 
   const [menu, setMenu] = useState<MenuState | null>(null);
-  const [dialog, setDialog] = useState<DialogState | null>(null);
+  const [editing, setEditing] = useState<EditingState | null>(null);
   // 拖拽移动：dragSrcRef 持当前被拖条目（dragover 阶段读不到 dataTransfer，故用 ref）；
   // dragOverPath 为正悬停的目录路径（驱动放置高亮）。
   const dragSrcRef = useRef<FileEntry | null>(null);
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
+
+  const dirOf = (p: string): string => p.replace(/[\\/][^\\/]*$/, '');
+  // 确保目录已展开（新建时让幽灵输入行可见）；已展开则不动。
+  const ensureExpanded = (dir: string): void => {
+    if (!vm.expanded.has(dir)) vm.toggle(dir);
+  };
+  // 构造名称校验闭包：空→不报错（由提交逻辑禁止）；非法字符/保留名/超长/同目录重名→返回 i18n 文案。
+  // rename 传 selfName 以放行「纯大小写改名」（排除自身）。
+  const makeValidate =
+    (siblings: string[], selfName?: string) =>
+    (name: string): string | null => {
+      if (/[/\\\x00]/.test(name)) return t('files.inline.illegalChar');
+      if (name === '.' || name === '..') return t('files.inline.dotName');
+      if (name.length > 255) return t('files.inline.tooLong');
+      const lower = name.toLowerCase();
+      const self = selfName?.toLowerCase();
+      if (siblings.some((s) => s.toLowerCase() === lower && s.toLowerCase() !== self)) {
+        return t('files.inline.exists');
+      }
+      return null;
+    };
 
   // —— 模糊过滤（仅作用于已加载子树）——
   const q = searchQuery.trim().toLowerCase();
@@ -244,13 +345,43 @@ export const FileSystemTree = ({
     });
   };
 
-  const onDialogConfirm = (value: string): void => {
-    const d = dialog;
-    setDialog(null);
-    if (!d) return;
-    if (d.mode === 'newFile') void runOp(() => vm.createFile(d.dir, value));
-    else if (d.mode === 'newDir') void runOp(() => vm.createDir(d.dir, value));
-    else if (d.mode === 'rename' && d.entry) void runOp(() => vm.renameEntry(d.entry!, value));
+  // 触发内联新建：先确保目标目录展开，再进入编辑态（幽灵行渲染在该目录子项顶部）。
+  const startNew = (kind: 'newFile' | 'newDir', dir: string): void => {
+    closeMenu();
+    if (dir !== rootPath) ensureExpanded(dir);
+    setEditing({ kind, dir });
+  };
+  const startRename = (entry: FileEntry): void => {
+    closeMenu();
+    setEditing({ kind: 'rename', entry });
+  };
+
+  // 幽灵新建输入行：editing 命中该 dir 时渲染，否则 null。
+  const newRow = (dir: string, depth: number): ReactNode => {
+    if (!editing || editing.kind === 'rename' || editing.dir !== dir) return null;
+    const isDir = editing.kind === 'newDir';
+    const siblings = (vm.childrenByPath[dir] ?? []).map((e) => e.name);
+    return (
+      <Box sx={styles.row} style={{ paddingLeft: depth * 14 + 6 }}>
+        <Box sx={styles.chevronSpacer} aria-hidden />
+        <Box sx={isDir ? styles.iconDir : styles.icon} aria-hidden>
+          {isDir ? <FolderRoundedIcon fontSize="small" /> : <NoteAddRoundedIcon fontSize="small" />}
+        </Box>
+        <InlineInput
+          initial=""
+          selectBasename={false}
+          placeholder={isDir ? t('files.dialog.newDir.label') : t('files.dialog.newFile.label')}
+          validate={makeValidate(siblings)}
+          onSubmit={(name) => {
+            setEditing(null);
+            void runOp(() => (isDir ? vm.createDir(dir, name) : vm.createFile(dir, name)));
+          }}
+          onCancel={() => setEditing(null)}
+          baseSx={styles.inlineInput}
+          errSx={styles.inlineInputError}
+        />
+      </Box>
+    );
   };
 
   const renderNodes = (entries: FileEntry[], depth: number): ReactNode =>
@@ -261,6 +392,7 @@ export const FileSystemTree = ({
       const isExpanded = filtering ? kidsMatch : vm.expanded.has(entry.path);
       const isSelected = entry.path === selectedPath;
       const isDropTarget = entry.isDir && dragOverPath === entry.path;
+      const isRenaming = editing?.kind === 'rename' && editing.entry.path === entry.path;
       return (
         <Box key={entry.path}>
           <Box
@@ -271,9 +403,11 @@ export const FileSystemTree = ({
               ] as SxProps<Theme>
             }
             style={{ paddingLeft: depth * 14 + 6 }}
-            onClick={() => handleRow(entry)}
+            onClick={() => {
+              if (!isRenaming) handleRow(entry);
+            }}
             onContextMenu={(e) => openRowMenu(e, entry)}
-            draggable
+            draggable={!isRenaming}
             onDragStart={(e) => onRowDragStart(e, entry)}
             onDragEnd={onRowDragEnd}
             onDragOver={entry.isDir ? (e) => onDirDragOver(e, entry) : undefined}
@@ -305,12 +439,32 @@ export const FileSystemTree = ({
                 <FileTypeIcon name={entry.name} />
               )}
             </Box>
-            <Typography component="span" sx={styles.name} title={entry.name}>
-              {renderName(entry.name)}
-            </Typography>
+            {isRenaming ? (
+              <InlineInput
+                initial={entry.name}
+                selectBasename={!entry.isDir}
+                placeholder=""
+                validate={makeValidate(
+                  (vm.childrenByPath[dirOf(entry.path)] ?? []).map((e) => e.name),
+                  entry.name,
+                )}
+                onSubmit={(name) => {
+                  setEditing(null);
+                  void runOp(() => vm.renameEntry(entry, name));
+                }}
+                onCancel={() => setEditing(null)}
+                baseSx={styles.inlineInput}
+                errSx={styles.inlineInputError}
+              />
+            ) : (
+              <Typography component="span" sx={styles.name} title={entry.name}>
+                {renderName(entry.name)}
+              </Typography>
+            )}
           </Box>
           {entry.isDir && isExpanded && (
             <>
+              {newRow(entry.path, depth + 1)}
               {!filtering && vm.loading.has(entry.path) && (
                 <Box sx={styles.hint} style={{ paddingLeft: (depth + 1) * 14 + 6 }}>
                   {t('files.tree.loading')}
@@ -346,14 +500,12 @@ export const FileSystemTree = ({
     // 空白处：新建 + 粘贴（剪贴板非空时，粘贴到根目录）+ 刷新。
     if (menu.entry === null) {
       return [
-        item('nd', <CreateNewFolderRoundedIcon fontSize="small" />, t('files.menu.newDir'), () => {
-          closeMenu();
-          setDialog({ mode: 'newDir', dir: rootPath });
-        }),
-        item('nf', <NoteAddRoundedIcon fontSize="small" />, t('files.menu.newFile'), () => {
-          closeMenu();
-          setDialog({ mode: 'newFile', dir: rootPath });
-        }),
+        item('nd', <CreateNewFolderRoundedIcon fontSize="small" />, t('files.menu.newDir'), () =>
+          startNew('newDir', rootPath),
+        ),
+        item('nf', <NoteAddRoundedIcon fontSize="small" />, t('files.menu.newFile'), () =>
+          startNew('newFile', rootPath),
+        ),
         ...(vm.clipboard
           ? [
               item('pst', <ContentPasteRoundedIcon fontSize="small" />, t('files.menu.paste'), () =>
@@ -373,14 +525,12 @@ export const FileSystemTree = ({
     return [
       ...(en.isDir
         ? [
-            item('nd', <CreateNewFolderRoundedIcon fontSize="small" />, t('files.menu.newDir'), () => {
-              closeMenu();
-              setDialog({ mode: 'newDir', dir: en.path });
-            }),
-            item('nf', <NoteAddRoundedIcon fontSize="small" />, t('files.menu.newFile'), () => {
-              closeMenu();
-              setDialog({ mode: 'newFile', dir: en.path });
-            }),
+            item('nd', <CreateNewFolderRoundedIcon fontSize="small" />, t('files.menu.newDir'), () =>
+              startNew('newDir', en.path),
+            ),
+            item('nf', <NoteAddRoundedIcon fontSize="small" />, t('files.menu.newFile'), () =>
+              startNew('newFile', en.path),
+            ),
             ...(vm.clipboard
               ? [
                   item('pst', <ContentPasteRoundedIcon fontSize="small" />, t('files.menu.paste'), () =>
@@ -391,10 +541,9 @@ export const FileSystemTree = ({
             <Divider key="d0" sx={styles.menuDivider} />,
           ]
         : []),
-      item('rn', <DriveFileRenameOutlineRoundedIcon fontSize="small" />, t('files.menu.rename'), () => {
-        closeMenu();
-        setDialog({ mode: 'rename', dir: '', entry: en });
-      }),
+      item('rn', <DriveFileRenameOutlineRoundedIcon fontSize="small" />, t('files.menu.rename'), () =>
+        startRename(en),
+      ),
       item('cpy', <ContentCopyRoundedIcon fontSize="small" />, t('files.menu.copy'), () => onCopy(en)),
       item('cut', <ContentCutRoundedIcon fontSize="small" />, t('files.menu.cut'), () => onCut(en)),
       item('dup', <FileCopyRoundedIcon fontSize="small" />, t('files.menu.duplicate'), () =>
@@ -430,6 +579,7 @@ export const FileSystemTree = ({
       {filtering && vm.rootEntries.length > 0 && !vm.rootEntries.some(subtreeMatches) && (
         <Box sx={styles.hint}>{t('files.search.noMatch')}</Box>
       )}
+      {newRow(rootPath, 0)}
       {renderNodes(vm.rootEntries, 0)}
 
       <Menu
@@ -441,17 +591,6 @@ export const FileSystemTree = ({
       >
         {menuItems()}
       </Menu>
-
-      <InputDialog
-        open={!!dialog}
-        title={dialog ? t(`files.dialog.${dialog.mode}.title`) : ''}
-        label={dialog ? t(`files.dialog.${dialog.mode}.label`) : ''}
-        confirmText={t('files.dialog.confirm')}
-        cancelText={t('common.cancel')}
-        initialValue={dialog?.mode === 'rename' ? (dialog.entry?.name ?? '') : ''}
-        onConfirm={onDialogConfirm}
-        onClose={() => setDialog(null)}
-      />
     </Box>
   );
 };

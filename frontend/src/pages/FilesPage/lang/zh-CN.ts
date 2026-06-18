@@ -70,6 +70,12 @@ export const filesPageZhCN: Messages = {
       newDir: { title: '新建文件夹', label: '文件夹名' },
       rename: { title: '重命名', label: '新名称' },
     },
+    inline: {
+      illegalChar: '名称不能包含 / \\ 或空字符',
+      dotName: '名称不能为 . 或 ..',
+      tooLong: '名称过长（不超过 255 个字符）',
+      exists: '该名称已存在',
+    },
     diff: {
       view: '查看改动（相对 HEAD）',
       loading: '正在计算改动…',
