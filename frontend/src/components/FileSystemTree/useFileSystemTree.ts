@@ -42,24 +42,39 @@ export const useFileSystemTree = (
   const [loading, setLoading] = useState<Set<string>>(() => new Set());
   const [errored, setErrored] = useState<Set<string>>(() => new Set());
 
-  const loadChildren = useCallback(async (path: string) => {
-    setLoading((s) => new Set(s).add(path));
-    setErrored((s) => {
-      const n = new Set(s);
-      n.delete(path);
-      return n;
-    });
-    try {
-      const entries = await FileService.listDir(path);
-      setChildrenByPath((m) => ({ ...m, [path]: entries }));
-    } catch {
-      setErrored((s) => new Set(s).add(path));
-    } finally {
-      setLoading((s) => {
+  // silent=true：刷新已加载目录时不动 loading/errored 态（避免「加载中」闪屏），
+  // 失败保留旧数据。供自动刷新(file:changed)与写操作后的刷新使用。
+  const loadChildren = useCallback(async (path: string, silent = false) => {
+    if (!silent) {
+      setLoading((s) => new Set(s).add(path));
+      setErrored((s) => {
         const n = new Set(s);
         n.delete(path);
         return n;
       });
+    }
+    try {
+      const entries = await FileService.listDir(path);
+      setChildrenByPath((m) => ({ ...m, [path]: entries }));
+      if (silent) {
+        setErrored((s) => {
+          if (!s.has(path)) return s;
+          const n = new Set(s);
+          n.delete(path);
+          return n;
+        });
+      }
+    } catch {
+      if (!silent) setErrored((s) => new Set(s).add(path));
+      // silent 失败：保留旧数据，不显错（外部短暂状态不该让树闪烁）
+    } finally {
+      if (!silent) {
+        setLoading((s) => {
+          const n = new Set(s);
+          n.delete(path);
+          return n;
+        });
+      }
     }
   }, []);
 
@@ -86,7 +101,7 @@ export const useFileSystemTree = (
         const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
         const changed = new Set(dirs.map(norm));
         for (const key of Object.keys(childrenRef.current)) {
-          if (changed.has(norm(key))) void loadChildren(key);
+          if (changed.has(norm(key))) void loadChildren(key, true); // 静默刷新，防闪屏
         }
       },
       [loadChildren],
@@ -109,7 +124,7 @@ export const useFileSystemTree = (
 
   const reload = useCallback(
     (path: string) => {
-      void loadChildren(path);
+      void loadChildren(path, true);
     },
     [loadChildren],
   );
@@ -119,7 +134,7 @@ export const useFileSystemTree = (
     async (dir: string, name: string) => {
       await FileService.createFile(dir, name);
       setExpanded((s) => new Set(s).add(dir));
-      await loadChildren(dir);
+      await loadChildren(dir, true);
       onAfterMutate?.({ kind: 'create', parentDir: dir });
     },
     [loadChildren, onAfterMutate],
@@ -129,7 +144,7 @@ export const useFileSystemTree = (
     async (dir: string, name: string) => {
       await FileService.createDir(dir, name);
       setExpanded((s) => new Set(s).add(dir));
-      await loadChildren(dir);
+      await loadChildren(dir, true);
       onAfterMutate?.({ kind: 'create', parentDir: dir });
     },
     [loadChildren, onAfterMutate],
@@ -139,7 +154,7 @@ export const useFileSystemTree = (
     async (entry: FileEntry, newName: string) => {
       const newPath = await FileService.rename(entry.path, newName);
       const parent = dirOf(entry.path);
-      await loadChildren(parent);
+      await loadChildren(parent, true);
       onAfterMutate?.({ kind: 'rename', parentDir: parent, oldPath: entry.path, newPath });
     },
     [loadChildren, onAfterMutate],
@@ -149,7 +164,7 @@ export const useFileSystemTree = (
     async (entry: FileEntry) => {
       await FileService.duplicate(entry.path);
       const parent = dirOf(entry.path);
-      await loadChildren(parent);
+      await loadChildren(parent, true);
       onAfterMutate?.({ kind: 'duplicate', parentDir: parent });
     },
     [loadChildren, onAfterMutate],
@@ -159,7 +174,7 @@ export const useFileSystemTree = (
     async (entry: FileEntry) => {
       await FileService.trash(entry.path);
       const parent = dirOf(entry.path);
-      await loadChildren(parent);
+      await loadChildren(parent, true);
       onAfterMutate?.({ kind: 'trash', parentDir: parent, oldPath: entry.path });
     },
     [loadChildren, onAfterMutate],
