@@ -78,6 +78,14 @@ export const filesPageEnUS: Messages = {
       tooLong: 'Name too long (255 characters max)',
       exists: 'A file with this name already exists',
     },
+    git: {
+      modified: 'Modified',
+      added: 'Added',
+      deleted: 'Deleted',
+      untracked: 'Untracked',
+      renamed: 'Renamed',
+      conflict: 'Conflict',
+    },
     diff: {
       view: 'View changes (vs HEAD)',
       compareClipboard: 'Compare with clipboard (red = current, green = clipboard)',

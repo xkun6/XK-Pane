@@ -237,6 +237,11 @@ export const GitService = {
     return (rows ?? []).map(toFileStatus);
   },
 
+  // path 所在仓库的工作树根（绝对路径）；供把 statusFiles 的仓库相对路径还原为绝对路径。非仓库抛 ErrNotARepo。
+  async repoRoot(path: string): Promise<string> {
+    return Binding.RepoRoot(path);
+  },
+
   // 单文件 diff（staged=true 暂存区相对 HEAD / false 工作树相对暂存区）；复用 DiffView 渲染。
   async diffFile(path: string, file: string, staged: boolean): Promise<DiffResult> {
     return toDiff(await Binding.DiffFile(path, file, staged));

@@ -41,6 +41,7 @@ import { FileService, NativeDialogs, type FileEntry } from '@/services';
 import { FileTypeIcon } from '@/components/FileTypeIcon';
 import { fileSystemTreeStyles } from './FileSystemTree.styles';
 import { useFileSystemTree, type FileTreeMutation } from './useFileSystemTree';
+import { useGitDecorations, type GitDecoKind } from './useGitDecorations';
 
 export interface FileSystemTreeProps {
   rootPath: string;
@@ -163,6 +164,20 @@ export const FileSystemTree = ({
   const styles = fileSystemTreeStyles(theme);
   const t = useT();
   const vm = useFileSystemTree(rootPath, onAfterMutate);
+  const gitDeco = useGitDecorations(rootPath);
+  // Git 装饰类别 → foundation.status 配色（新增/未跟踪=绿，修改/重命名=黄，删除/冲突=红）。
+  const gitColor = (kind: GitDecoKind): string => {
+    const s = theme.palette.foundation.status;
+    return kind === 'added' ? s.success : kind === 'modified' ? s.warning : s.danger;
+  };
+  // Git 角标字母 → i18n tooltip 文案键。
+  const gitTitle = (letter: string): string => {
+    const key =
+      { M: 'modified', A: 'added', D: 'deleted', U: 'untracked', R: 'renamed', C: 'conflict' }[
+        letter
+      ] ?? 'modified';
+    return t(`files.git.${key}`);
+  };
 
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [editing, setEditing] = useState<EditingState | null>(null);
@@ -508,6 +523,8 @@ export const FileSystemTree = ({
       const isDropTarget = entry.isDir && dragOverPath === entry.path;
       const isRenaming = editing?.kind === 'rename' && editing.entry.path === entry.path;
       const isFocused = entry.path === focusedPath;
+      const fileDeco = entry.isDir ? undefined : gitDeco.fileDeco(entry.path);
+      const dirHasChanges = entry.isDir && gitDeco.dirChanged(entry.path);
       return (
         <Box key={entry.path}>
           <Box
@@ -580,9 +597,28 @@ export const FileSystemTree = ({
                 errSx={styles.inlineInputError}
               />
             ) : (
-              <Typography component="span" sx={styles.name} title={entry.name}>
+              <Typography
+                component="span"
+                sx={
+                  (fileDeco
+                    ? [styles.name, { color: gitColor(fileDeco.kind) }]
+                    : styles.name) as SxProps<Theme>
+                }
+                title={entry.name}
+              >
                 {renderName(entry.name)}
               </Typography>
+            )}
+            {!isRenaming && dirHasChanges && <Box sx={styles.dirChangeDot} aria-hidden />}
+            {!isRenaming && fileDeco && (
+              <Box
+                component="span"
+                sx={styles.gitBadge}
+                style={{ color: gitColor(fileDeco.kind) }}
+                title={gitTitle(fileDeco.letter)}
+              >
+                {fileDeco.letter}
+              </Box>
             )}
           </Box>
           {entry.isDir && isExpanded && (

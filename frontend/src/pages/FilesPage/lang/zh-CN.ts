@@ -78,6 +78,14 @@ export const filesPageZhCN: Messages = {
       tooLong: '名称过长（不超过 255 个字符）',
       exists: '该名称已存在',
     },
+    git: {
+      modified: '已修改',
+      added: '新增',
+      deleted: '已删除',
+      untracked: '未跟踪',
+      renamed: '重命名',
+      conflict: '冲突',
+    },
     diff: {
       view: '查看改动（相对 HEAD）',
       compareClipboard: '与剪贴板比较（红＝当前内容，绿＝剪贴板）',

@@ -97,6 +97,24 @@ export const fileSystemTreeStyles = (theme: Theme): Record<string, SxProps<Theme
       color: fp.accent,
       fontWeight: 700,
     },
+    // Git 状态角标字母（M/A/D/U/R/C），颜色按类别在组件内行内设置。
+    gitBadge: {
+      flexShrink: 0,
+      width: 14,
+      textAlign: 'center',
+      fontSize: 11,
+      fontWeight: 700,
+      lineHeight: 1,
+    },
+    // 含变更目录的滚动标记小圆点（folder roll-up）。
+    dirChangeDot: {
+      flexShrink: 0,
+      width: 6,
+      height: 6,
+      borderRadius: '50%',
+      backgroundColor: fp.accent,
+      mr: 0.25,
+    },
     hint: {
       px: 1.5,
       py: 1,

@@ -25,6 +25,16 @@ func (s *Service) StatusFiles(ctx context.Context, path string) ([]gitx.FileStat
 	return repo.StatusFiles(ctx)
 }
 
+// RepoRoot 返回 path 所在 Git 仓库的工作树根（绝对路径）。非仓库透传 ErrNotARepo。
+// 供文件树 Git 状态装饰把 StatusFiles 的仓库相对路径还原为绝对路径与树节点比对。
+func (s *Service) RepoRoot(ctx context.Context, path string) (string, error) {
+	repo, err := gitx.Open(path)
+	if err != nil {
+		return "", err
+	}
+	return repo.TopLevel(ctx)
+}
+
 // DiffFile 返回单文件 diff（staged 决定暂存区/工作树侧），解析为 localhistory.DiffResult
 // 复用前端 DiffView。行级 diff（无字符级 inline，对齐 VSCode 默认）；二进制 → IsBinary。
 func (s *Service) DiffFile(ctx context.Context, path, file string, staged bool) (localhistory.DiffResult, error) {
