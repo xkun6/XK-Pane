@@ -5,7 +5,9 @@ import { useRightPanel, type RightPanelId } from '@/rightpanel';
 import type { FileTreeMutation } from '@/components/FileSystemTree';
 import {
   FileService,
+  GitService,
   NativeDialogs,
+  type DiffResult,
   type FileEntry,
   type RecentDirectory,
 } from '@/services';
@@ -30,6 +32,12 @@ export interface UseFilesPageResult {
   // 图片就地预览：非空时右栏渲染 <img>（data URI），不进文本编辑器。
   imageDataUri: string | null;
   viewMode: FilesViewMode;
+  // Git diff 就地（HEAD vs 工作树）：diffMode=true 时右栏渲染 DiffView。
+  diffMode: boolean;
+  gitDiff: DiffResult | null;
+  diffLoading: boolean;
+  diffError: 'notRepo' | 'generic' | null;
+  toggleDiff: () => Promise<void>;
   // 选中（驱动树高亮）
   selectedFile: string | null;
   // 文件树内模糊过滤词（仅过滤已加载节点）
@@ -72,6 +80,10 @@ export const useFilesPage = (): UseFilesPageResult => {
   const [imageDataUri, setImageDataUri] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<FilesViewMode>('source');
   const [treeQuery, setTreeQuery] = useState('');
+  const [diffMode, setDiffMode] = useState(false);
+  const [gitDiff, setGitDiff] = useState<DiffResult | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [diffError, setDiffError] = useState<'notRepo' | 'generic' | null>(null);
 
   // 用 ref 追踪当前打开文件，使 onTreeMutate 回调保持稳定（不随每次 open 重建）。
   const openFileRef = useRef<string | null>(null);
@@ -98,6 +110,9 @@ export const useFilesPage = (): UseFilesPageResult => {
     setOriginalValue('');
     setIsBinary(false);
     setImageDataUri(null);
+    setDiffMode(false);
+    setGitDiff(null);
+    setDiffError(null);
     setFileError(null);
     setTreeQuery('');
   }, [rootDir]);
@@ -125,6 +140,9 @@ export const useFilesPage = (): UseFilesPageResult => {
       setCurrentFile(entry.path);
       setCurrentDir(dirOf(entry.path));
       setImageDataUri(null);
+      setDiffMode(false);
+      setGitDiff(null);
+      setDiffError(null);
       try {
         if (isImg(entry.path)) {
           // 图片：读 data URI 就地预览，不进文本编辑器。
@@ -189,6 +207,29 @@ export const useFilesPage = (): UseFilesPageResult => {
     });
   }, [currentFile, rootDir]);
 
+  // 切换「查看改动」：开启时拉取该文件 HEAD vs 工作树 diff（读盘内容，未保存的编辑不计入）。
+  const toggleDiff = useCallback(async () => {
+    const open = openFileRef.current;
+    if (!open) return;
+    if (diffMode) {
+      setDiffMode(false);
+      return;
+    }
+    setDiffMode(true);
+    setDiffLoading(true);
+    setDiffError(null);
+    setGitDiff(null);
+    try {
+      const d = await GitService.diffFileAbs(open);
+      setGitDiff(d);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setDiffError(/not a git repository/i.test(msg) ? 'notRepo' : 'generic');
+    } finally {
+      setDiffLoading(false);
+    }
+  }, [diffMode]);
+
   // 文件树写操作回调：当前打开的文件被删除 / 改名 → 清空编辑器与选中态（改名后路径已变）。
   const onTreeMutate = useCallback(
     (m: FileTreeMutation) => {
@@ -200,6 +241,8 @@ export const useFilesPage = (): UseFilesPageResult => {
         setOriginalValue('');
         setIsBinary(false);
         setImageDataUri(null);
+        setDiffMode(false);
+        setGitDiff(null);
         setFileError(null);
         setCurrentFile(null);
       }
@@ -222,6 +265,11 @@ export const useFilesPage = (): UseFilesPageResult => {
     isMarkdown: openFilePath ? isMd(openFilePath) : false,
     imageDataUri,
     viewMode,
+    diffMode,
+    gitDiff,
+    diffLoading,
+    diffError,
+    toggleDiff,
     selectedFile: currentFile,
     treeQuery,
     setTreeQuery,

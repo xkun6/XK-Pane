@@ -8,9 +8,11 @@ import {
   useTheme,
 } from '@mui/material';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
+import DifferenceRoundedIcon from '@mui/icons-material/DifferenceRounded';
 import { useT } from '@/i18n';
 import { CodeEditor, languageForPath } from '@/components/CodeEditor';
 import { MarkdownView } from '@/components/MarkdownView';
+import { DiffView } from '@/components/DiffView';
 import { filesPageStyles } from './FilesPage.styles';
 import { filesPathBase, type FilesViewMode, type UseFilesPageResult } from './useFilesPage';
 
@@ -25,6 +27,15 @@ export const FileEditorPane = ({ vm }: { vm: UseFilesPageResult }) => {
   }
 
   const lang = languageForPath(vm.openFilePath);
+  // 「查看改动」仅对文本文件有意义（图片/二进制不 diff）。
+  const canDiff = !vm.isBinary && !vm.imageDataUri;
+  const diffLabels = {
+    binary: t('files.diff.binary'),
+    truncated: t('files.diff.truncated'),
+    identical: t('files.diff.identical'),
+    added: t('files.diff.added'),
+    removed: t('files.diff.removed'),
+  };
 
   return (
     <Box sx={styles.right}>
@@ -53,12 +64,27 @@ export const FileEditorPane = ({ vm }: { vm: UseFilesPageResult }) => {
             <ToggleButton value="preview">{t('files.editor.preview')}</ToggleButton>
           </ToggleButtonGroup>
         )}
+        {canDiff && (
+          <Tooltip title={t('files.diff.view')} arrow>
+            <span>
+              <IconButton
+                size="small"
+                sx={vm.diffMode ? styles.toolBtnActive : styles.toolBtn}
+                onClick={() => void vm.toggleDiff()}
+                aria-label={t('files.diff.view')}
+                aria-pressed={vm.diffMode}
+              >
+                <DifferenceRoundedIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
         <Tooltip title={t('files.editor.save')} arrow>
           <span>
             <IconButton
               size="small"
               sx={styles.toolBtn}
-              disabled={!vm.dirty || vm.saving || vm.isBinary}
+              disabled={!vm.dirty || vm.saving || vm.isBinary || vm.diffMode}
               onClick={() => void vm.save()}
               aria-label={t('files.editor.save')}
             >
@@ -70,6 +96,18 @@ export const FileEditorPane = ({ vm }: { vm: UseFilesPageResult }) => {
       <Box sx={styles.editorBody}>
         {vm.fileError ? (
           <Box sx={styles.errorHint}>{t('files.editor.loadError')}</Box>
+        ) : vm.diffMode ? (
+          vm.diffLoading ? (
+            <Box sx={styles.binaryHint}>{t('files.diff.loading')}</Box>
+          ) : vm.diffError === 'notRepo' ? (
+            <Box sx={styles.binaryHint}>{t('files.diff.notRepo')}</Box>
+          ) : vm.diffError ? (
+            <Box sx={styles.errorHint}>{t('files.diff.error')}</Box>
+          ) : vm.gitDiff ? (
+            <Box sx={styles.diffWrap}>
+              <DiffView diff={vm.gitDiff} labels={diffLabels} />
+            </Box>
+          ) : null
         ) : vm.imageDataUri ? (
           <Box sx={styles.imageWrap}>
             <Box

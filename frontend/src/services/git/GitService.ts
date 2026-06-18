@@ -242,6 +242,12 @@ export const GitService = {
     return toDiff(await Binding.DiffFile(path, file, staged));
   },
 
+  // 按文件绝对路径取工作树相对 HEAD 的 diff（后端自解析仓库根与相对路径）；供文件页就地查看改动。
+  // 非仓库时后端透传 ErrNotARepo（调用方捕获后提示）。
+  async diffFileAbs(absPath: string): Promise<DiffResult> {
+    return toDiff(await Binding.DiffFileAbs(absPath));
+  },
+
   // 暂存指定文件（git add）。
   async stage(path: string, files: string[]): Promise<void> {
     await Binding.Stage(path, files);

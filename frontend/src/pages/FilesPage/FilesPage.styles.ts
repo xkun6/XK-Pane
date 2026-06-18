@@ -203,6 +203,13 @@ export const filesPageStyles = (theme: Theme): Record<string, SxProps<Theme>> =>
       '&:hover': { backgroundColor: fp.bg.hover, color: fp.text.primary },
       '&.Mui-disabled': { color: fp.text.muted, opacity: 0.5 },
     },
+    // 工具栏按钮激活态（如「查看改动」已开启）
+    toolBtnActive: {
+      borderRadius: 6,
+      color: fp.accent,
+      backgroundColor: fp.bg.active,
+      '&:hover': { backgroundColor: fp.bg.active, color: fp.accent },
+    },
     toggleGroup: {
       '& .MuiToggleButton-root': {
         textTransform: 'none',
@@ -231,6 +238,13 @@ export const filesPageStyles = (theme: Theme): Record<string, SxProps<Theme>> =>
       justifyContent: 'center',
       color: fp.text.muted,
       fontSize: 13,
+    },
+    // —— Git diff 就地 ——
+    diffWrap: {
+      flex: 1,
+      minHeight: 0,
+      overflow: 'auto',
+      backgroundColor: fp.bg.content,
     },
     // —— 图片就地预览 ——
     imageWrap: {

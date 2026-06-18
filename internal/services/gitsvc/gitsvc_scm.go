@@ -39,6 +39,28 @@ func (s *Service) DiffFile(ctx context.Context, path, file string, staged bool) 
 	return parseUnifiedDiff(raw), nil
 }
 
+// DiffFileAbs 按「文件绝对路径」返回其工作树相对 HEAD 的 diff（供文件页就地查看改动）。
+// 自行解析该文件所属仓库根与相对路径，免去前端拼相对路径。非仓库透传 ErrNotARepo。
+func (s *Service) DiffFileAbs(ctx context.Context, absPath string) (localhistory.DiffResult, error) {
+	repo, err := gitx.Open(filepath.Dir(absPath))
+	if err != nil {
+		return localhistory.DiffResult{}, err
+	}
+	root, err := repo.TopLevel(ctx)
+	if err != nil {
+		return localhistory.DiffResult{}, err
+	}
+	rel, err := filepath.Rel(root, absPath)
+	if err != nil {
+		return localhistory.DiffResult{}, err
+	}
+	raw, err := repo.DiffFileRaw(ctx, filepath.ToSlash(rel), false)
+	if err != nil {
+		return localhistory.DiffResult{}, err
+	}
+	return parseUnifiedDiff(raw), nil
+}
+
 // Stage 把文件加入暂存区。非仓库透传 ErrNotARepo。
 func (s *Service) Stage(ctx context.Context, path string, files []string) error {
 	repo, err := gitx.Open(path)

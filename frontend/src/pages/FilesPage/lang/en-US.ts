@@ -57,5 +57,16 @@ export const filesPageEnUS: Messages = {
       newDir: { title: 'New folder', label: 'Folder name' },
       rename: { title: 'Rename', label: 'New name' },
     },
+    diff: {
+      view: 'View changes (vs HEAD)',
+      loading: 'Computing changes…',
+      notRepo: 'This file is not in a Git repository.',
+      error: 'Failed to get changes.',
+      binary: 'Binary file — cannot diff.',
+      truncated: 'File too large — truncated.',
+      identical: 'No differences from HEAD.',
+      added: 'Added',
+      removed: 'Removed',
+    },
   },
 };

@@ -57,5 +57,16 @@ export const filesPageZhCN: Messages = {
       newDir: { title: '新建文件夹', label: '文件夹名' },
       rename: { title: '重命名', label: '新名称' },
     },
+    diff: {
+      view: '查看改动（相对 HEAD）',
+      loading: '正在计算改动…',
+      notRepo: '该文件不在 Git 仓库中。',
+      error: '获取改动失败。',
+      binary: '二进制文件，无法比较。',
+      truncated: '文件过大，已截断。',
+      identical: '与 HEAD 无差异。',
+      added: '新增',
+      removed: '删除',
+    },
   },
 };
