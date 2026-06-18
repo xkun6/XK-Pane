@@ -377,10 +377,12 @@ export const FileSystemTree = ({
   const openRowMenu = (e: MouseEvent, entry: FileEntry): void => {
     e.preventDefault();
     e.stopPropagation();
+    if (editing) return; // 内联编辑中：右键不弹菜单（MUI Menu autoFocus 会抢焦点致旧输入框 blur 误提交）
     setMenu({ x: e.clientX, y: e.clientY, entry });
   };
   const openBlankMenu = (e: MouseEvent): void => {
     e.preventDefault();
+    if (editing) return;
     setMenu({ x: e.clientX, y: e.clientY, entry: null });
   };
   const closeMenu = (): void => setMenu(null);
@@ -569,6 +571,8 @@ export const FileSystemTree = ({
                 )}
                 onSubmit={(name) => {
                   setEditing(null);
+                  // 焦点游标跟随到新路径（否则改名后 focusedPath 悬挂、下次按键跳回首行）。
+                  setFocusedPath(entry.path.slice(0, entry.path.length - entry.name.length) + name);
                   void runOp(() => vm.renameEntry(entry, name));
                 }}
                 onCancel={() => setEditing(null)}
@@ -597,6 +601,8 @@ export const FileSystemTree = ({
               {kids && renderNodes(kids, depth + 1)}
             </>
           )}
+          {/* 过滤态下目标目录因无命中子项而 isExpanded=false 时，仍渲染新建幽灵行（否则点了没反应）。 */}
+          {entry.isDir && !isExpanded && newRow(entry.path, depth + 1)}
         </Box>
       );
     });
