@@ -101,6 +101,7 @@ export interface UseHistoryPageResult {
   select: (path: string, errorTitle: string) => Promise<void>;
   refresh: (errorTitle: string) => Promise<void>;
   selectFile: (filePath: string, errorTitle: string) => Promise<void>;
+  followFile: (path: string, filePath: string, errorTitle: string) => Promise<void>;
   backToList: () => void;
   selectVersion: (v: FileVersion, errorTitle: string) => Promise<void>;
   setViewMode: (mode: HistoryViewMode, errorTitle: string) => void;
@@ -352,6 +353,32 @@ export const useHistoryPage = (): UseHistoryPageResult => {
     [loadVersionsFor, loadDiff],
   );
 
+  // 绑定模式「跟随当前打开的文件」（VS Code Timeline 行为）：一步设定 path+file 直达阶段 2
+  // 时间线，跳过阶段 1 的文件列表挑选。path/filePath 显式传入（避开 pathRef 渲染滞后）；
+  // 仍预拉文件列表 + 配置，使「返回列表」可即点。filePath 用项目内正斜杠相对路径（同 store 键）。
+  const followFile = useCallback(
+    async (path: string, filePath: string, errorTitle: string): Promise<void> => {
+      if (!path || !filePath) return;
+      setSelectedPath(path);
+      setSelectedFile(filePath);
+      setViewModeState('diff');
+      setBranchFilterState('');
+      setSelectedVersion(null);
+      setDiff(null);
+      setContent('');
+      try {
+        await Promise.all([loadFiles(path, errorTitle), loadConfigStats(path)]);
+        const { ordered, selected } = await loadVersionsFor(path, filePath, null);
+        if (selected) await loadDiff(path, filePath, ordered, selected, errorTitle);
+      } catch (e) {
+        setVersions([]);
+        setFileBranches([]);
+        void NativeDialogs.error(errorTitle, messageOf(e));
+      }
+    },
+    [loadFiles, loadConfigStats, loadVersionsFor, loadDiff],
+  );
+
   const backToList = useCallback((): void => {
     setSelectedFile(null);
     setVersions([]);
@@ -566,6 +593,7 @@ export const useHistoryPage = (): UseHistoryPageResult => {
     select,
     refresh,
     selectFile,
+    followFile,
     backToList,
     selectVersion,
     setViewMode,

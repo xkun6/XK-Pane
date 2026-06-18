@@ -37,9 +37,12 @@ const MB = 1024 * 1024;
 // 两种用法见 GitPage：整页模式（项目选择器）/ 绑定模式（boundPath，右侧抽屉跟随当前目录）。
 export interface HistoryPageProps {
   boundPath?: string | null;
+  // 绑定模式下「当前打开的文件」（项目内正斜杠相对路径）。非空时自动跟随该文件直达时间线
+  // （VS Code Timeline 行为）；为空 / undefined 时回落到文件列表挑选。仅本地历史抽屉传入。
+  boundFile?: string | null;
 }
 
-export const HistoryPage = ({ boundPath }: HistoryPageProps) => {
+export const HistoryPage = ({ boundPath, boundFile }: HistoryPageProps) => {
   const theme = useTheme();
   const styles = historyPageStyles(theme);
   const t = useT();
@@ -54,11 +57,14 @@ export const HistoryPage = ({ boundPath }: HistoryPageProps) => {
   // watcher 自动捕获 → live 刷新当前项目的列表 / 时间线。
   useLocalHistoryChangeEvent(vm.selectedPath, vm.reloadSilent);
 
-  // 绑定模式：boundPath 变化即重选目标（空路径 → 清空）。只盯 boundPath，语言切换不重载（保留视图态）。
+  // 绑定模式：boundPath / boundFile 变化即重选目标。有 boundFile 则跟随该文件直达时间线
+  // （VS Code Timeline）；否则回落到文件列表。只盯绑定输入，语言切换不重载（保留视图态）。
   useEffect(() => {
-    if (bound) void vm.select(boundPath ?? '', errorTitle);
+    if (!bound) return;
+    if (boundPath && boundFile) void vm.followFile(boundPath, boundFile, errorTitle);
+    else void vm.select(boundPath ?? '', errorTitle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bound, boundPath]);
+  }, [bound, boundPath, boundFile]);
 
   const sourceColor = (source: string): string => {
     const f = theme.palette.foundation;

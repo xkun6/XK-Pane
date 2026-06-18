@@ -20,13 +20,24 @@ function basename(path: string): string {
   return idx >= 0 ? norm.slice(idx + 1) : norm;
 }
 
+// 把绝对文件路径换算为「项目内正斜杠相对路径」（= 本地历史 store 键，对齐
+// watcher 的 ToSlash(Rel(root, abs))）。仅作比较用归一（D7：实际文件 IO 仍用原始路径），
+// 切片保留原始大小写，仅前缀判断不区分大小写（Windows）。文件不在根内 → null。
+function relativeKey(abs: string | null, root: string | null): string | null {
+  if (!abs || !root) return null;
+  const a = abs.replace(/\\/g, '/');
+  const r = root.replace(/\\/g, '/').replace(/\/+$/, '');
+  if (!a.toLowerCase().startsWith(r.toLowerCase() + '/')) return null;
+  return a.slice(r.length + 1);
+}
+
 // 右侧抽屉宿主：active 为空不渲染（不占布局宽度）。绑定目标 = 当前聚焦目录（回落到树根）。
 export const RightPanelDrawer = () => {
   const theme = useTheme();
   const styles = rightPanelDrawerStyles(theme);
   const t = useT();
   const { active, close } = useRightPanel();
-  const { currentDir, rootDir } = useCurrentDir();
+  const { currentDir, rootDir, currentFile } = useCurrentDir();
 
   if (!active) return null;
 
@@ -35,6 +46,8 @@ export const RightPanelDrawer = () => {
   // 本地历史按「项目根」精确存储、不向上查找，必须绑 rootDir（文件页打开的项目根）——
   // 否则进子目录会查到空历史、在子目录错建 .xkpanes、且 live 刷新（事件按项目根过滤）失效。
   const boundPath = isGit ? currentDir ?? rootDir : rootDir ?? currentDir;
+  // 本地历史抽屉：当前打开的文件相对项目根 → 自动跟随其时间线（Git 抽屉不需要）。
+  const boundFile = isGit ? null : relativeKey(currentFile, boundPath);
   const Icon = isGit ? AccountTreeRoundedIcon : HistoryRoundedIcon;
   const title = isGit ? t('route.git') : t('route.history');
 
@@ -59,7 +72,7 @@ export const RightPanelDrawer = () => {
 
       <Box sx={styles.body}>
         <Suspense fallback={<Box sx={styles.loading}>{t('common.loading')}</Box>}>
-          {isGit ? <GitPanel boundPath={boundPath} /> : <HistoryPanel boundPath={boundPath} />}
+          {isGit ? <GitPanel boundPath={boundPath} /> : <HistoryPanel boundPath={boundPath} boundFile={boundFile} />}
         </Suspense>
       </Box>
     </Box>
