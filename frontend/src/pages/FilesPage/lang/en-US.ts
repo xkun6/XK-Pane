@@ -57,6 +57,7 @@ export const filesPageEnUS: Messages = {
       duplicate: 'Duplicate',
       trash: 'Move to Trash',
       copyPath: 'Copy path',
+      copyRelPath: 'Copy relative path',
       reveal: 'Reveal in file manager',
       refresh: 'Refresh',
       trashTitle: 'Move to Trash',

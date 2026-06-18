@@ -338,6 +338,20 @@ export const FileSystemTree = ({
       /* 复制失败静默：非关键路径 */
     });
   };
+  // 相对 rootPath 的路径：归一仅用于判断前缀，切片用原始字符串以保留分隔符（守 D7，不规范化写入值）。
+  const relativeToRoot = (abs: string): string => {
+    const cleanRoot = rootPath.replace(/[\\/]+$/, '');
+    if (cleanRoot && normCmp(abs).startsWith(normCmp(cleanRoot) + '/')) {
+      return abs.slice(cleanRoot.length).replace(/^[\\/]+/, '');
+    }
+    return abs; // 不在根下：回退绝对路径
+  };
+  const onCopyRelPath = (entry: FileEntry): void => {
+    closeMenu();
+    void navigator.clipboard?.writeText(relativeToRoot(entry.path)).catch(() => {
+      /* 复制失败静默 */
+    });
+  };
   const onReveal = (entry: FileEntry): void => {
     closeMenu();
     void FileService.revealInOS(entry.path).catch(() => {
@@ -558,6 +572,9 @@ export const FileSystemTree = ({
       ),
       <Divider key="d1" sx={styles.menuDivider} />,
       item('cp', <LinkRoundedIcon fontSize="small" />, t('files.menu.copyPath'), () => onCopyPath(en)),
+      item('crp', <LinkRoundedIcon fontSize="small" />, t('files.menu.copyRelPath'), () =>
+        onCopyRelPath(en),
+      ),
       item('rv', <OpenInNewRoundedIcon fontSize="small" />, t('files.menu.reveal'), () => onReveal(en)),
     ];
   };

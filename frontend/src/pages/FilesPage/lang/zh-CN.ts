@@ -57,6 +57,7 @@ export const filesPageZhCN: Messages = {
       duplicate: '复制副本',
       trash: '移到回收站',
       copyPath: '复制路径',
+      copyRelPath: '复制相对路径',
       reveal: '在系统文件管理器中显示',
       refresh: '刷新',
       trashTitle: '移到回收站',
