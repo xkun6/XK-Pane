@@ -150,6 +150,7 @@ export const FilesPage = () => {
             {vm.searchMode === 'content' ? (
               <ContentSearchResults
                 results={vm.contentResults}
+                term={vm.contentTerm}
                 loading={vm.contentLoading}
                 searched={vm.contentSearched}
                 selectedPath={vm.selectedFile}

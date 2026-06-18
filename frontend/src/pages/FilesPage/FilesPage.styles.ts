@@ -99,51 +99,95 @@ export const filesPageStyles = (theme: Theme): Record<string, SxProps<Theme>> =>
       textTransform: 'uppercase',
       color: fp.text.muted,
     },
-    contentRow: {
+    // —— 内容搜索结果（按文件分组）——
+    contentGroup: {
+      mb: 0.25,
+    },
+    // 文件头行（图标 + 文件名 + 压暗目录 + 命中数）。
+    contentFile: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 0.5,
       px: 1.5,
-      py: 0.75,
+      height: 26,
       cursor: 'pointer',
       borderLeft: '2px solid transparent',
       '&:hover': { backgroundColor: fp.bg.hover },
     },
-    contentRowActive: {
+    contentFileActive: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 0.5,
       px: 1.5,
-      py: 0.75,
+      height: 26,
       cursor: 'pointer',
       borderLeft: `2px solid ${fp.accent}`,
       backgroundColor: fp.bg.active,
     },
-    contentRowHead: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 0.5,
-      minWidth: 0,
-    },
-    contentRel: {
-      flex: 1,
-      minWidth: 0,
+    contentFileName: {
+      flexShrink: 0,
+      maxWidth: '60%',
       fontSize: 12.5,
+      fontWeight: 600,
       color: fp.text.primary,
       overflow: 'hidden',
       textOverflow: 'ellipsis',
       whiteSpace: 'nowrap',
-      direction: 'rtl', // 长路径优先显示尾部（文件名）
-      textAlign: 'left',
     },
-    contentLineNo: {
-      fontSize: 11.5,
+    contentFileDir: {
+      flex: 1,
+      minWidth: 0,
+      fontSize: 11,
       color: fp.text.muted,
-      flexShrink: 0,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
     },
-    contentLineText: {
-      mt: 0.25,
-      ml: 2.5,
+    // 命中数小角标。
+    contentHitCount: {
+      flexShrink: 0,
+      minWidth: 16,
+      px: 0.5,
+      textAlign: 'center',
+      fontSize: 10.5,
+      fontWeight: 700,
+      lineHeight: '16px',
+      borderRadius: 8,
+      color: fp.text.secondary,
+      backgroundColor: fp.bg.hover,
+    },
+    // 命中行（行号 gutter + 预览）。
+    contentHit: {
+      display: 'flex',
+      alignItems: 'baseline',
+      gap: 1,
+      pl: 3.5,
+      pr: 1.5,
+      py: 0.25,
+      cursor: 'pointer',
+      '&:hover': { backgroundColor: fp.bg.hover },
+    },
+    contentHitLine: {
+      flexShrink: 0,
+      minWidth: 30,
+      textAlign: 'right',
+      fontSize: 11,
+      fontFamily: 'monospace',
+      color: fp.text.muted,
+    },
+    contentHitText: {
+      flex: 1,
+      minWidth: 0,
       fontSize: 12,
       fontFamily: 'monospace',
       color: fp.text.secondary,
       overflow: 'hidden',
       textOverflow: 'ellipsis',
       whiteSpace: 'nowrap',
+    },
+    contentHitHL: {
+      color: fp.accent,
+      fontWeight: 700,
     },
     searchInput: {
       flex: 1,

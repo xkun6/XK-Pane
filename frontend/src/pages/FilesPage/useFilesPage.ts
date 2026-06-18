@@ -58,6 +58,8 @@ export interface UseFilesPageResult {
   searchMode: SearchMode;
   setSearchMode: (m: SearchMode) => void;
   contentResults: ContentMatch[];
+  // 产出当前结果集的搜索词（结果列表命中高亮用）。
+  contentTerm: string;
   contentLoading: boolean;
   contentSearched: boolean;
   runContentSearch: () => Promise<void>;
@@ -472,6 +474,7 @@ export const useFilesPage = (): UseFilesPageResult => {
     searchMode,
     setSearchMode,
     contentResults,
+    contentTerm,
     contentLoading,
     contentSearched,
     runContentSearch,
