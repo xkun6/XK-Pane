@@ -83,11 +83,11 @@ tasks:
     label: build:frontend (DEV={{.DEV}} RUNNER={{.PACKAGE_MANAGER}})
     summary: Build the frontend project
     dir: frontend
-    sources:
-      - "**/*"
-      - exclude: node_modules/**/*
-    generates:
-      - dist/**/*
+    # 强制每次重建前端：不走 go-task 增量缓存。否则 vite build 会被 checksum 判定"最新"而跳过，
+    # 但 Go 那步照常重编并把过期 frontend/dist 通过 embed.FS 打进二进制 —— 打出来的包前端是旧的
+    # （wails3 dev 直读 frontend/src 源码、看不出这个问题）。前端构建仅 ~十几秒，换取打包永不漏改动。
+    # deps 的 generate:bindings 仍保持增量（Go 没变就不重生成、也不会撞 dev server 对 bindings 目录的锁）。
+    method: none
     deps:
       - task: install:frontend:deps
       - task: generate:bindings
