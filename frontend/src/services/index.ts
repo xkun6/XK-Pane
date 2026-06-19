@@ -122,6 +122,11 @@ export {
 } from './clitools/CliToolService';
 export { SessionScanService, type ResumeSession } from './sessionscan/SessionScanService';
 export {
+  AgentUsageService,
+  type TokenUsage,
+  type TokenWindow,
+} from './agentusage/AgentUsageService';
+export {
   TranscriptService,
   type Timeline,
   type TimelineEvent,

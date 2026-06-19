@@ -6,6 +6,7 @@ import { useRouter } from '@/router';
 import type { RouteDefinition } from '@/router';
 import { usePreferences } from '@/preferences';
 import { lifecycleRole } from '@/services/transport';
+import { AgentUsageRail } from './AgentUsageRail';
 import { sidebarStyles } from './Sidebar.styles';
 
 type IconComponent = ComponentType<{ fontSize?: 'small' | 'medium' | 'large' | 'inherit' }>;
@@ -89,6 +90,8 @@ export const Sidebar = () => {
       </Box>
 
       <Box sx={styles.spacer} />
+
+      <AgentUsageRail />
 
       <Box sx={styles.section}>
         {footer.filter(visibleHere).map(renderItem)}

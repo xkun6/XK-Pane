@@ -20,6 +20,20 @@ export const zhCN: Locale = {
     sidebar: {
       brand: 'X',
       navAriaLabel: '主导航',
+      usage: {
+        ariaLabel: 'Claude Code token 用量',
+        title: 'Claude Code token 用量',
+        source: '本地会话日志统计',
+        last5h: '近5h',
+        today: '今日',
+        week: '本周',
+        month: '本月',
+        input: '输入',
+        output: '输出',
+        cacheRead: '缓存读',
+        cacheCreate: '缓存写',
+        msgs: '消息',
+      },
     },
     titleBar: {
       controls: {

@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 
 	"xkpane/internal/events"
+	"xkpane/internal/services/agentusage"
 	"xkpane/internal/services/appsettings"
 	"xkpane/internal/services/bedrock"
 	"xkpane/internal/services/bedrockdocsync"
@@ -202,6 +203,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(wsSvc),
 			application.NewService(wtSvc), // 自动 worktree（在隔离 worktree 中启动会话）
 			application.NewService(scanSvc),
+			application.NewService(agentusage.New()),  // 本地 token 用量（近5h/今日/本周，侧栏竖向显示）
 			application.NewService(transcriptSvc),     // 结构化时间线（桌面卡片视图取数）
 			application.NewService(wailsNotifier),     // Wails 通知 service（跑 ServiceStartup 注册 toast）
 			application.NewService(webAccessSvc),      // Web 网关门面（GetAccessInfo → 配对二维码）

@@ -13,6 +13,20 @@ export const enUS: Locale = {
     sidebar: {
       brand: 'X',
       navAriaLabel: 'Primary navigation',
+      usage: {
+        ariaLabel: 'Claude Code token usage',
+        title: 'Claude Code token usage',
+        source: 'From local session logs',
+        last5h: 'Last 5h',
+        today: 'Today',
+        week: 'This week',
+        month: 'This month',
+        input: 'Input',
+        output: 'Output',
+        cacheRead: 'Cache read',
+        cacheCreate: 'Cache write',
+        msgs: 'Messages',
+      },
     },
     titleBar: {
       controls: {
