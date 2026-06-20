@@ -108,6 +108,25 @@ func TestStdoutKeepsPythonErrorEngine(t *testing.T) {
 	}
 }
 
+func TestStdoutDropsEngineEmptyErrorDumpNoise(t *testing.T) {
+	// post_error_dump 每帧空转储噪音（带 / 不带 [Python] 前缀都应丢弃）
+	for _, s := range []string{
+		"[2026-06-20 09:02:18,049] [ERROR][Engine] post_error_dump: Starting error dump",
+		"[2026-06-20 09:02:18,052] [ERROR][Engine] Error dump: None",
+		"[Python] [2026-06-20 09:02:18,049] [ERROR][Engine] post_error_dump: Starting error dump",
+		"[Python] [2026-06-20 09:02:18,052] [ERROR][Engine] Error dump: None",
+	} {
+		mustDrop(t, s)
+	}
+}
+
+func TestStdoutKeepsRealEngineErrorDump(t *testing.T) {
+	// 只屏蔽 None：真有内容的 dump 必须保留，避免吞掉真实错误
+	mustParse(t, "[2026-06-20 09:02:18,052] [ERROR][Engine] Error dump: Traceback (most recent call last)")
+	// 其它 [ERROR][Engine]（如 get_world_record: None）不在屏蔽名单内，照常保留
+	mustParse(t, "[2026-05-14 20:22:19,549] [ERROR][Engine] get_world_record: None")
+}
+
 func TestStdoutKeepsModBracketTag(t *testing.T) {
 	cases := []struct{ input, cat string }{
 		{"[ContainerTreasure] ContainerTreasure Server Init", "ContainerTreasure"},

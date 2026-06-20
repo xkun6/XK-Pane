@@ -58,9 +58,16 @@ func parseStdoutLine(raw string) (ParsedLog, bool) {
 	}
 
 	// 规则 1：Python 时间戳头
-	if ts, level, category, _, ok := parsePythonHeader(body); ok {
+	if ts, level, category, message, ok := parsePythonHeader(body); ok {
 		// 与 MC Studio 一致：丢弃 [INFO][Engine]（ModSDK 内部 trace），保留 ERROR/WARN/其他类别
 		if level == "INFO" && category == "Engine" {
+			return ParsedLog{}, false
+		}
+		// 屏蔽引擎"空错误转储"噪音：ModSDK 的 post_error_dump 每帧轮询，无真实错误时
+		// 恒定刷 "Starting error dump" + "Error dump: None" 一对（实测每秒数十次），几秒就
+		// 刷爆 cap=2000 环形缓冲，把真实 mod 日志全顶掉。这两行属噪音；真有错误时
+		// "Error dump: <堆栈>" 不等于 None，仍照常保留，不影响真实错误暴露。
+		if isEngineEmptyDump(level, category, message) {
 			return ParsedLog{}, false
 		}
 		return ParsedLog{
@@ -126,6 +133,18 @@ func leadingModTag(body string) (string, bool) {
 
 // isEngineBracketTag 已知 C++ 引擎 / SDK 方括号前缀黑名单（当前仅 UniSDK）。
 func isEngineBracketTag(tag string) bool { return tag == "UniSDK" }
+
+// isEngineEmptyDump 判定引擎"空错误转储"噪音 —— ModSDK 的 post_error_dump 每帧轮询，
+// 没有真实错误时恒定刷出 "Starting error dump" + "Error dump: None" 一对（实测每秒数十次，
+// 几秒就刷爆 cap=2000 环形缓冲，把真实 mod 日志全顶掉）。仅作用于 [ERROR][Engine]：
+// 起始标记行恒定丢弃，"Error dump:" 只在等于 None 时丢弃 —— 真有内容（如堆栈）时仍保留。
+func isEngineEmptyDump(level, category, message string) bool {
+	if level != "ERROR" || category != "Engine" {
+		return false
+	}
+	msg := strings.TrimSpace(message)
+	return msg == "post_error_dump: Starting error dump" || msg == "Error dump: None"
+}
 
 // parsePythonHeader 解析 [YYYY-MM-DD HH:MM:SS,mmm] [LEVEL][Category?] message。
 // 返回 (timestamp, level, category, message, ok)；category 为 "" 表示无。关键鉴别点：时间戳含 , 分隔毫秒。
