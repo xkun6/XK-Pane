@@ -1,7 +1,7 @@
 // Package sessionscan 扫描本机 CLI Agent 的历史会话文件，供「会话恢复」UI 列举可 resume 的会话。
 //
 // 移植 cc-pane 的 claude_session_service / codex_session_service 的 **local** 子集：
-//   - Claude：~/.claude/projects/<编码目录>/*.jsonl —— 目录名 = project_path 把 `: \ / _` 换 `-`
+//   - Claude：~/.claude/projects/<编码目录>/*.jsonl —— 目录名 = project_path 把所有非字母数字字符换 `-`
 //   - Codex： ~/.codex/sessions/**/*.jsonl（递归）—— id+cwd 从首 20 行 session_meta 取
 //
 // 两者都从文件前若干行解析「首条用户 prompt」作 description（截 80 字 + …）。
@@ -141,10 +141,17 @@ func homeDir() string {
 
 // ── Claude ──────────────────────────────────────────────────────────────────
 
-// encodeClaudeProjectPath 把项目路径编码为 Claude CLI 的目录名：`: \ / _` → `-`
-// （对照 cc-pane claude_path.rs:5）。
+// encodeClaudeProjectPath 把项目路径编码为 Claude CLI 的目录名：所有**非字母数字**字符
+// （含中文 / 空格 / 点 / 盘符冒号 / 路径分隔符 / 下划线等）逐字符替换为 `-`，与 Claude CLI 的
+// path.replace(/[^a-zA-Z0-9]/g, '-') 一致。旧实现只替换 `: \ / _`，会漏掉中文等非 ASCII 字符
+// → 中文项目目录名（如 红石洲行动 → `------`）对不上、读不到会话历史（对照 cc-pane claude_path.rs:5）。
 func encodeClaudeProjectPath(path string) string {
-	return strings.NewReplacer(":", "-", "\\", "-", "/", "-", "_", "-").Replace(path)
+	return strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			return r
+		}
+		return '-'
+	}, path)
 }
 
 func scanClaudeProject(projectPath string) []ResumeSession {

@@ -26,6 +26,20 @@ func writeSample(t *testing.T, body string) string {
 	return p
 }
 
+func TestEncodeClaudeProjectDir(t *testing.T) {
+	cases := map[string]string{
+		`I:\vms-workspace`: "I--vms-workspace",
+		// 中文路径：每个汉字 / 分隔符 / 冒号各换一个 `-`，对照 ~/.claude/projects 磁盘真相。
+		`J:\Program\PE\sanjiaozhou\红石洲行动`: "J--Program-PE-sanjiaozhou------",
+		`J:\Program\PE\sanjiaozhou\武器`:    "J--Program-PE-sanjiaozhou---",
+	}
+	for in, want := range cases {
+		if got := encodeClaudeProjectDir(in); got != want {
+			t.Errorf("encodeClaudeProjectDir(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestParseFull(t *testing.T) {
 	res := Parse(writeSample(t, sample), 0)
 

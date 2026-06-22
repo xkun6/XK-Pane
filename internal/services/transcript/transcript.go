@@ -20,7 +20,7 @@ import (
 )
 
 // ResolveClaudePath 返回 cwd 下指定 Claude session id 的转录文件路径（若存在且为文件）。
-// 目录名编码同 Claude CLI（`: \ / _` → `-`，对照 sessionscan）。供「精确映射」：已知会话 id 时
+// 目录名编码同 Claude CLI（所有非字母数字字符 → `-`，对照 sessionscan）。供「精确映射」：已知会话 id 时
 // 直接定位转录，避免同一项目目录下多个并发会话「取最新」的歧义。空入参 / 无 home / 文件不存在返回 ok=false。
 func ResolveClaudePath(cwd, sessionID string) (string, bool) {
 	if strings.TrimSpace(cwd) == "" || strings.TrimSpace(sessionID) == "" {
@@ -30,12 +30,23 @@ func ResolveClaudePath(cwd, sessionID string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	enc := strings.NewReplacer(":", "-", "\\", "-", "/", "-", "_", "-").Replace(cwd)
-	p := filepath.Join(home, ".claude", "projects", enc, sessionID+".jsonl")
+	p := filepath.Join(home, ".claude", "projects", encodeClaudeProjectDir(cwd), sessionID+".jsonl")
 	if st, err := os.Stat(p); err != nil || st.IsDir() {
 		return "", false
 	}
 	return p, true
+}
+
+// encodeClaudeProjectDir 把 cwd 编码为 Claude CLI 的项目目录名：所有非字母数字字符 → `-`，
+// 与 Claude CLI 的 path.replace(/[^a-zA-Z0-9]/g, '-') 一致（保持与 sessionscan.encodeClaudeProjectPath 同步）。
+// 旧实现只替换 `: \ / _`，中文等非 ASCII 字符不替换 → 中文路径目录名对不上、读不到转录。
+func encodeClaudeProjectDir(cwd string) string {
+	return strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			return r
+		}
+		return '-'
+	}, cwd)
 }
 
 // scanLineCap 单行 jsonl 上限（会话行可能极长，超 bufio 默认 64KB；同 sessionscan）。

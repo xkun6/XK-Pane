@@ -11,6 +11,10 @@ func TestEncodeClaudeProjectPath(t *testing.T) {
 		`I:\vms-workspace`:         "I--vms-workspace",
 		`D:\04_workspace_rust\vms`: "D--04-workspace-rust-vms",
 		`/home/user/my_project`:    "-home-user-my-project",
+		// 中文路径：每个非字母数字字符（含每个汉字）各换一个 `-`，对照磁盘真相
+		// ~/.claude/projects/ 下 Claude CLI 实际生成的目录名。
+		`J:\Program\PE\sanjiaozhou\红石洲行动`: "J--Program-PE-sanjiaozhou------",
+		`J:\Program\PE\sanjiaozhou\武器`:    "J--Program-PE-sanjiaozhou---",
 	}
 	for in, want := range cases {
 		if got := encodeClaudeProjectPath(in); got != want {
