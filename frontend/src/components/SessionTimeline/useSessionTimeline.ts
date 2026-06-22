@@ -6,6 +6,7 @@ import {
   type TimelineQuestion,
   type TimelineMetrics,
 } from '@/services';
+import { derivePending } from './derivePending';
 
 // 轮询间隔：转录是 append-only 文件，~1.5s 拉一次增量足够「准实时」，不压后端。
 const POLL_MS = 1500;
@@ -107,6 +108,9 @@ export function useSessionTimeline({ sessionId, active }: UseSessionTimelineArgs
     answeredAskCountRef.current = answeredAskCount;
   }, [answeredAskCount]);
 
+  // 转录派生的待答：事件漏掉时的可靠回退（尤其 web viewer 事后挂载错过 fire-and-forget 事件）。详见 derivePending。
+  const derivedPending = useMemo(() => derivePending(events), [events]);
+
   // 订阅「待答 AskUserQuestion」：始终监听（不漏 —— 事件 fire-and-forget 无重放），按会话过滤。
   useEffect(() => {
     if (!sessionId) return;
@@ -160,5 +164,6 @@ export function useSessionTimeline({ sessionId, active }: UseSessionTimelineArgs
     };
   }, [sessionId, active]);
 
-  return { events, title, supported, loading, pending, busy, metrics };
+  // 事件秒级快路径优先，转录派生兜底：两端行为一致，且彻底堵上 web viewer 错过 fire-and-forget 事件的洞。
+  return { events, title, supported, loading, pending: pending ?? derivedPending, busy, metrics };
 }
