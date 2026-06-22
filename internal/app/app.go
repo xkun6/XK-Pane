@@ -361,6 +361,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 		Scanner:    scanSvc,
 		Replayer:   termSvc,
 		Writer:     termSvc,
+		AskPend:    orchSvc, // 待答 AskUserQuestion 回灌（晚到 web viewer 经 timeline 轮询恢复待答态）
 	})
 	if err := orchSvc.Start(); err != nil {
 		logx.For("app").Warn("orchestrator start failed (CLI 将无 MCP 注入，fail-open)", "err", err)

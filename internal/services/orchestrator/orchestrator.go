@@ -144,11 +144,19 @@ type Service struct {
 	// emit 把事件推给前端（orchestrator:launch）；nil 时丢弃（未 AttachApp / 单测）。
 	emitMu sync.RWMutex
 	emit   func(name string, payload any)
+
+	// pendingAsk 记住每会话「当前待答的 AskUserQuestion」（PreToolUse ask-pending 旁路上报）。
+	// 待答信息只在那条 fire-and-forget 事件里有 —— AskUserQuestion 阻塞期间整个 assistant 轮次（文本+
+	// tool_use）都不落 JSONL 转录，故晚到 / 重连的 web viewer 错过事件后无从恢复 → 卡片只读点不动。
+	// 这里存一份，供 webapi 的 timeline 轮询回灌；前端据 ToolUseID 是否已现身转录判收尾（作答 / 取消都会
+	// 让轮次落盘），无需后端显式清除（一会话一条、下次提问即覆盖）。
+	pendingAskMu sync.RWMutex
+	pendingAsk   map[string]PendingAsk
 }
 
 // New 构造一个未启动的 orchestrator 服务。deps 为编排工具的下游依赖（terminal/project/workspace）。
 func New(deps Deps) *Service {
-	return &Service{deps: deps, rl: newRateLimiter(restRateWindowSecs*time.Second, restRateMaxReq)}
+	return &Service{deps: deps, rl: newRateLimiter(restRateWindowSecs*time.Second, restRateMaxReq), pendingAsk: make(map[string]PendingAsk)}
 }
 
 // AttachApp 回填 app 引用，让编排工具能 Emit orchestrator:launch 给前端（app 装配阶段调，镜像 terminal）。

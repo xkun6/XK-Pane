@@ -88,11 +88,29 @@ func (s *Service) handleSessionStarted(w http.ResponseWriter, r *http.Request) {
 
 // askPendingRequest 是 POST /api/terminal/ask-pending 的请求体（cli-hook 的 PreToolUse(AskUserQuestion)
 // 上报）。ToolInput 透传工具 input（{questions:[...]}），后端只取 questions 转发给前端卡片。
+// ToolUseID = 该 AskUserQuestion 的 tool_use id（PreToolUse hook 输入自带）：供前端据「它是否已现身转录」
+// 判定待答收尾（作答 / 取消都会让阻塞的轮次落盘 → tool_use 出现 → 该待答失效）。
 type askPendingRequest struct {
 	PtySessionID string `json:"ptySessionId"`
+	ToolUseID    string `json:"toolUseId"`
 	ToolInput    struct {
 		Questions []events.AskQuestion `json:"questions"`
 	} `json:"toolInput"`
+}
+
+// PendingAsk 是某会话当前待答的 AskUserQuestion 快照（供 webapi 经 timeline 回灌晚到的 web viewer）。
+type PendingAsk struct {
+	ToolUseID string               `json:"toolUseId"`
+	Questions []events.AskQuestion `json:"questions"`
+}
+
+// PendingAsk 返回某会话当前记下的待答 AskUserQuestion（无则 ok=false）。供 webapi timeline 端点回灌。
+// 不在此判「是否已答」—— 由前端据 ToolUseID 是否已现身累积转录裁决（后端不重复解析转录）。
+func (s *Service) PendingAsk(sessionID string) (PendingAsk, bool) {
+	s.pendingAskMu.RLock()
+	defer s.pendingAskMu.RUnlock()
+	p, ok := s.pendingAsk[sessionID]
+	return p, ok
 }
 
 // handleAskPending 接收 PreToolUse(AskUserQuestion) 上报：校验 token + 限流 → emit TerminalAskPending。
@@ -116,6 +134,10 @@ func (s *Service) handleAskPending(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "ptySessionId required")
 		return
 	}
+	// 存一份供 webapi timeline 轮询回灌（晚到的 web viewer 错过下面这条 fire-and-forget 事件后的兜底）。
+	s.pendingAskMu.Lock()
+	s.pendingAsk[req.PtySessionID] = PendingAsk{ToolUseID: req.ToolUseID, Questions: req.ToolInput.Questions}
+	s.pendingAskMu.Unlock()
 	s.emitEvent(events.TerminalAskPending, events.TerminalAskPendingPayload{
 		SessionID: req.PtySessionID,
 		Questions: req.ToolInput.Questions,

@@ -13,11 +13,14 @@ import (
 type preToolUseInput struct {
 	ToolName  string          `json:"tool_name"`
 	ToolInput json.RawMessage `json:"tool_input"`
+	ToolUseID string          `json:"tool_use_id"`
 }
 
 // askPendingRequest 是回连 orchestrator 的上报体：透传 tool_input（含 questions），由后端取 questions 转发。
+// ToolUseID 一并上报：供前端据「它是否已现身转录」判定待答收尾（作答 / 取消都会让阻塞轮次落盘）。
 type askPendingRequest struct {
 	PtySessionID string          `json:"ptySessionId"`
+	ToolUseID    string          `json:"toolUseId"`
 	ToolInput    json.RawMessage `json:"toolInput"`
 }
 
@@ -54,7 +57,7 @@ func runAskPending() {
 		return
 	}
 
-	body, err := json.Marshal(askPendingRequest{PtySessionID: pty, ToolInput: in.ToolInput})
+	body, err := json.Marshal(askPendingRequest{PtySessionID: pty, ToolUseID: in.ToolUseID, ToolInput: in.ToolInput})
 	if err != nil {
 		return
 	}

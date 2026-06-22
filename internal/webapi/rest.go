@@ -71,6 +71,13 @@ type SessionWriter interface {
 	WriteInput(ctx context.Context, sessionID string, data string) error
 }
 
+// AskPender 返回某会话当前待答的 AskUserQuestion 快照（*orchestrator.Service 满足）。供 timeline 回灌
+// 给晚到 / 重连的 web viewer —— 待答的 ask-pending 事件 fire-and-forget 无重放，且其 tool_use 在阻塞
+// 期间不落转录，故唯一可靠恢复途径是经轮询的 timeline 把后端记下的待答带回前端。
+type AskPender interface {
+	PendingAsk(sessionID string) (orchestrator.PendingAsk, bool)
+}
+
 // ServiceDeps 是网关远程端点的下游依赖（app 装配处经 AttachServices 注入）。
 type ServiceDeps struct {
 	Launcher   Launcher
@@ -80,6 +87,7 @@ type ServiceDeps struct {
 	Scanner    SessionScanner
 	Replayer   SessionReplayer
 	Writer     SessionWriter
+	AskPend    AskPender
 }
 
 // launchRequest 是 POST /api/launch 的请求体（对齐 orchestrator.LaunchParams 的 json 形态）。
@@ -250,9 +258,20 @@ func (g *Gateway) handleSessionTimeline(w http.ResponseWriter, r *http.Request) 
 		unsupported()
 		return
 	}
+	// 待答 AskUserQuestion 回灌（晚到 / 重连的 web viewer 错过 fire-and-forget 事件后的恢复途径）。
+	// 后端只「记得」最近一条；是否仍有效由前端据 toolUseId 是否已现身累积转录裁决（作答 / 取消都让其落盘）。
+	pendingAsk := func() any {
+		if deps.AskPend == nil {
+			return nil
+		}
+		if p, ok := deps.AskPend.PendingAsk(sid); ok {
+			return p
+		}
+		return nil
+	}
 	emptyTimeline := func() {
 		// 支持但暂无转录（会话刚启动、Claude 尚未落首行）→ 空时间线，前端继续轮询。
-		writeJSON(w, http.StatusOK, map[string]any{"supported": true, "events": []any{}, "total": 0})
+		writeJSON(w, http.StatusOK, map[string]any{"supported": true, "events": []any{}, "total": 0, "pending": pendingAsk()})
 	}
 
 	file := ""
@@ -291,6 +310,7 @@ func (g *Gateway) handleSessionTimeline(w http.ResponseWriter, r *http.Request) 
 		"total":     res.Total,
 		"title":     res.Title,
 		"metrics":   hudstats.Collect(file), // 卡片底部状态行指标（与桌面 transcriptsvc 同源，见 hudstats）
+		"pending":   pendingAsk(),           // 当前待答 AskUserQuestion（回灌晚到的 web viewer），无则 null
 	})
 }
 

@@ -74,12 +74,21 @@ export interface TimelineMetrics {
   sevenDay?: TimelineUsageWindow;
 }
 
+// TimelinePending 是后端经轮询回灌的「当前待答 AskUserQuestion」（含 toolUseId）。供晚到 / 重连的
+// web viewer 恢复待答态 —— ask-pending 事件 fire-and-forget 无重放、其 tool_use 阻塞期间不落转录，
+// 故唯一可靠途径是 timeline 轮询带回。toolUseId 供前端判收尾：它一旦现身累积转录即失效（作答 / 取消）。
+export interface TimelinePending {
+  toolUseId: string;
+  questions: TimelineQuestion[];
+}
+
 export interface Timeline {
   supported: boolean;
   events: TimelineEvent[];
   total: number; // 文件总行数 = 下次轮询的 after 游标
   title?: string;
   metrics?: TimelineMetrics;
+  pending?: TimelinePending | null; // 当前待答（后端回灌），无则 null/缺省
 }
 
 interface TimelineDTO {
@@ -88,6 +97,7 @@ interface TimelineDTO {
   total?: number;
   title?: string;
   metrics?: TimelineMetrics;
+  pending?: TimelinePending | null;
 }
 
 export const TranscriptService = {
@@ -103,6 +113,7 @@ export const TranscriptService = {
         total: Number(res.total ?? 0),
         ...(res.title ? { title: res.title } : {}),
         ...(dto.metrics ? { metrics: dto.metrics } : {}),
+        pending: dto.pending ?? null, // 桌面 binding 暂不返回（owner 走事件即可）；缺省 null
       };
     }
     const res = await httpClient.get<TimelineDTO>(
@@ -114,6 +125,7 @@ export const TranscriptService = {
       total: Number(res.total ?? 0),
       title: res.title,
       ...(res.metrics ? { metrics: res.metrics } : {}),
+      pending: res.pending ?? null,
     };
   },
 

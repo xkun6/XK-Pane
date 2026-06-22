@@ -132,6 +132,7 @@ export {
   type TimelineEvent,
   type TimelineKind,
   type TimelineQuestion,
+  type TimelinePending,
   type TimelineOption,
   type TimelineToolDetail,
   type TimelineMetrics,

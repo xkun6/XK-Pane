@@ -4,9 +4,9 @@ import {
   TerminalService,
   type TimelineEvent,
   type TimelineQuestion,
+  type TimelinePending,
   type TimelineMetrics,
 } from '@/services';
-import { derivePending } from './derivePending';
 
 // 轮询间隔：转录是 append-only 文件，~1.5s 拉一次增量足够「准实时」，不压后端。
 const POLL_MS = 1500;
@@ -24,8 +24,9 @@ export interface UseSessionTimelineResult {
   title: string;
   supported: boolean | null; // null = 首拉前未知
   loading: boolean;
-  // 当前【待答】的 AskUserQuestion 问题（来自 PreToolUse hook 旁路事件，落盘转录之前即到）。
-  // null = 无待答。答完（转录增长）后自动清除。卡片据此渲染可作答的待答卡（与只读历史区分）。
+  // 当前【待答】的 AskUserQuestion 问题。双源：① PreToolUse hook 旁路【事件】（秒级，owner / 在线 viewer）；
+  // ② 后端经 timeline 轮询【回灌】（兜底事件漏失 —— 晚到 / 重连的 web viewer 错过 fire-and-forget 事件）。
+  // null = 无待答。答完 / 取消（该轮次落盘）后自动清除。卡片据此渲染可作答的待答卡（与只读历史区分）。
   pending: TimelineQuestion[] | null;
   // 会话「工作中」liveness：基于 PTY 输出活跃度推断（工作时 TUI 自旋持续吐字节；空闲于提示符则静默）。
   // 供卡片底部渲染「思考中…」指示器，让用户确信 Agent 仍在跑、未因意外中断。
@@ -42,6 +43,7 @@ export function useSessionTimeline({ sessionId, active }: UseSessionTimelineArgs
   const [supported, setSupported] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<TimelineQuestion[] | null>(null);
+  const [polledPending, setPolledPending] = useState<TimelinePending | null>(null); // 后端经 timeline 回灌的待答
   const [busy, setBusy] = useState(false);
   const [metrics, setMetrics] = useState<TimelineMetrics | null>(null);
   const busyRef = useRef(false); // 仅在 idle↔busy 跳变时 setState，避免每个输出批次都重渲
@@ -57,6 +59,7 @@ export function useSessionTimeline({ sessionId, active }: UseSessionTimelineArgs
     setSupported(null);
     setLoading(true);
     setPending(null);
+    setPolledPending(null);
     setMetrics(null);
     busyRef.current = false;
     setBusy(false);
@@ -91,9 +94,9 @@ export function useSessionTimeline({ sessionId, active }: UseSessionTimelineArgs
   }, [sessionId, active]);
 
   // 「已答 AskUserQuestion」数：tool_use(AskUserQuestion) 且其 toolUseId 存在匹配的 tool_result。
-  // ★ 命门：待答期间转录会先落该问题【自己】的 assistant tool_use 行（无 result —— 实测 jsonl 里 tool_use 与
-  //   tool_result 分属相邻两行、tool_use 在前并于作答前即写入）。若按「事件总数增长」判定已答，会把这条
-  //   tool_use 误当成已答而提前清掉底部可点的交互卡 → 退化成中间那张只读卡（不可点）。故只认 tool_result 落地。
+  // ★ 实测更正：AskUserQuestion 阻塞期间，整个 assistant 轮次（文本 + 该 tool_use）都【不落 JSONL 转录】——
+  //   要等作答 / 取消、轮次结束才一起落（验证：待答时该会话 jsonl 里既无该 tool_use 也无 result）。故某
+  //   AskUserQuestion 的 tool_result 配对一旦出现 = 该问题已收尾，用于清除事件态 pending。
   const answeredAskCount = useMemo(() => {
     const resultIds = new Set<string>();
     for (const ev of events) if (ev.kind === 'tool_result' && ev.toolUseId) resultIds.add(ev.toolUseId);
@@ -107,9 +110,6 @@ export function useSessionTimeline({ sessionId, active }: UseSessionTimelineArgs
   useEffect(() => {
     answeredAskCountRef.current = answeredAskCount;
   }, [answeredAskCount]);
-
-  // 转录派生的待答：事件漏掉时的可靠回退（尤其 web viewer 事后挂载错过 fire-and-forget 事件）。详见 derivePending。
-  const derivedPending = useMemo(() => derivePending(events), [events]);
 
   // 订阅「待答 AskUserQuestion」：始终监听（不漏 —— 事件 fire-and-forget 无重放），按会话过滤。
   useEffect(() => {
@@ -146,6 +146,7 @@ export function useSessionTimeline({ sessionId, active }: UseSessionTimelineArgs
         }
         if (tl.title) setTitle(tl.title);
         setMetrics(tl.metrics ?? null); // 每轮刷新（剩余时间倒计 / 用量变化）
+        setPolledPending(tl.pending ?? null); // 后端回灌的当前待答（兜底晚到 web viewer 错过事件）
         if (tl.total > cursorRef.current) {
           cursorRef.current = tl.total;
           if (tl.events.length > 0) setEvents((prev) => [...prev, ...tl.events]);
@@ -164,6 +165,14 @@ export function useSessionTimeline({ sessionId, active }: UseSessionTimelineArgs
     };
   }, [sessionId, active]);
 
-  // 事件秒级快路径优先，转录派生兜底：两端行为一致，且彻底堵上 web viewer 错过 fire-and-forget 事件的洞。
-  return { events, title, supported, loading, pending: pending ?? derivedPending, busy, metrics };
+  // 有效待答 = 事件秒级快路径优先；否则用轮询回灌的待答，但仅当其 toolUseId 尚未现身累积转录时才有效
+  // ——一旦该轮次落盘（作答 / 取消都会落 → tool_use 出现）即说明待答已收尾，立即失效、交回转录的只读历史卡。
+  const effectivePending = useMemo<TimelineQuestion[] | null>(() => {
+    if (pending) return pending;
+    if (!polledPending) return null;
+    const settled = events.some((e) => e.toolUseId === polledPending.toolUseId);
+    return settled ? null : polledPending.questions;
+  }, [pending, polledPending, events]);
+
+  return { events, title, supported, loading, pending: effectivePending, busy, metrics };
 }
