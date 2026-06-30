@@ -50,6 +50,7 @@ import (
 	"xkpane/internal/webapi"
 
 	_ "xkpane/internal/services/botbridge/platform/feishu"
+	_ "xkpane/internal/services/botbridge/platform/qqbot"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	wailsevents "github.com/wailsapp/wails/v3/pkg/events"
