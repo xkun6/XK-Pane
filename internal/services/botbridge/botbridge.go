@@ -1,0 +1,544 @@
+package botbridge
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"sync"
+	"time"
+
+	"xkpane/internal/events"
+	"xkpane/internal/services/orchestrator"
+	"xkpane/internal/services/terminal"
+	"xkpane/internal/storage"
+	"xkpane/internal/utils/cryptox"
+	"xkpane/internal/utils/logx"
+
+	"gorm.io/gorm"
+)
+
+const pollInterval = 1500 * time.Millisecond
+
+type SessionLister interface {
+	SessionSnapshots() []terminal.SessionSnapshot
+}
+
+type AskPender interface {
+	PendingAsk(sessionID string) (orchestrator.PendingAsk, bool)
+}
+
+type BotDeps struct {
+	Sessions SessionLister
+	Writer   sessionWriter
+	AskPend  AskPender
+	Scanner  sessionScanner
+}
+
+type Status struct {
+	Enabled   bool   `json:"enabled"`
+	Platform  string `json:"platform"`
+	AppID     string `json:"appId"`
+	Connected bool   `json:"connected"`
+	Error     string `json:"error,omitempty"`
+}
+
+type ConfigInput struct {
+	Platform  string `json:"platform"`
+	AppID     string `json:"appId"`
+	AppSecret string `json:"appSecret"`
+	Enabled   bool   `json:"enabled"`
+}
+
+type Service struct {
+	holder *storage.Holder
+	log    *logxLogger
+
+	depsMu sync.RWMutex
+	deps   BotDeps
+
+	ctxMu  sync.Mutex
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	platformMu sync.Mutex
+	platform   Platform
+	connected  bool
+	lastErr    string
+
+	dispatch *dispatcher
+
+	writeLocksMu sync.Mutex
+	writeLocks   map[string]*sync.Mutex
+
+	pollMu    sync.Mutex
+	pollers   map[string]context.CancelFunc
+	pushedAsk map[string]string
+}
+
+type logxLogger struct{}
+
+func (logxLogger) Info(msg string, args ...any)  { logx.For("botbridge").Info(msg, args...) }
+func (logxLogger) Warn(msg string, args ...any)  { logx.For("botbridge").Warn(msg, args...) }
+func (logxLogger) Error(msg string, args ...any) { logx.For("botbridge").Error(msg, args...) }
+
+func New(holder *storage.Holder) *Service {
+	s := &Service{
+		holder:     holder,
+		log:        &logxLogger{},
+		writeLocks: map[string]*sync.Mutex{},
+		pollers:    map[string]context.CancelFunc{},
+		pushedAsk:  map[string]string{},
+	}
+	s.dispatch = newDispatcher(dispatchDeps{
+		writer:           nil,
+		ask:              s.pendingAsk,
+		listSessions:     s.sessionSnapshots,
+		saveBinding:      s.saveBinding,
+		sendText:         s.sendTextToScope,
+		sendCard:         s.sendCardToScope,
+		sessionWriteLock: s.sessionWriteLock,
+		askAnswered:      s.clearPushedAsk,
+	})
+	return s
+}
+
+func (s *Service) AttachServices(deps BotDeps) {
+	s.depsMu.Lock()
+	s.deps = deps
+	s.depsMu.Unlock()
+	s.dispatch.deps.writer = deps.Writer
+}
+
+func (s *Service) Start() error {
+	s.ctxMu.Lock()
+	if s.ctx != nil {
+		s.ctxMu.Unlock()
+		return nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.ctx = ctx
+	s.cancel = cancel
+	s.ctxMu.Unlock()
+
+	if err := s.loadBindings(); err != nil {
+		s.setErr(err)
+	}
+	if err := s.reloadPlatform(ctx); err != nil {
+		s.setErr(err)
+		return err
+	}
+	go s.pollLoop(ctx)
+	return nil
+}
+
+func (s *Service) Stop() error {
+	s.ctxMu.Lock()
+	cancel := s.cancel
+	s.ctx = nil
+	s.cancel = nil
+	s.ctxMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	s.stopPlatform()
+	s.pollMu.Lock()
+	for id, c := range s.pollers {
+		c()
+		delete(s.pollers, id)
+	}
+	s.pollMu.Unlock()
+	return nil
+}
+
+func (s *Service) RouteEvent(name string, payload any) {
+	switch name {
+	case events.TerminalAskPending:
+		p, ok := payload.(events.TerminalAskPendingPayload)
+		if !ok {
+			return
+		}
+		go func() {
+			if pending, ok := s.pendingAsk(p.SessionID); ok {
+				s.dispatch.setPending(p.SessionID, pending)
+				s.pushAskCard(p.SessionID, pending)
+			}
+		}()
+	case events.TerminalExit:
+		if p, ok := payload.(events.TerminalExitPayload); ok {
+			s.stopPoller(p.SessionID)
+			s.clearPushedAsk(p.SessionID, "")
+		}
+	}
+}
+
+func (s *Service) GetStatus() (Status, error) {
+	cfg, err := s.loadConfig()
+	if err != nil {
+		return Status{}, err
+	}
+	s.platformMu.Lock()
+	connected := s.connected
+	lastErr := s.lastErr
+	s.platformMu.Unlock()
+	return Status{Enabled: cfg.Enabled, Platform: cfg.Platform, AppID: cfg.AppID, Connected: connected, Error: lastErr}, nil
+}
+
+func (s *Service) SetConfig(ctx context.Context, in ConfigInput) error {
+	platform := strings.TrimSpace(in.Platform)
+	if platform == "" {
+		platform = "feishu"
+	}
+	if platform != "feishu" {
+		return fmt.Errorf("unsupported bot platform %q", platform)
+	}
+	var tokenEnc string
+	if strings.TrimSpace(in.AppSecret) != "" {
+		enc, err := cryptox.EncryptString(in.AppSecret)
+		if err != nil {
+			return err
+		}
+		tokenEnc = enc
+	} else {
+		old, err := s.loadConfig()
+		if err == nil {
+			tokenEnc = old.TokenEnc
+		}
+	}
+	row := storage.BotBridgeConfig{
+		ID:           1,
+		Platform:     platform,
+		AppID:        strings.TrimSpace(in.AppID),
+		TokenEnc:     tokenEnc,
+		Enabled:      in.Enabled,
+		BindingsJSON: "{}",
+		Extra:        compactJSON(map[string]any{"mode": "websocket"}),
+	}
+	if old, err := s.loadConfig(); err == nil && old.BindingsJSON != "" {
+		row.BindingsJSON = old.BindingsJSON
+	}
+	if err := s.holder.Current().GORM.WithContext(ctx).Save(&row).Error; err != nil {
+		return err
+	}
+	s.ctxMu.Lock()
+	runCtx := s.ctx
+	s.ctxMu.Unlock()
+	if runCtx != nil {
+		if err := s.reloadPlatform(runCtx); err != nil {
+			s.setErr(err)
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) loadConfig() (storage.BotBridgeConfig, error) {
+	var row storage.BotBridgeConfig
+	err := s.holder.Current().GORM.First(&row, "id = ?", 1).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return storage.BotBridgeConfig{ID: 1, Platform: "feishu", BindingsJSON: "{}"}, nil
+		}
+		return storage.BotBridgeConfig{ID: 1, Platform: "feishu", BindingsJSON: "{}"}, err
+	}
+	if row.Platform == "" {
+		row.Platform = "feishu"
+	}
+	return row, nil
+}
+
+func (s *Service) reloadPlatform(ctx context.Context) error {
+	cfg, err := s.loadConfig()
+	if err != nil {
+		return nil
+	}
+	s.stopPlatform()
+	if !cfg.Enabled {
+		s.platformMu.Lock()
+		s.connected = false
+		s.lastErr = ""
+		s.platformMu.Unlock()
+		return nil
+	}
+	secret, err := cryptox.DecryptString(cfg.TokenEnc)
+	if err != nil {
+		return err
+	}
+	p, err := CreatePlatform(cfg.Platform, map[string]any{
+		"app_id":     cfg.AppID,
+		"app_secret": secret,
+	})
+	if err != nil {
+		return err
+	}
+	if reporter, ok := p.(ConnectionReporter); ok {
+		reporter.SetConnectionHandler(s.handleConnectionStatus)
+	}
+	if err := p.Start(s.handlePlatformMessage); err != nil {
+		return err
+	}
+	s.platformMu.Lock()
+	s.platform = p
+	s.lastErr = ""
+	s.platformMu.Unlock()
+	_ = ctx
+	return nil
+}
+
+func (s *Service) stopPlatform() {
+	s.platformMu.Lock()
+	p := s.platform
+	s.platform = nil
+	s.connected = false
+	s.platformMu.Unlock()
+	if p != nil {
+		_ = p.Stop()
+	}
+}
+
+func (s *Service) handlePlatformMessage(p Platform, msg *Message) {
+	if msg == nil {
+		return
+	}
+	ctx := context.Background()
+	if handled, err := s.dispatch.handleAction(ctx, msg.ScopeKey, msg.MessageID, msg.Content); err != nil {
+		s.log.Warn("handle platform action failed", "err", err)
+	} else if handled {
+		return
+	}
+	if _, err := s.dispatch.handleMessage(ctx, msg.ScopeKey, msg.MessageID, msg.Content); err != nil {
+		s.log.Warn("handle platform message failed", "err", err)
+	}
+}
+
+func (s *Service) handleConnectionStatus(connected bool, err error) {
+	s.platformMu.Lock()
+	s.connected = connected
+	if err != nil {
+		s.lastErr = err.Error()
+	} else if connected {
+		s.lastErr = ""
+	}
+	s.platformMu.Unlock()
+}
+
+func (s *Service) pollLoop(ctx context.Context) {
+	t := time.NewTicker(pollInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			for _, snap := range s.sessionSnapshots() {
+				s.ensurePoller(ctx, snap)
+			}
+		}
+	}
+}
+
+func (s *Service) ensurePoller(ctx context.Context, snap sessionSnapshot) {
+	s.pollMu.Lock()
+	if _, ok := s.pollers[snap.ID]; ok {
+		s.pollMu.Unlock()
+		return
+	}
+	pctx, cancel := context.WithCancel(ctx)
+	s.pollers[snap.ID] = cancel
+	s.pollMu.Unlock()
+	go s.pollSession(pctx, snap)
+}
+
+func (s *Service) stopPoller(sessionID string) {
+	s.pollMu.Lock()
+	if cancel := s.pollers[sessionID]; cancel != nil {
+		cancel()
+		delete(s.pollers, sessionID)
+	}
+	s.pollMu.Unlock()
+}
+
+func (s *Service) pollSession(ctx context.Context, snap sessionSnapshot) {
+	after := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(pollInterval):
+		}
+		s.depsMu.RLock()
+		scanner := s.deps.Scanner
+		s.depsMu.RUnlock()
+		path, ok := locateTranscript(ctx, scanner, snap)
+		if !ok {
+			continue
+		}
+		res := parseTimeline(path, snap, after)
+		after = res.Total
+		for _, ev := range res.Events {
+			if ev.ToolUseID != "" {
+				s.dispatch.markToolUseSeen(snap.ID, ev.ToolUseID)
+				s.clearPushedAsk(snap.ID, ev.ToolUseID)
+			}
+			card, ok := eventToCard(ev)
+			if !ok {
+				continue
+			}
+			for _, scope := range s.dispatch.bindingsForSession(snap.ID) {
+				_ = s.sendCardToScope(ctx, scope, nil, card)
+			}
+		}
+		if pending, ok := s.dispatch.effectivePending(snap.ID); ok {
+			s.pushAskCard(snap.ID, pending)
+		}
+	}
+}
+
+func (s *Service) pushAskCard(sessionID string, p PendingAsk) {
+	if p.ToolUseID == "" {
+		return
+	}
+	scopes := s.dispatch.bindingsForSession(sessionID)
+	if len(scopes) == 0 {
+		return
+	}
+	s.pollMu.Lock()
+	if s.pushedAsk[sessionID] == p.ToolUseID {
+		s.pollMu.Unlock()
+		return
+	}
+	s.pushedAsk[sessionID] = p.ToolUseID
+	s.pollMu.Unlock()
+	card := askCard(p)
+	for _, scope := range scopes {
+		_ = s.sendCardToScope(context.Background(), scope, nil, card)
+	}
+}
+
+func (s *Service) clearPushedAsk(sessionID, toolUseID string) {
+	if sessionID == "" {
+		return
+	}
+	s.pollMu.Lock()
+	if toolUseID == "" || s.pushedAsk[sessionID] == toolUseID {
+		delete(s.pushedAsk, sessionID)
+	}
+	s.pollMu.Unlock()
+}
+
+func (s *Service) sendTextToScope(ctx context.Context, scopeKey string, replyCtx any, content string) error {
+	s.platformMu.Lock()
+	p := s.platform
+	s.platformMu.Unlock()
+	if p == nil {
+		return errors.New("botbridge platform not connected")
+	}
+	if replyCtx == nil {
+		replyCtx = scopeKey
+	}
+	return p.Send(ctx, replyCtx, content)
+}
+
+func (s *Service) sendCardToScope(ctx context.Context, scopeKey string, replyCtx any, card *Card) error {
+	s.platformMu.Lock()
+	p := s.platform
+	s.platformMu.Unlock()
+	if p == nil {
+		return errors.New("botbridge platform not connected")
+	}
+	if replyCtx == nil {
+		replyCtx = scopeKey
+	}
+	if cs, ok := p.(CardSender); ok {
+		return cs.SendCard(ctx, replyCtx, card)
+	}
+	if ib, ok := p.(InlineButtonSender); ok {
+		return ib.SendWithButtons(ctx, replyCtx, card.RenderText(), card.CollectButtons())
+	}
+	return p.Send(ctx, replyCtx, card.RenderText())
+}
+
+func (s *Service) pendingAsk(sessionID string) (PendingAsk, bool) {
+	s.depsMu.RLock()
+	askPend := s.deps.AskPend
+	s.depsMu.RUnlock()
+	if askPend == nil {
+		return PendingAsk{}, false
+	}
+	p, ok := askPend.PendingAsk(sessionID)
+	if !ok {
+		return PendingAsk{}, false
+	}
+	return PendingAsk{ToolUseID: p.ToolUseID, Questions: p.Questions}, true
+}
+
+func (s *Service) sessionSnapshots() []sessionSnapshot {
+	s.depsMu.RLock()
+	lister := s.deps.Sessions
+	s.depsMu.RUnlock()
+	if lister == nil {
+		return nil
+	}
+	raw := lister.SessionSnapshots()
+	out := make([]sessionSnapshot, 0, len(raw))
+	for _, snap := range raw {
+		out = append(out, fromTerminalSnapshot(snap))
+	}
+	return out
+}
+
+func (s *Service) sessionWriteLock(sessionID string) *sync.Mutex {
+	s.writeLocksMu.Lock()
+	defer s.writeLocksMu.Unlock()
+	if s.writeLocks[sessionID] == nil {
+		s.writeLocks[sessionID] = &sync.Mutex{}
+	}
+	return s.writeLocks[sessionID]
+}
+
+func (s *Service) loadBindings() error {
+	cfg, err := s.loadConfig()
+	if err != nil {
+		return nil
+	}
+	var bindings map[string]string
+	if strings.TrimSpace(cfg.BindingsJSON) != "" {
+		if err := json.Unmarshal([]byte(cfg.BindingsJSON), &bindings); err != nil {
+			return err
+		}
+	}
+	if bindings == nil {
+		bindings = map[string]string{}
+	}
+	s.dispatch.replaceBindings(bindings)
+	return nil
+}
+
+func (s *Service) saveBinding(scopeKey, sessionID string) {
+	cfg, err := s.loadConfig()
+	if err != nil {
+		cfg = storage.BotBridgeConfig{ID: 1, Platform: "feishu", BindingsJSON: "{}"}
+	}
+	var bindings map[string]string
+	_ = json.Unmarshal([]byte(cfg.BindingsJSON), &bindings)
+	if bindings == nil {
+		bindings = map[string]string{}
+	}
+	bindings[scopeKey] = sessionID
+	cfg.BindingsJSON = compactJSON(bindings)
+	if cfg.Platform == "" {
+		cfg.Platform = "feishu"
+	}
+	_ = s.holder.Current().GORM.Save(&cfg).Error
+}
+
+func (s *Service) setErr(err error) {
+	if err == nil {
+		return
+	}
+	s.platformMu.Lock()
+	s.lastErr = err.Error()
+	s.connected = false
+	s.platformMu.Unlock()
+}
