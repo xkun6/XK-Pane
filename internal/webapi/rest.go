@@ -220,9 +220,9 @@ func (g *Gateway) handleSessionReplay(w http.ResponseWriter, r *http.Request) {
 // handleSessionTimeline：GET /api/sessions/timeline?sessionId=&after= → 活跃会话的「结构化对话
 // 时间线」（从 Claude JSONL 转录解析为 user/assistant/thinking/tool 事件）。供 Web/手机的结构化
 // 重排视图：不镜像 PTY 网格、内容自由重排适配窄屏（见记忆 xkpane-mobile-strategy）。
-// 仅 cliTool=="claude"（有结构化转录）支持；其余引擎 / 裸 shell 返回 supported=false（前端回退 xterm）。
-// after = 已消费行数游标（增量轮询）。只读 ~/.claude/projects，无 DB / 子进程 / 明文密钥副作用。
-// 复用已注入的 Sessions（sessionId→cwd+cliTool）与 Scanner（cwd→最新 claude jsonl），无需新依赖。
+// claude/reclaude（~/.claude/projects）与 codex（~/.codex/sessions）支持；其余引擎 / 裸 shell 返回
+// supported=false（前端回退 xterm）。after = 已消费行数游标（增量轮询）。只读转录目录，无 DB / 子进程 /
+// 明文密钥副作用。复用已注入的 Sessions（sessionId→cwd+cliTool）与 Scanner（cwd→最新 jsonl），无需新依赖。
 func (g *Gateway) handleSessionTimeline(w http.ResponseWriter, r *http.Request) {
 	sid := strings.TrimSpace(r.URL.Query().Get("sessionId"))
 	if sid == "" {
@@ -253,8 +253,10 @@ func (g *Gateway) handleSessionTimeline(w http.ResponseWriter, r *http.Request) 
 			break
 		}
 	}
-	// 仅 claude/reclaude 有结构化转录（reclaude = Claude Code 同包，写同一 ~/.claude/projects）。
-	if !found || (cliTool != "claude" && cliTool != "reclaude") {
+	// claude/reclaude 写 ~/.claude/projects；codex 写 ~/.codex/sessions。其余引擎无结构化转录。
+	isClaude := cliTool == "claude" || cliTool == "reclaude"
+	isCodex := cliTool == "codex"
+	if !found || (!isClaude && !isCodex) {
 		unsupported()
 		return
 	}
@@ -274,8 +276,13 @@ func (g *Gateway) handleSessionTimeline(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusOK, map[string]any{"supported": true, "events": []any{}, "total": 0, "pending": pendingAsk()})
 	}
 
+	// 转录文件定位：claude 已知 id 时精确映射，否则（codex 恒、claude 旧会话）回退扫该项目对应引擎最新 jsonl。
+	wantSource := "claude"
+	if isCodex {
+		wantSource = "codex"
+	}
 	file := ""
-	if claudeID != "" {
+	if isClaude && claudeID != "" {
 		// 精确映射：已知本会话的 Claude 转录 id（新会话 = --session-id 钉死、恢复 = ResumeID）→ 直接定位。
 		// 文件未就绪时返回空并继续轮询，**不回退扫最新**（避免误取同目录里别的并发会话，如开发 XK-Pane 时
 		// 本机另有同目录会话在写）。
@@ -286,14 +293,14 @@ func (g *Gateway) handleSessionTimeline(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	} else {
-		// 兼容旧会话（本次改动前启动、未带 --session-id）：回退扫该项目最新 claude jsonl（按 mtime 倒序）。
+		// 回退扫该项目最新转录（按 mtime 倒序）：codex 无钉死 id 恒走此路；claude 旧会话（未带 --session-id）兼容。
 		rows, err := deps.Scanner.ListProjectSessions(r.Context(), cwd, 0)
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, "扫描转录失败")
 			return
 		}
 		for _, row := range rows {
-			if row.Source == "claude" {
+			if row.Source == wantSource {
 				file = row.FilePath
 				break
 			}
@@ -303,14 +310,24 @@ func (g *Gateway) handleSessionTimeline(w http.ResponseWriter, r *http.Request) 
 		emptyTimeline()
 		return
 	}
-	res := transcript.Parse(file, after)
+
+	// codex 与 claude 转录格式不同，分派各自解析器（均产出同一套 transcript.Event）。
+	// metrics（claude-hud 落盘产物）仅 claude 有，codex 为 nil。
+	var res transcript.Result
+	var metrics any
+	if isCodex {
+		res = transcript.ParseCodex(file, after)
+	} else {
+		res = transcript.Parse(file, after)
+		metrics = hudstats.Collect(file) // 卡片底部状态行指标（与桌面 transcriptsvc 同源，见 hudstats）
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"supported": true,
 		"events":    res.Events,
 		"total":     res.Total,
 		"title":     res.Title,
-		"metrics":   hudstats.Collect(file), // 卡片底部状态行指标（与桌面 transcriptsvc 同源，见 hudstats）
-		"pending":   pendingAsk(),           // 当前待答 AskUserQuestion（回灌晚到的 web viewer），无则 null
+		"metrics":   metrics,
+		"pending":   pendingAsk(), // 当前待答 AskUserQuestion（回灌晚到的 web viewer），无则 null
 	})
 }
 

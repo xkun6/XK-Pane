@@ -42,9 +42,10 @@ type Timeline struct {
 	Metrics *hudstats.Metrics `json:"metrics,omitempty"`
 }
 
-// GetTimeline 解析活跃会话的 Claude 转录为结构化时间线（与 webapi handleSessionTimeline 同语义）。
-// 仅 cliTool=="claude"/"reclaude" 支持；其余返回 supported=false。会话尚未落转录时返回 supported=true
-// 的空时间线（前端继续轮询）。after = 已消费行数游标（增量轮询不漏不重）。
+// GetTimeline 解析活跃会话的转录为结构化时间线（与 webapi handleSessionTimeline 同语义）。
+// 支持 cliTool=="claude"/"reclaude"（~/.claude/projects）与 "codex"（~/.codex/sessions）；其余返回
+// supported=false。会话尚未落转录时返回 supported=true 的空时间线（前端继续轮询）。
+// after = 已消费行数游标（增量轮询不漏不重）。codex 无钉死 id，回退扫该项目最新 rollout（按 mtime 倒序）。
 func (s *Service) GetTimeline(ctx context.Context, sessionID string, after int) (Timeline, error) {
 	empty := Timeline{Events: []transcript.Event{}}
 	if s.sessions == nil {
@@ -62,15 +63,22 @@ func (s *Service) GetTimeline(ctx context.Context, sessionID string, after int) 
 			break
 		}
 	}
-	// 仅 claude/reclaude 有结构化转录（reclaude = Claude Code 同包，写同一 ~/.claude/projects）。
-	if !found || (cliTool != "claude" && cliTool != "reclaude") {
+	// claude/reclaude 写 ~/.claude/projects；codex 写 ~/.codex/sessions。其余引擎无结构化转录。
+	isClaude := cliTool == "claude" || cliTool == "reclaude"
+	isCodex := cliTool == "codex"
+	if !found || (!isClaude && !isCodex) {
 		return empty, nil
 	}
-	// 支持但暂无转录（会话刚启动、Claude 尚未落首行）→ 空时间线，前端继续轮询。
+	// 支持但暂无转录（会话刚启动、Agent 尚未落首行）→ 空时间线，前端继续轮询。
 	emptySupported := Timeline{Supported: true, Events: []transcript.Event{}}
 
+	// 转录文件定位：claude 已知 id 时精确映射，否则（codex 恒、claude 旧会话）回退扫该项目对应引擎最新 jsonl。
+	wantSource := "claude"
+	if isCodex {
+		wantSource = "codex"
+	}
 	file := ""
-	if claudeID != "" {
+	if isClaude && claudeID != "" {
 		// 精确映射：已知本会话的 Claude 转录 id（新会话 = --session-id 钉死、恢复 = ResumeID）→ 直接定位。
 		// 文件未就绪时返回空并继续轮询，**不回退扫最新**（避免误取同目录里别的并发会话）。
 		if p, ok := transcript.ResolveClaudePath(cwd, claudeID); ok {
@@ -79,13 +87,13 @@ func (s *Service) GetTimeline(ctx context.Context, sessionID string, after int) 
 			return emptySupported, nil
 		}
 	} else if s.scanner != nil {
-		// 兼容旧会话（未带 --session-id）：回退扫该项目最新 claude jsonl（按 mtime 倒序）。
+		// 回退扫该项目最新转录（按 mtime 倒序）：codex 无钉死 id 恒走此路；claude 旧会话（未带 --session-id）兼容。
 		rows, err := s.scanner.ListProjectSessions(ctx, cwd, 0)
 		if err != nil {
 			return emptySupported, err
 		}
 		for _, row := range rows {
-			if row.Source == "claude" {
+			if row.Source == wantSource {
 				file = row.FilePath
 				break
 			}
@@ -94,12 +102,22 @@ func (s *Service) GetTimeline(ctx context.Context, sessionID string, after int) 
 	if file == "" {
 		return emptySupported, nil
 	}
-	res := transcript.Parse(file, after)
+
+	// codex 与 claude 转录格式不同，分派各自解析器（均产出同一套 transcript.Event）。
+	// metrics（上下文/5h/周限）复用 claude-hud 落盘产物，仅 claude 有；codex 传 nil。
+	var res transcript.Result
+	var metrics *hudstats.Metrics
+	if isCodex {
+		res = transcript.ParseCodex(file, after)
+	} else {
+		res = transcript.Parse(file, after)
+		metrics = hudstats.Collect(file) // file = 本会话转录原生路径，正是 claude-hud context 缓存的 sha256 入参
+	}
 	return Timeline{
 		Supported: true,
 		Events:    res.Events,
 		Total:     res.Total,
 		Title:     res.Title,
-		Metrics:   hudstats.Collect(file), // file = 本会话转录原生路径，正是 claude-hud context 缓存的 sha256 入参
+		Metrics:   metrics,
 	}, nil
 }
