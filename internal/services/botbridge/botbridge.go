@@ -160,10 +160,14 @@ func (s *Service) RouteEvent(name string, payload any) {
 			return
 		}
 		go func() {
-			if pending, ok := s.pendingAsk(p.SessionID); ok {
-				s.dispatch.setPending(p.SessionID, pending)
-				s.pushAskCard(p.SessionID, pending)
+			pending, ok := s.pendingAsk(p.SessionID)
+			if !ok {
+				s.log.Warn("收到 ask-pending 事件，但 orchestrator 未返回待答（可能 sessionId 不匹配或待答已清除）", "session", p.SessionID)
+				return
 			}
+			s.log.Info("收到 ask-pending 事件，准备推送 AskUserQuestion 卡片", "session", p.SessionID, "toolUseId", pending.ToolUseID, "questions", len(pending.Questions))
+			s.dispatch.setPending(p.SessionID, pending)
+			s.pushAskCard(p.SessionID, pending)
 		}()
 	case events.TerminalExit:
 		if p, ok := payload.(events.TerminalExitPayload); ok {
@@ -386,7 +390,9 @@ func (s *Service) pollSession(ctx context.Context, snap sessionSnapshot) {
 				continue
 			}
 			for _, scope := range s.dispatch.bindingsForSession(snap.ID) {
-				_ = s.sendCardToScope(ctx, scope, nil, card)
+				if err := s.sendCardToScope(ctx, scope, nil, card); err != nil {
+					s.log.Warn("推送镜像卡片失败", "session", snap.ID, "scope", scope, "err", err)
+				}
 			}
 		}
 		if pending, ok := s.dispatch.effectivePending(snap.ID); ok {
@@ -397,10 +403,12 @@ func (s *Service) pollSession(ctx context.Context, snap sessionSnapshot) {
 
 func (s *Service) pushAskCard(sessionID string, p PendingAsk) {
 	if p.ToolUseID == "" {
+		s.log.Warn("跳过 AskUserQuestion 卡片：toolUseId 为空", "session", sessionID)
 		return
 	}
 	scopes := s.dispatch.bindingsForSession(sessionID)
 	if len(scopes) == 0 {
+		s.log.Warn("跳过 AskUserQuestion 卡片：该会话未在 IM 绑定，请先在飞书内用 /sessions 绑定该会话", "session", sessionID, "toolUseId", p.ToolUseID)
 		return
 	}
 	s.pollMu.Lock()
@@ -412,7 +420,11 @@ func (s *Service) pushAskCard(sessionID string, p PendingAsk) {
 	s.pollMu.Unlock()
 	card := askCard(p)
 	for _, scope := range scopes {
-		_ = s.sendCardToScope(context.Background(), scope, nil, card)
+		if err := s.sendCardToScope(context.Background(), scope, nil, card); err != nil {
+			s.log.Warn("推送 AskUserQuestion 卡片失败", "session", sessionID, "scope", scope, "toolUseId", p.ToolUseID, "err", err)
+			continue
+		}
+		s.log.Info("已推送 AskUserQuestion 卡片", "session", sessionID, "scope", scope, "toolUseId", p.ToolUseID)
 	}
 }
 
