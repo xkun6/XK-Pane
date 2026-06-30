@@ -203,6 +203,61 @@ func askCards(p PendingAsk) []*Card {
 	return cards
 }
 
+// askText 把待答渲染成纯文本作答提示，供无按钮的纯文本平台（企业微信 / QQ OneBot / 微信）使用：
+// 每题选项 1-based 编号 + 描述，末尾说明回复格式。对应 dispatcher.parseTextSelections 的解析约定
+// （分号分隔每题、逗号分隔同题多选）。按钮平台不走这里，仍用 askCards 渲染富卡。
+func askText(p PendingAsk) string {
+	var sb strings.Builder
+	sb.WriteString("**需要你作答（AskUserQuestion）**\n")
+	multi := false
+	single := len(p.Questions) == 1
+	for qi, q := range p.Questions {
+		sb.WriteByte('\n')
+		label := "问题"
+		if !single {
+			label = fmt.Sprintf("问题 %d", qi+1)
+		}
+		if q.MultiSelect {
+			multi = true
+			label += "（多选）"
+		}
+		sb.WriteString(label)
+		sb.WriteString("：")
+		if head := strings.TrimSpace(q.Header); head != "" {
+			sb.WriteString(head)
+			sb.WriteString(" — ")
+		}
+		sb.WriteString(strings.TrimSpace(q.Question))
+		sb.WriteByte('\n')
+		for oi, opt := range q.Options {
+			label := opt.Label
+			if label == "" {
+				label = fmt.Sprintf("Option %d", oi+1)
+			}
+			sb.WriteString(fmt.Sprintf("  %d) %s", oi+1, label))
+			if d := strings.TrimSpace(opt.Description); d != "" {
+				sb.WriteString(" — ")
+				sb.WriteString(d)
+			}
+			sb.WriteByte('\n')
+		}
+	}
+	sb.WriteByte('\n')
+	switch {
+	case !single:
+		sb.WriteString("回复编号作答：多题用分号「;」分隔每题")
+		if multi {
+			sb.WriteString("、多选用逗号「,」")
+		}
+		sb.WriteString("，例如「1;2」。未答的题取第 1 项。")
+	case multi:
+		sb.WriteString("回复编号作答：多选用逗号「,」分隔，例如「1,3」。")
+	default:
+		sb.WriteString("回复编号作答，例如「1」。")
+	}
+	return strings.TrimRight(sb.String(), "\n")
+}
+
 func locateTranscript(ctx context.Context, scanner sessionScanner, snap sessionSnapshot) (string, bool) {
 	if (snap.CliTool == "claude" || snap.CliTool == "reclaude") && snap.ClaudeSessionID != "" {
 		return transcript.ResolveClaudePath(snap.Cwd, snap.ClaudeSessionID)

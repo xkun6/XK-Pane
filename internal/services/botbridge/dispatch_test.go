@@ -196,6 +196,127 @@ func TestDispatchRejectsEmptyMessage(t *testing.T) {
 	}
 }
 
+func TestTextAnswerSingleSelectSubmits(t *testing.T) {
+	writer := &fakeWriter{}
+	d := newDispatcher(dispatchDeps{writer: writer})
+	d.setBinding("scope-a", "sid-1")
+	d.setPending("sid-1", PendingAsk{
+		ToolUseID: "tool-1",
+		Questions: []events.AskQuestion{
+			{Question: "Pick", Options: []events.AskOption{{Label: "A"}, {Label: "B"}}},
+		},
+	})
+
+	handled, err := d.handleMessage(context.Background(), "scope-a", "", "2")
+	if err != nil || !handled {
+		t.Fatalf("handleMessage handled=%v err=%v", handled, err)
+	}
+	want := []string{keyDown, keyEnter}
+	if !reflect.DeepEqual(writer.writes, want) {
+		t.Fatalf("writes = %#v, want %#v", writer.writes, want)
+	}
+}
+
+func TestTextAnswerMultiQuestionSemicolon(t *testing.T) {
+	writer := &fakeWriter{}
+	d := newDispatcher(dispatchDeps{writer: writer})
+	d.setBinding("scope-a", "sid-1")
+	d.setPending("sid-1", PendingAsk{
+		ToolUseID: "tool-1",
+		Questions: []events.AskQuestion{
+			{Question: "Pick", Options: []events.AskOption{{Label: "A"}, {Label: "B"}, {Label: "C"}}},
+			{Question: "Again", Options: []events.AskOption{{Label: "D"}, {Label: "E"}}},
+		},
+	})
+
+	handled, err := d.handleMessage(context.Background(), "scope-a", "", "3;1")
+	if err != nil || !handled {
+		t.Fatalf("handleMessage handled=%v err=%v", handled, err)
+	}
+	// Q1 选第 3 项（2 个 keyDown + Enter），Q2 选第 1 项（Enter），末尾提交 Enter。
+	want := []string{keyDown, keyDown, keyEnter, keyEnter, keyEnter}
+	if !reflect.DeepEqual(writer.writes, want) {
+		t.Fatalf("writes = %#v, want %#v", writer.writes, want)
+	}
+}
+
+func TestTextAnswerMultiSelectComma(t *testing.T) {
+	writer := &fakeWriter{}
+	d := newDispatcher(dispatchDeps{writer: writer})
+	d.setBinding("scope-a", "sid-1")
+	d.setPending("sid-1", PendingAsk{
+		ToolUseID: "tool-1",
+		Questions: []events.AskQuestion{
+			{Question: "Pick", MultiSelect: true, Options: []events.AskOption{{Label: "A"}, {Label: "B"}, {Label: "C"}}},
+		},
+	})
+
+	handled, err := d.handleMessage(context.Background(), "scope-a", "", "1,3")
+	if err != nil || !handled {
+		t.Fatalf("handleMessage handled=%v err=%v", handled, err)
+	}
+	want := []string{keySpace, keyDown, keyDown, keySpace, keyRight, keyEnter}
+	if !reflect.DeepEqual(writer.writes, want) {
+		t.Fatalf("writes = %#v, want %#v", writer.writes, want)
+	}
+}
+
+func TestTextNonAnswerDuringPendingFallsThrough(t *testing.T) {
+	// 待答期内的非编号回复（普通文本 / 越界编号）不得误判为作答，必须原样透传到 PTY。
+	for _, in := range []string{"hello", "9"} {
+		writer := &fakeWriter{}
+		d := newDispatcher(dispatchDeps{writer: writer})
+		d.setBinding("scope-a", "sid-1")
+		d.setPending("sid-1", PendingAsk{
+			ToolUseID: "tool-1",
+			Questions: []events.AskQuestion{
+				{Question: "Pick", Options: []events.AskOption{{Label: "A"}, {Label: "B"}}},
+			},
+		})
+
+		handled, err := d.handleMessage(context.Background(), "scope-a", "", in)
+		if err != nil || !handled {
+			t.Fatalf("handleMessage(%q) handled=%v err=%v", in, handled, err)
+		}
+		want := []string{in + "\r"}
+		if !reflect.DeepEqual(writer.writes, want) {
+			t.Fatalf("in=%q writes = %#v, want %#v", in, writer.writes, want)
+		}
+	}
+}
+
+func TestParseTextSelections(t *testing.T) {
+	qs := []events.AskQuestion{
+		{Options: []events.AskOption{{Label: "A"}, {Label: "B"}, {Label: "C"}}},
+		{MultiSelect: true, Options: []events.AskOption{{Label: "D"}, {Label: "E"}}},
+	}
+	cases := []struct {
+		name string
+		in   string
+		want map[int][]int
+		ok   bool
+	}{
+		{"single", "1", map[int][]int{0: {0}}, true},
+		{"two questions", "2;1", map[int][]int{0: {1}, 1: {0}}, true},
+		{"skip q1 multi q2", ";1,2", map[int][]int{1: {0, 1}}, true},
+		{"chinese punctuation", "1；2", map[int][]int{0: {0}, 1: {1}}, true},
+		{"single select rejects multi", "1,2", nil, false},
+		{"too many segments", "1;1;1", nil, false},
+		{"out of range", "9", nil, false},
+		{"non numeric", "ab", nil, false},
+		{"empty", "", nil, false},
+	}
+	for _, c := range cases {
+		got, ok := parseTextSelections(c.in, qs)
+		if ok != c.ok {
+			t.Fatalf("%s: ok=%v, want %v", c.name, ok, c.ok)
+		}
+		if c.ok && !reflect.DeepEqual(got, c.want) {
+			t.Fatalf("%s: got=%#v, want %#v", c.name, got, c.want)
+		}
+	}
+}
+
 func TestToolUseIDSeenInvalidatesPending(t *testing.T) {
 	d := newDispatcher(dispatchDeps{})
 	d.setPending("sid-1", PendingAsk{ToolUseID: "tool-1"})

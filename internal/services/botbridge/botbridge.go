@@ -467,21 +467,34 @@ func (s *Service) pushAskCard(sessionID string, p PendingAsk) {
 	// 先占去重位，避免后续轮询重复推；若本轮一张都没投递成功，再回滚占位让下一轮重推。
 	s.pushedAsk[sessionID] = p.ToolUseID
 	s.pollMu.Unlock()
-	cards := askCards(p)
 	delivered := false
-	for _, scope := range scopes {
-		sent := 0
-		for _, card := range cards {
-			if err := s.sendCardToScope(context.Background(), scope, nil, card); err != nil {
-				s.log.Warn("推送 AskUserQuestion 卡片失败", "session", sessionID, "scope", scope, "toolUseId", p.ToolUseID, "err", err)
+	if s.platformIsTextOnly() {
+		// 纯文本平台无按钮：推一条编号作答提示，用户回复编号即作答（见 dispatcher 文本作答兜底）。
+		text := askText(p)
+		for _, scope := range scopes {
+			if err := s.sendTextToScope(context.Background(), scope, nil, text); err != nil {
+				s.log.Warn("推送 AskUserQuestion 文本作答提示失败", "session", sessionID, "scope", scope, "toolUseId", p.ToolUseID, "err", err)
 				continue
 			}
-			sent++
-		}
-		if sent > 0 {
 			delivered = true
+			s.log.Info("已推送 AskUserQuestion 文本作答提示", "session", sessionID, "scope", scope, "toolUseId", p.ToolUseID)
 		}
-		s.log.Info("已推送 AskUserQuestion 卡片", "session", sessionID, "scope", scope, "toolUseId", p.ToolUseID, "cards", sent, "total", len(cards))
+	} else {
+		cards := askCards(p)
+		for _, scope := range scopes {
+			sent := 0
+			for _, card := range cards {
+				if err := s.sendCardToScope(context.Background(), scope, nil, card); err != nil {
+					s.log.Warn("推送 AskUserQuestion 卡片失败", "session", sessionID, "scope", scope, "toolUseId", p.ToolUseID, "err", err)
+					continue
+				}
+				sent++
+			}
+			if sent > 0 {
+				delivered = true
+			}
+			s.log.Info("已推送 AskUserQuestion 卡片", "session", sessionID, "scope", scope, "toolUseId", p.ToolUseID, "cards", sent, "total", len(cards))
+		}
 	}
 	if !delivered {
 		// 全部 scope 都没投递成功（常见于平台 WS 尚未握手 / 临时断连）：清掉去重占位，
@@ -506,6 +519,24 @@ func (s *Service) clearPushedAsk(sessionID, toolUseID string) {
 		delete(s.pushedAsk, sessionID)
 	}
 	s.pollMu.Unlock()
+}
+
+// platformIsTextOnly 判断当前平台是否无富卡 / 无内联按钮能力（企业微信 / QQ OneBot / 微信）。
+// 与 sendCardToScope 的能力降级判定保持一致：既非 CardSender 也非 InlineButtonSender 即纯文本。
+func (s *Service) platformIsTextOnly() bool {
+	s.platformMu.Lock()
+	p := s.platform
+	s.platformMu.Unlock()
+	if p == nil {
+		return false
+	}
+	if _, ok := p.(CardSender); ok {
+		return false
+	}
+	if _, ok := p.(InlineButtonSender); ok {
+		return false
+	}
+	return true
 }
 
 func (s *Service) sendTextToScope(ctx context.Context, scopeKey string, replyCtx any, content string) error {

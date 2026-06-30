@@ -185,7 +185,81 @@ func (d *dispatcher) handleMessage(ctx context.Context, scopeKey, messageID, con
 		}
 		return true, nil
 	}
+	// 文本作答兜底：纯文本平台（无按钮）下，待答期内的纯编号回复（如「1」「1,3」「1;2」）
+	// 解析为选项选择 → 走 BuildAnswerKeys 提交，与按钮作答同一套键位。非编号回复继续透传到 PTY。
+	if p, ok := d.effectivePending(sid); ok {
+		if sel, isAnswer := parseTextSelections(content, p.Questions); isAnswer {
+			d.applyTextSelections(p.ToolUseID, sel)
+			return true, d.submitAsk(ctx, scopeKey, p.ToolUseID)
+		}
+	}
 	return true, d.writeText(ctx, sid, content+"\r")
+}
+
+// applyTextSelections 把文本作答解析出的各题选择写入 selections，供 submitAsk 统一构造按键。
+func (d *dispatcher) applyTextSelections(toolUseID string, sel map[int][]int) {
+	d.mu.Lock()
+	if d.selections[toolUseID] == nil {
+		d.selections[toolUseID] = map[int][]int{}
+	}
+	for qi, picks := range sel {
+		d.selections[toolUseID][qi] = append([]int(nil), picks...)
+	}
+	d.mu.Unlock()
+}
+
+// parseTextSelections 把「纯编号回复」解析为各题选项选择（0-based）。
+// 约定：分号 ';' 分隔每题、逗号 ',' 分隔同题多选，编号 1-based；同时兼容中文「，」「；」。
+// 仅当回复完全由数字/逗号/分号/空白组成、段数不超过题数、每个编号都落在该题选项范围内、
+// 且单选题不含多个编号时，才认定为作答；否则返回 false，由调用方按普通文本透传到 PTY。
+func parseTextSelections(content string, questions []events.AskQuestion) (map[int][]int, bool) {
+	content = strings.TrimSpace(content)
+	if content == "" || len(questions) == 0 {
+		return nil, false
+	}
+	norm := strings.NewReplacer("，", ",", "；", ";").Replace(content)
+	for _, r := range norm {
+		switch {
+		case r >= '0' && r <= '9', r == ',', r == ';', r == ' ', r == '\t':
+		default:
+			return nil, false
+		}
+	}
+	segs := strings.Split(norm, ";")
+	if len(segs) > len(questions) {
+		return nil, false
+	}
+	out := map[int][]int{}
+	for i, seg := range segs {
+		seg = strings.TrimSpace(seg)
+		if seg == "" {
+			continue
+		}
+		opts := len(questions[i].Options)
+		picks := make([]int, 0, len(seg))
+		for _, tk := range strings.Split(seg, ",") {
+			tk = strings.TrimSpace(tk)
+			if tk == "" {
+				continue
+			}
+			n, err := strconv.Atoi(tk)
+			if err != nil || n < 1 || n > opts {
+				return nil, false
+			}
+			picks = append(picks, n-1)
+		}
+		if len(picks) == 0 {
+			continue
+		}
+		if !questions[i].MultiSelect && len(picks) > 1 {
+			return nil, false
+		}
+		out[i] = picks
+	}
+	if len(out) == 0 {
+		return nil, false
+	}
+	return out, true
 }
 
 func (d *dispatcher) handleAction(ctx context.Context, scopeKey, messageID, action string) (bool, error) {

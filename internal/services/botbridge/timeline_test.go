@@ -92,6 +92,43 @@ func TestAskCardsSingleQuestionUsesOneCard(t *testing.T) {
 	}
 }
 
+func TestAskTextNumbersOptionsAndInstructs(t *testing.T) {
+	p := PendingAsk{
+		ToolUseID: "tool-1",
+		Questions: []events.AskQuestion{
+			{Question: "选一个", Options: []events.AskOption{{Label: "蓝绿", Description: "零停机"}, {Label: "滚动"}}},
+			{Question: "再选", MultiSelect: true, Options: []events.AskOption{{Label: "监控"}, {Label: "告警"}}},
+		},
+	}
+	text := askText(p)
+	// 每题选项必须 1-based 编号，描述随选项附上。
+	for _, want := range []string{"1) 蓝绿", "2) 滚动", "零停机", "1) 监控", "2) 告警", "问题 1", "问题 2"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("askText 缺片段 %q：\n%s", want, text)
+		}
+	}
+	// 多题 + 含多选 → 提示分号分隔每题、逗号分隔多选。
+	if !strings.Contains(text, "分号") || !strings.Contains(text, "逗号") {
+		t.Fatalf("askText 多题多选未给出分隔说明：\n%s", text)
+	}
+}
+
+func TestAskTextSingleQuestionSimpleHint(t *testing.T) {
+	p := PendingAsk{
+		ToolUseID: "tool-1",
+		Questions: []events.AskQuestion{
+			{Question: "只有一个", Options: []events.AskOption{{Label: "A"}, {Label: "B"}}},
+		},
+	}
+	text := askText(p)
+	if strings.Contains(text, "分号") {
+		t.Fatalf("单题单选不应提示分号：\n%s", text)
+	}
+	if !strings.Contains(text, "1") || !strings.Contains(text, "回复编号") {
+		t.Fatalf("单题缺编号作答提示：\n%s", text)
+	}
+}
+
 func TestEventToCardSkipsAskUserQuestionToolUse(t *testing.T) {
 	card, ok := eventToCard(transcript.Event{Kind: transcript.KindToolUse, ToolName: "AskUserQuestion"})
 	if ok {
