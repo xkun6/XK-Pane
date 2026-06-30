@@ -309,9 +309,13 @@ func codexToolInput(tool, arguments string) string {
 	case "Bash":
 		var a struct {
 			Command json.RawMessage `json:"command"`
+			Cmd     json.RawMessage `json:"cmd"`
 		}
 		_ = json.Unmarshal([]byte(arguments), &a)
 		if cmd := codexCommandString(a.Command); cmd != "" {
+			return compactJSON(map[string]string{"command": cmd})
+		}
+		if cmd := codexCommandString(a.Cmd); cmd != "" {
 			return compactJSON(map[string]string{"command": cmd})
 		}
 		return passthroughArgs(arguments)
@@ -387,12 +391,18 @@ func codexOutputText(raw json.RawMessage) string {
 	}
 	if json.Unmarshal(raw, &arr) == nil {
 		var b strings.Builder
+		appendPart := func(s string) {
+			if b.Len() > 0 {
+				b.WriteByte('\n')
+			}
+			b.WriteString(s)
+		}
 		for _, it := range arr {
 			switch {
 			case it.Text != "":
-				b.WriteString(it.Text)
+				appendPart(it.Text)
 			case it.ImageURL != "":
-				b.WriteString("[image]")
+				appendPart("[image]")
 			}
 		}
 		return b.String()
@@ -400,26 +410,31 @@ func codexOutputText(raw json.RawMessage) string {
 	return ""
 }
 
-// codexBashDetail 把 shell 的 output 字符串解析成 bash Detail（stdout）+ 是否出错（退出码非 0）。
-// output 形如 "Exit code: 0\nWall time: 0.4 seconds\nOutput:\n<内容>"；不匹配则整体作 stdout。
+// codexBashDetail 把 shell/exec_command 的 output 字符串解析成 bash Detail（stdout）+ 是否出错（退出码非 0）。
+// shell_command 形如 "Exit code: 0\nWall time: ...\nOutput:\n<内容>"；
+// exec_command 形如 "Chunk ID: ...\nWall time: ...\nProcess exited with code 0\nOutput:\n<内容>"。
 func codexBashDetail(output string) (*ToolResultDetail, bool) {
 	body := output
 	isErr := false
-	if strings.HasPrefix(output, "Exit code:") {
-		nl := strings.IndexByte(output, '\n')
-		firstLine := output
-		if nl >= 0 {
-			firstLine = output[:nl]
+	for _, ln := range strings.Split(output, "\n") {
+		line := strings.TrimSpace(strings.TrimRight(ln, "\r"))
+		switch {
+		case strings.HasPrefix(line, "Exit code:"):
+			codeStr := strings.TrimSpace(strings.TrimPrefix(line, "Exit code:"))
+			if n, err := strconv.Atoi(codeStr); err == nil && n != 0 {
+				isErr = true
+			}
+		case strings.HasPrefix(line, "Process exited with code "):
+			codeStr := strings.TrimSpace(strings.TrimPrefix(line, "Process exited with code "))
+			if n, err := strconv.Atoi(codeStr); err == nil && n != 0 {
+				isErr = true
+			}
 		}
-		codeStr := strings.TrimSpace(strings.TrimPrefix(firstLine, "Exit code:"))
-		if n, err := strconv.Atoi(codeStr); err == nil && n != 0 {
-			isErr = true
-		}
-		if i := strings.Index(output, "\nOutput:\n"); i >= 0 {
-			body = output[i+len("\nOutput:\n"):]
-		} else if nl >= 0 {
-			body = output[nl+1:]
-		}
+	}
+	if i := strings.Index(output, "\nOutput:\n"); i >= 0 {
+		body = output[i+len("\nOutput:\n"):]
+	} else if strings.HasPrefix(output, "Output:\n") {
+		body = output[len("Output:\n"):]
 	}
 	body = strings.Trim(body, "\r\n")
 	return &ToolResultDetail{Kind: "bash", Stdout: capRunes(stripANSI(body), toolResultCap)}, isErr
@@ -477,8 +492,15 @@ func codexEditDetail(patch string) *ToolResultDetail {
 			} else {
 				push(ln) // 多文件补丁：非首文件保留文件头作边界
 			}
+		case strings.HasPrefix(ln, "*** Move to: "):
+			p := strings.TrimSpace(strings.TrimPrefix(ln, "*** Move to: "))
+			if d.FilePath != "" && p != "" {
+				push(d.FilePath + " -> " + p)
+			} else if p != "" {
+				push("-> " + p)
+			}
 		case strings.HasPrefix(ln, "*** "):
-			continue // 其它 *** 指令（Move to 等）
+			continue // 其它 *** 指令
 		default:
 			if strings.HasPrefix(ln, "+") {
 				d.Added++
@@ -504,9 +526,9 @@ func cleanCodexUserText(s string) string {
 	switch {
 	case strings.HasPrefix(t, "# AGENTS.md"),
 		strings.HasPrefix(t, "<user_instructions>"),
-		strings.Contains(t, "<environment_context>"),
-		strings.Contains(t, "<permissions instructions>"),
-		strings.Contains(t, "<system-reminder>"):
+		strings.HasPrefix(t, "<environment_context>"),
+		strings.HasPrefix(t, "<permissions instructions>"),
+		strings.HasPrefix(t, "<system-reminder>"):
 		return ""
 	}
 	return capRunes(t, textCap)

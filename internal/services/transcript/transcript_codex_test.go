@@ -227,6 +227,83 @@ func TestParseCodex_BashNonZeroExit(t *testing.T) {
 	}
 }
 
+func TestParseCodex_ExecCommandCmdAndProcessExitFormat(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "r.jsonl")
+	lines := []string{
+		`{"type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"go test ./...\"}","call_id":"x"}}`,
+		`{"type":"response_item","payload":{"type":"function_call_output","call_id":"x","output":"Chunk ID: abc123\nWall time: 0.1327 seconds\nProcess exited with code 1\nOriginal token count: 42\nOutput:\ncompile failed\n"}}`,
+	}
+	if err := os.WriteFile(p, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	res := ParseCodex(p, 0)
+	var use, result *Event
+	for i := range res.Events {
+		if res.Events[i].Kind == KindToolUse {
+			use = &res.Events[i]
+		}
+		if res.Events[i].Kind == KindToolResult {
+			result = &res.Events[i]
+		}
+	}
+	if use == nil {
+		t.Fatal("缺 tool_use")
+	}
+	if !strings.Contains(use.ToolInput, `"command":"go test ./..."`) {
+		t.Fatalf("exec_command toolInput = %q，期望从 cmd 归一出 command", use.ToolInput)
+	}
+	if result == nil {
+		t.Fatal("缺 tool_result")
+	}
+	if !result.IsError {
+		t.Errorf("Process exited with code 1 应标 isError")
+	}
+	if result.Detail == nil || strings.TrimSpace(result.Detail.Stdout) != "compile failed" {
+		t.Fatalf("exec_command stdout = %+v，期望仅保留 Output 后正文", result.Detail)
+	}
+}
+
+func TestCodexEditDetailPreservesMoveTo(t *testing.T) {
+	patch := strings.Join([]string{
+		"*** Begin Patch",
+		"*** Update File: old.txt",
+		"*** Move to: new.txt",
+		"@@",
+		"-old",
+		"+new",
+		"*** End Patch",
+	}, "\n")
+
+	d := codexEditDetail(patch)
+	if d == nil {
+		t.Fatal("缺 edit detail")
+	}
+	joined := strings.Join(d.Diff, "\n")
+	if !strings.Contains(joined, "old.txt -> new.txt") {
+		t.Fatalf("move diff = %q，期望保留 old -> new 边界", joined)
+	}
+}
+
+func TestCodexOutputTextJoinsContentItemsWithNewlines(t *testing.T) {
+	raw := json.RawMessage(`[{"type":"input_text","text":"one"},{"type":"input_text","text":"two"},{"type":"input_image","image_url":"data:image/png;base64,abc"}]`)
+
+	got := codexOutputText(raw)
+	if got != "one\ntwo\n[image]" {
+		t.Fatalf("codexOutputText = %q，期望文本/图片项用换行分隔", got)
+	}
+}
+
+func TestCleanCodexUserTextDoesNotDropLiteralTagsInRealPrompt(t *testing.T) {
+	in := "请解释字符串 <environment_context> 在文档里的含义"
+
+	got := cleanCodexUserText(in)
+	if got == "" {
+		t.Fatal("包含 environment_context 字面量的真实用户消息不应被整条过滤")
+	}
+}
+
 // 读不到文件 → 空结果（非 nil events）。
 func TestParseCodex_MissingFile(t *testing.T) {
 	res := ParseCodex(filepath.Join(t.TempDir(), "nope.jsonl"), 0)
