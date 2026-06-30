@@ -7,10 +7,40 @@ import (
 	"path/filepath"
 	"strings"
 
+	"xkpane/internal/events"
 	"xkpane/internal/services/sessionscan"
 	"xkpane/internal/services/terminal"
 	"xkpane/internal/services/transcript"
 )
+
+// optionsDescBlock 渲染选项的「编号 + 标签 + 描述」markdown 列表（飞书按钮只能显示标签，
+// 描述靠这段文字补上）。任一选项无描述则整体省略，避免无意义的编号噪声。
+func optionsDescBlock(opts []events.AskOption) string {
+	has := false
+	for _, o := range opts {
+		if strings.TrimSpace(o.Description) != "" {
+			has = true
+			break
+		}
+	}
+	if !has {
+		return ""
+	}
+	var sb strings.Builder
+	for i, o := range opts {
+		label := o.Label
+		if label == "" {
+			label = fmt.Sprintf("Option %d", i+1)
+		}
+		sb.WriteString(fmt.Sprintf("%d. **%s**", i+1, label))
+		if d := strings.TrimSpace(o.Description); d != "" {
+			sb.WriteString(" — ")
+			sb.WriteString(d)
+		}
+		sb.WriteByte('\n')
+	}
+	return strings.TrimRight(sb.String(), "\n")
+}
 
 type sessionSnapshot struct {
 	ID              string
@@ -94,6 +124,9 @@ func askCard(p PendingAsk) *Card {
 			b.Markdown("**" + q.Header + "**")
 		}
 		b.Markdown(q.Question)
+		if desc := optionsDescBlock(q.Options); desc != "" {
+			b.Markdown(desc)
+		}
 		buttons := make([]CardButton, 0, len(q.Options))
 		for oi, opt := range q.Options {
 			label := opt.Label
@@ -139,6 +172,9 @@ func askCards(p PendingAsk) []*Card {
 		b.Markdown(q.Question)
 		if q.MultiSelect {
 			b.Markdown("_多选：可点多个选项，选完点末尾「提交全部」_")
+		}
+		if desc := optionsDescBlock(q.Options); desc != "" {
+			b.Markdown(desc)
 		}
 		buttons := make([]CardButton, 0, len(q.Options))
 		for oi, opt := range q.Options {

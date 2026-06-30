@@ -12,6 +12,7 @@ import (
 	"xkpane/internal/events"
 	"xkpane/internal/services/orchestrator"
 	"xkpane/internal/services/terminal"
+	"xkpane/internal/services/transcript"
 	"xkpane/internal/storage"
 	"xkpane/internal/utils/cryptox"
 	"xkpane/internal/utils/logx"
@@ -165,9 +166,8 @@ func (s *Service) RouteEvent(name string, payload any) {
 				s.log.Warn("收到 ask-pending 事件，但 orchestrator 未返回待答（可能 sessionId 不匹配或待答已清除）", "session", p.SessionID)
 				return
 			}
-			s.log.Info("收到 ask-pending 事件，准备推送 AskUserQuestion 卡片", "session", p.SessionID, "toolUseId", pending.ToolUseID, "questions", len(pending.Questions))
+			s.log.Info("收到 ask-pending 事件，登记待答（卡片由轮询器统一推送，保证与镜像卡顺序一致）", "session", p.SessionID, "toolUseId", pending.ToolUseID, "questions", len(pending.Questions))
 			s.dispatch.setPending(p.SessionID, pending)
-			s.pushAskCard(p.SessionID, pending)
 		}()
 	case events.TerminalExit:
 		if p, ok := payload.(events.TerminalExitPayload); ok {
@@ -381,7 +381,11 @@ func (s *Service) pollSession(ctx context.Context, snap sessionSnapshot) {
 		res := parseTimeline(path, snap, after)
 		after = res.Total
 		for _, ev := range res.Events {
-			if ev.ToolUseID != "" {
+			// 仅在 tool_result（答案落地）时标记 seen / 清除 ask 卡去重。
+			// 不能在 tool_use 出现时就标记：reclaude 待答期会先把 AskUserQuestion 的 tool_use
+			// 写进转录，若此时标记 seen 会令 effectivePending 误判已答、提前清除待答，
+			// 导致用户点「提交全部」时待答已消失、submitAsk 静默返回而无反应。
+			if ev.Kind == transcript.KindToolResult && ev.ToolUseID != "" {
 				s.dispatch.markToolUseSeen(snap.ID, ev.ToolUseID)
 				s.clearPushedAsk(snap.ID, ev.ToolUseID)
 			}
