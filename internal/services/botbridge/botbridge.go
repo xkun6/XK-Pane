@@ -418,13 +418,17 @@ func (s *Service) pushAskCard(sessionID string, p PendingAsk) {
 	}
 	s.pushedAsk[sessionID] = p.ToolUseID
 	s.pollMu.Unlock()
-	card := askCard(p)
+	cards := askCards(p)
 	for _, scope := range scopes {
-		if err := s.sendCardToScope(context.Background(), scope, nil, card); err != nil {
-			s.log.Warn("推送 AskUserQuestion 卡片失败", "session", sessionID, "scope", scope, "toolUseId", p.ToolUseID, "err", err)
-			continue
+		sent := 0
+		for _, card := range cards {
+			if err := s.sendCardToScope(context.Background(), scope, nil, card); err != nil {
+				s.log.Warn("推送 AskUserQuestion 卡片失败", "session", sessionID, "scope", scope, "toolUseId", p.ToolUseID, "err", err)
+				continue
+			}
+			sent++
 		}
-		s.log.Info("已推送 AskUserQuestion 卡片", "session", sessionID, "scope", scope, "toolUseId", p.ToolUseID)
+		s.log.Info("已推送 AskUserQuestion 卡片", "session", sessionID, "scope", scope, "toolUseId", p.ToolUseID, "cards", sent, "total", len(cards))
 	}
 }
 

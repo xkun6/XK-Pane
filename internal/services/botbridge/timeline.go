@@ -120,6 +120,53 @@ func askCard(p PendingAsk) *Card {
 	return b.Build()
 }
 
+// askCards 把待答渲染成「一题一卡」。单问题沿用 askCard（已验证可在飞书渲染）；
+// 多问题时拆成 N 张卡（每张只含单个问题的选项行，末张附「提交全部」按钮）。
+// 原因：飞书对单张卡内多个 action 交互模块存在渲染降级——3+ 个 action 模块会令整卡
+// 退化成纯文字、所有按钮消失（实测复现）。拆成一题一卡后每张 ≤2 个 action 模块即可正常渲染。
+// 作答按全局 qIdx 累积（见 dispatcher.handleAskQ），与卡片如何分布无关，故 answerKeys 不受影响。
+func askCards(p PendingAsk) []*Card {
+	total := len(p.Questions)
+	if total <= 1 {
+		return []*Card{askCard(p)}
+	}
+	cards := make([]*Card, 0, total)
+	for qi, q := range p.Questions {
+		b := NewCard().Title(fmt.Sprintf("AskUserQuestion (%d/%d)", qi+1, total), "orange")
+		if q.Header != "" {
+			b.Markdown("**" + q.Header + "**")
+		}
+		b.Markdown(q.Question)
+		if q.MultiSelect {
+			b.Markdown("_多选：可点多个选项，选完点末尾「提交全部」_")
+		}
+		buttons := make([]CardButton, 0, len(q.Options))
+		for oi, opt := range q.Options {
+			label := opt.Label
+			if label == "" {
+				label = fmt.Sprintf("Option %d", oi+1)
+			}
+			buttons = append(buttons, CardButton{
+				Text:  label,
+				Type:  "default",
+				Value: fmt.Sprintf("askq:%d:%d", qi, oi),
+				Extra: map[string]string{
+					"askq_label":    label,
+					"askq_question": q.Question,
+				},
+			})
+		}
+		if len(buttons) > 0 {
+			b.Buttons(buttons...)
+		}
+		if qi == total-1 && p.ToolUseID != "" {
+			b.Buttons(PrimaryBtn("提交全部", "asksubmit:"+p.ToolUseID))
+		}
+		cards = append(cards, b.Build())
+	}
+	return cards
+}
+
 func locateTranscript(ctx context.Context, scanner sessionScanner, snap sessionSnapshot) (string, bool) {
 	if (snap.CliTool == "claude" || snap.CliTool == "reclaude") && snap.ClaudeSessionID != "" {
 		return transcript.ResolveClaudePath(snap.Cwd, snap.ClaudeSessionID)
