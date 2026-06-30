@@ -31,6 +31,10 @@ export const settingsPageEnUS: Messages = {
         label: 'Web access',
         description: 'LAN access from phone / tablet, shared sessions',
       },
+      botbridge: {
+        label: 'Bot bridge',
+        description: 'Mirror terminal sessions to Feishu with write-back',
+      },
       screenshot: {
         label: 'Screenshot shortcut',
         description: 'Global capture hotkey and screenshot retention',

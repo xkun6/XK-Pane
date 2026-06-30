@@ -55,6 +55,11 @@ export const useSettingsPage = (): UseSettingsPageResult => {
         descriptionKey: 'settings.list.webaccess.description',
       },
       {
+        id: 'botbridge',
+        labelKey: 'settings.list.botbridge.label',
+        descriptionKey: 'settings.list.botbridge.description',
+      },
+      {
         id: 'screenshot',
         labelKey: 'settings.list.screenshot.label',
         descriptionKey: 'settings.list.screenshot.description',

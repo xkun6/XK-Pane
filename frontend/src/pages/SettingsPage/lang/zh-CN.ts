@@ -34,6 +34,10 @@ export const settingsPageZhCN: Messages = {
         label: 'Web 访问',
         description: '手机 / 平板局域网访问与会话互通',
       },
+      botbridge: {
+        label: 'Bot 连接器',
+        description: '飞书镜像当前终端并支持回写作答',
+      },
       screenshot: {
         label: '截图快捷键',
         description: '全局截图热键与截图文件保留策略',

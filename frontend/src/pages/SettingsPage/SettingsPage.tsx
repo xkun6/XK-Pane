@@ -9,6 +9,7 @@ import { Knowledge } from './knowledge';
 import { ProviderSettings } from './provider';
 import { WebAccess } from './webaccess';
 import { Screenshot } from './screenshot';
+import { Botbridge } from './botbridge';
 
 // 设置页（两列）：
 //   左列：选项列表（personalization / language / database）
@@ -66,6 +67,7 @@ export const SettingsPage = () => {
         {vm.activeItem.id === 'database' && <Database />}
         {vm.activeItem.id === 'knowledge' && <Knowledge />}
         {vm.activeItem.id === 'webaccess' && <WebAccess />}
+        {vm.activeItem.id === 'botbridge' && <Botbridge />}
         {vm.activeItem.id === 'screenshot' && <Screenshot />}
       </Box>
     </Box>

@@ -8,6 +8,7 @@ import { registerKnowledgeLocales } from '../knowledge';
 import { registerProviderSettingsLocales } from '../provider';
 import { registerWebAccessLocales } from '../webaccess';
 import { registerScreenshotLocales } from '../screenshot';
+import { registerBotbridgeLocales } from '../botbridge';
 
 let registered = false;
 
@@ -24,6 +25,7 @@ export const registerSettingsPageLocales = (): void => {
   registerKnowledgeLocales();
   registerProviderSettingsLocales();
   registerWebAccessLocales();
+  registerBotbridgeLocales();
   registerScreenshotLocales();
   registered = true;
 };

@@ -17,6 +17,7 @@ import (
 	"xkpane/internal/services/appsettings"
 	"xkpane/internal/services/bedrock"
 	"xkpane/internal/services/bedrockdocsync"
+	"xkpane/internal/services/botbridge"
 	"xkpane/internal/services/cliadapters"
 	"xkpane/internal/services/clitools"
 	"xkpane/internal/services/file"
@@ -47,6 +48,8 @@ import (
 	"xkpane/internal/utils/httpx"
 	"xkpane/internal/utils/logx"
 	"xkpane/internal/webapi"
+
+	_ "xkpane/internal/services/botbridge/platform/feishu"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	wailsevents "github.com/wailsapp/wails/v3/pkg/events"
@@ -131,6 +134,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	}
 	webGateway := webapi.NewGateway(holder, webFS)
 	webAccessSvc := webapi.NewService(webGateway)
+	botBridge := botbridge.New(holder)
 
 	// MC PE 控制（P6e）：mcpeSvc 注册给前端（包管理 / 启动 / 日志），经 SetEmitter 双路推日志事件；
 	// mcdkBridge 是后端 TCP 桥（127.0.0.1:0，等游戏内 Python 模组反向连入），非 Wails service，
@@ -207,6 +211,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(transcriptSvc),     // 结构化时间线（桌面卡片视图取数）
 			application.NewService(wailsNotifier),     // Wails 通知 service（跑 ServiceStartup 注册 toast）
 			application.NewService(webAccessSvc),      // Web 网关门面（GetAccessInfo → 配对二维码）
+			application.NewService(botBridge),         // Bot 连接器（飞书 WebSocket + 当前终端镜像/回写）
 			application.NewService(mcpeSvc),           // MC PE 控制（包管理 / 启动 / 日志 / 桥状态）
 			application.NewService(bedrockDocSyncSvc), // Bedrock OTA 文档同步（设置 → 知识库面板）
 			application.NewService(shotSvc),           // 截图快捷键（设置 → 截图：改键 UpdateShortcut）
@@ -239,6 +244,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	mirrorEmit := func(name string, payload any) {
 		app.Event.Emit(name, payload)
 		webGateway.RouteEvent(name, payload)
+		botBridge.RouteEvent(name, payload)
 	}
 	termSvc.SetEmitter(mirrorEmit)
 	mcpeSvc.SetEmitter(mirrorEmit)           // MC PE 日志/退出事件双路（桌面 webview + Web 网关）
@@ -363,12 +369,23 @@ func Run(assets embed.FS, trayIcon []byte) error {
 		Writer:     termSvc,
 		AskPend:    orchSvc, // 待答 AskUserQuestion 回灌（晚到 web viewer 经 timeline 轮询恢复待答态）
 	})
+	botBridge.AttachServices(botbridge.BotDeps{
+		Sessions: termSvc,
+		Writer:   termSvc,
+		AskPend:  orchSvc,
+		Scanner:  scanSvc,
+	})
 	if err := orchSvc.Start(); err != nil {
 		logx.For("app").Warn("orchestrator start failed (CLI 将无 MCP 注入，fail-open)", "err", err)
 	} else {
 		termSvc.SetOrchestrator(orchSvc.Port(), orchSvc.Token())
 	}
 	defer func() { _ = orchSvc.Stop() }()
+
+	if err := botBridge.Start(); err != nil {
+		logx.For("app").Warn("botbridge start failed (IM bot 不可用，fail-open)", "err", err)
+	}
+	defer func() { _ = botBridge.Stop() }()
 
 	// —— Web 网关（P7 M1）：bind 0.0.0.0，手机/平板经局域网访问。失败 fail-open（Web 访问不可用，
 	// 不阻断桌面应用）。端口被占等启动失败仅 warn。——

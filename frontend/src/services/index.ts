@@ -147,6 +147,11 @@ export {
 } from './orchestrator/OrchestratorService';
 export { WebAccessService, type AccessInfo } from './webaccess/WebAccessService';
 export {
+  BotBridgeService,
+  type BotBridgeStatus,
+  type BotBridgeConfigInput,
+} from './botbridge/BotBridgeService';
+export {
   MCPEService,
   type MCPackage,
   type MCWorldConfig,
