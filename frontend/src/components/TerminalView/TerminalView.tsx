@@ -26,8 +26,10 @@ export const TerminalView = (props: TerminalViewProps) => {
   const { hostRef } = useTerminalView(props);
   const sid = props.sessionId;
   const viewMode = props.viewMode ?? 'terminal';
-  // 仅 claude/reclaude 有结构化转录；非此类会话不挂 SessionTimeline（避免无谓轮询，且无卡片可切）。
-  const canCard = props.cliTool === 'claude' || props.cliTool === 'reclaude';
+  // claude/reclaude（~/.claude/projects）与 codex（~/.codex/sessions）有结构化转录；其余会话不挂
+  // SessionTimeline（避免无谓轮询，且无卡片可切）。
+  const canCard =
+    props.cliTool === 'claude' || props.cliTool === 'reclaude' || props.cliTool === 'codex';
   const cardVisible = canCard && viewMode === 'card';
 
   const timeline =
@@ -41,7 +43,7 @@ export const TerminalView = (props: TerminalViewProps) => {
         onRawInput={(data) => {
           void TerminalService.write(sid, data).catch(() => {});
         }}
-        // 打断 = 写 Esc（claude/reclaude TUI 的打断键；卡片仅这两类会话挂载）。
+        // 打断 = 写 Esc（claude/reclaude 与 codex TUI 的打断键一致，均为 Esc 取消当前轮次）。
         onInterrupt={() => {
           void TerminalService.write(sid, '\x1b').catch(() => {});
         }}

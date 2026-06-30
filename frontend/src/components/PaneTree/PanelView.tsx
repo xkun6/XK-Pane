@@ -9,8 +9,9 @@ import { panelViewStyles } from './PaneTree.styles';
 
 // 叶子面板：TabBar（其活动 Tab）+ 内容区（每 Tab 一个 TerminalView，活动可见、其余隐藏保挂载）。
 // 无 Tab（初始 / 关掉最后会话）→ 渲染空态占位，不凭空开空 shell。
-// 仅 claude/reclaude 会话有结构化转录 → 才提供卡片视图（与后端 transcriptsvc.GetTimeline 的 supported 同口径）。
-const canShowCard = (cliTool?: string): boolean => cliTool === 'claude' || cliTool === 'reclaude';
+// claude/reclaude 与 codex 会话有结构化转录 → 才提供卡片视图（与后端 transcriptsvc.GetTimeline 的 supported 同口径）。
+const canShowCard = (cliTool?: string): boolean =>
+  cliTool === 'claude' || cliTool === 'reclaude' || cliTool === 'codex';
 
 export const PanelView = ({ panel }: { panel: Panel }) => {
   const theme = useTheme();
