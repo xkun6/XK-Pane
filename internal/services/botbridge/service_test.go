@@ -2,14 +2,28 @@ package botbridge
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"xkpane/internal/events"
 	"xkpane/internal/storage"
 	"xkpane/internal/utils/cryptox"
 )
+
+// registerFakeFeishu 确保测试进程内 "feishu" 平台有一个工厂——SetConfig 现在会校验平台
+// 是否已注册适配器，而 botbridge 包测试不会 blank import platform/feishu。
+func registerFakeFeishu(t *testing.T) {
+	t.Helper()
+	if _, ok := platformFactories["feishu"]; ok {
+		return
+	}
+	RegisterPlatform("feishu", func(map[string]any) (Platform, error) {
+		return &fakePlatform{}, nil
+	})
+}
 
 func TestSetConfigRejectsUnsupportedPlatform(t *testing.T) {
 	s := New(testHolder(t))
@@ -30,16 +44,16 @@ func TestGetStatusReturnsDefaultWhenConfigMissing(t *testing.T) {
 	}
 }
 
-func TestSetConfigEncryptsAppSecretRoundTrip(t *testing.T) {
+func TestSetConfigEncryptsCredentialsRoundTrip(t *testing.T) {
 	holder := testHolder(t)
 	s := New(holder)
+	registerFakeFeishu(t)
 	plain := "app-secret-for-test"
 
 	err := s.SetConfig(context.Background(), ConfigInput{
-		Platform:  "feishu",
-		AppID:     "cli_a",
-		AppSecret: plain,
-		Enabled:   false,
+		Platform:    "feishu",
+		Credentials: map[string]string{"app_id": "cli_a", "app_secret": plain},
+		Enabled:     false,
 	})
 	if err != nil {
 		t.Fatalf("SetConfig err=%v", err)
@@ -49,18 +63,37 @@ func TestSetConfigEncryptsAppSecretRoundTrip(t *testing.T) {
 	if err := holder.Current().GORM.First(&row, "id = ?", 1).Error; err != nil {
 		t.Fatalf("load bot_bridge_config: %v", err)
 	}
-	if row.TokenEnc == "" {
-		t.Fatalf("TokenEnc is empty")
+	if row.CredentialsEnc == "" {
+		t.Fatalf("CredentialsEnc is empty")
 	}
-	if row.TokenEnc == plain {
-		t.Fatalf("TokenEnc stored plaintext")
+	if strings.Contains(row.CredentialsEnc, plain) {
+		t.Fatalf("CredentialsEnc 含明文密钥")
 	}
-	got, err := cryptox.DecryptString(row.TokenEnc)
+	dec, err := cryptox.DecryptString(row.CredentialsEnc)
 	if err != nil {
 		t.Fatalf("DecryptString err=%v", err)
 	}
-	if got != plain {
-		t.Fatalf("decrypted secret = %q, want %q", got, plain)
+	var creds map[string]string
+	if err := json.Unmarshal([]byte(dec), &creds); err != nil {
+		t.Fatalf("凭据 JSON 解析失败: %v", err)
+	}
+	if creds["app_secret"] != plain {
+		t.Fatalf("decrypted app_secret = %q, want %q", creds["app_secret"], plain)
+	}
+	if creds["app_id"] != "cli_a" {
+		t.Fatalf("app_id = %q, want cli_a", creds["app_id"])
+	}
+
+	// 非敏感字段经 GetStatus 回传、敏感字段不回传。
+	st, err := s.GetStatus()
+	if err != nil {
+		t.Fatalf("GetStatus err=%v", err)
+	}
+	if st.Credentials["app_id"] != "cli_a" {
+		t.Fatalf("status app_id = %q, want cli_a", st.Credentials["app_id"])
+	}
+	if _, ok := st.Credentials["app_secret"]; ok {
+		t.Fatalf("status 不应回传敏感字段 app_secret")
 	}
 }
 

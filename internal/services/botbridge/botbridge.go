@@ -38,18 +38,17 @@ type BotDeps struct {
 }
 
 type Status struct {
-	Enabled   bool   `json:"enabled"`
-	Platform  string `json:"platform"`
-	AppID     string `json:"appId"`
-	Connected bool   `json:"connected"`
-	Error     string `json:"error,omitempty"`
+	Enabled     bool              `json:"enabled"`
+	Platform    string            `json:"platform"`
+	Credentials map[string]string `json:"credentials"` // 仅非敏感字段，敏感字段（密钥）不回传
+	Connected   bool              `json:"connected"`
+	Error       string            `json:"error,omitempty"`
 }
 
 type ConfigInput struct {
-	Platform  string `json:"platform"`
-	AppID     string `json:"appId"`
-	AppSecret string `json:"appSecret"`
-	Enabled   bool   `json:"enabled"`
+	Platform    string            `json:"platform"`
+	Credentials map[string]string `json:"credentials"` // 各平台凭据字段，键名见 platformSpecs
+	Enabled     bool              `json:"enabled"`
 }
 
 type Service struct {
@@ -177,16 +176,27 @@ func (s *Service) RouteEvent(name string, payload any) {
 	}
 }
 
+// ListPlatforms 返回已注册适配器的平台凭据规格，供前端配置页动态渲染输入框。
+func (s *Service) ListPlatforms() []PlatformSpec {
+	return registeredPlatformSpecs()
+}
+
 func (s *Service) GetStatus() (Status, error) {
 	cfg, err := s.loadConfig()
 	if err != nil {
 		return Status{}, err
 	}
+	public := map[string]string{}
+	for k, v := range s.decodeCredentials(cfg) {
+		if !isSecretField(cfg.Platform, k) {
+			public[k] = v
+		}
+	}
 	s.platformMu.Lock()
 	connected := s.connected
 	lastErr := s.lastErr
 	s.platformMu.Unlock()
-	return Status{Enabled: cfg.Enabled, Platform: cfg.Platform, AppID: cfg.AppID, Connected: connected, Error: lastErr}, nil
+	return Status{Enabled: cfg.Enabled, Platform: cfg.Platform, Credentials: public, Connected: connected, Error: lastErr}, nil
 }
 
 func (s *Service) SetConfig(ctx context.Context, in ConfigInput) error {
@@ -194,32 +204,37 @@ func (s *Service) SetConfig(ctx context.Context, in ConfigInput) error {
 	if platform == "" {
 		platform = "feishu"
 	}
-	if platform != "feishu" {
+	if _, ok := platformFactories[platform]; !ok {
 		return fmt.Errorf("unsupported bot platform %q", platform)
 	}
-	var tokenEnc string
-	if strings.TrimSpace(in.AppSecret) != "" {
-		enc, err := cryptox.EncryptString(in.AppSecret)
-		if err != nil {
-			return err
+	old, _ := s.loadConfig()
+	oldCreds := s.decodeCredentials(old)
+	samePlatform := old.Platform == platform
+	sp, _ := platformSpec(platform)
+	creds := map[string]string{}
+	for _, f := range sp.Fields {
+		v := strings.TrimSpace(in.Credentials[f.Key])
+		// 敏感字段留空 + 同平台 → 沿用旧值（前端保存时不回显密钥，空=不变）。
+		if v == "" && f.Secret && samePlatform {
+			v = oldCreds[f.Key]
 		}
-		tokenEnc = enc
-	} else {
-		old, err := s.loadConfig()
-		if err == nil {
-			tokenEnc = old.TokenEnc
+		if v != "" {
+			creds[f.Key] = v
 		}
+	}
+	credsEnc, err := encodeCredentials(creds)
+	if err != nil {
+		return err
 	}
 	row := storage.BotBridgeConfig{
-		ID:           1,
-		Platform:     platform,
-		AppID:        strings.TrimSpace(in.AppID),
-		TokenEnc:     tokenEnc,
-		Enabled:      in.Enabled,
-		BindingsJSON: "{}",
-		Extra:        compactJSON(map[string]any{"mode": "websocket"}),
+		ID:             1,
+		Platform:       platform,
+		CredentialsEnc: credsEnc,
+		Enabled:        in.Enabled,
+		BindingsJSON:   "{}",
+		Extra:          compactJSON(map[string]any{"mode": "websocket"}),
 	}
-	if old, err := s.loadConfig(); err == nil && old.BindingsJSON != "" {
+	if old.BindingsJSON != "" {
 		row.BindingsJSON = old.BindingsJSON
 	}
 	if err := s.holder.Current().GORM.WithContext(ctx).Save(&row).Error; err != nil {
@@ -235,6 +250,38 @@ func (s *Service) SetConfig(ctx context.Context, in ConfigInput) error {
 		}
 	}
 	return nil
+}
+
+// encodeCredentials 把凭据 map 序列化并整体加密后存 CredentialsEnc。
+func encodeCredentials(creds map[string]string) (string, error) {
+	b, err := json.Marshal(creds)
+	if err != nil {
+		return "", err
+	}
+	return cryptox.EncryptString(string(b))
+}
+
+// decodeCredentials 解出凭据 map：优先读新版 CredentialsEnc；为空则向后兼容旧版飞书
+// 单平台的 AppID + TokenEnc 两列，合成出 {app_id, app_secret}。
+func (s *Service) decodeCredentials(row storage.BotBridgeConfig) map[string]string {
+	if strings.TrimSpace(row.CredentialsEnc) != "" {
+		if dec, err := cryptox.DecryptString(row.CredentialsEnc); err == nil {
+			var m map[string]string
+			if json.Unmarshal([]byte(dec), &m) == nil && m != nil {
+				return m
+			}
+		}
+	}
+	out := map[string]string{}
+	if strings.TrimSpace(row.AppID) != "" {
+		out["app_id"] = row.AppID
+	}
+	if strings.TrimSpace(row.TokenEnc) != "" {
+		if sec, err := cryptox.DecryptString(row.TokenEnc); err == nil {
+			out["app_secret"] = sec
+		}
+	}
+	return out
 }
 
 func (s *Service) loadConfig() (storage.BotBridgeConfig, error) {
@@ -265,14 +312,11 @@ func (s *Service) reloadPlatform(ctx context.Context) error {
 		s.platformMu.Unlock()
 		return nil
 	}
-	secret, err := cryptox.DecryptString(cfg.TokenEnc)
-	if err != nil {
-		return err
+	opts := map[string]any{}
+	for k, v := range s.decodeCredentials(cfg) {
+		opts[k] = v
 	}
-	p, err := CreatePlatform(cfg.Platform, map[string]any{
-		"app_id":     cfg.AppID,
-		"app_secret": secret,
-	})
+	p, err := CreatePlatform(cfg.Platform, opts)
 	if err != nil {
 		return err
 	}

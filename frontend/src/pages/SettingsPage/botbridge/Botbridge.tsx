@@ -29,7 +29,7 @@ export const Botbridge = () => {
         </Box>
 
         <Box sx={styles.row}>
-          <Typography sx={styles.label}>{t('settings.botbridge.platform')}</Typography>
+          <Typography sx={styles.label}>{t('settings.botbridge.platformLabel')}</Typography>
           <TextField
             select
             size="small"
@@ -37,26 +37,27 @@ export const Botbridge = () => {
             onChange={(e) => vm.setPlatform(e.target.value)}
             sx={styles.input}
           >
-            <MenuItem value="feishu">{t('settings.botbridge.platformFeishu')}</MenuItem>
+            {vm.platforms.map((id) => (
+              <MenuItem key={id} value={id}>
+                {t(`settings.botbridge.platform.${id}`)}
+              </MenuItem>
+            ))}
           </TextField>
         </Box>
 
-        <Box sx={styles.row}>
-          <Typography sx={styles.label}>{t('settings.botbridge.appId')}</Typography>
-          <TextField size="small" value={vm.appId} onChange={(e) => vm.setAppId(e.target.value)} sx={styles.input} />
-        </Box>
-
-        <Box sx={styles.row}>
-          <Typography sx={styles.label}>{t('settings.botbridge.appSecret')}</Typography>
-          <TextField
-            size="small"
-            type="password"
-            value={vm.appSecret}
-            placeholder={t('settings.botbridge.secretPlaceholder')}
-            onChange={(e) => vm.setAppSecret(e.target.value)}
-            sx={styles.input}
-          />
-        </Box>
+        {vm.fields.map((field) => (
+          <Box sx={styles.row} key={field.key}>
+            <Typography sx={styles.label}>{t(`settings.botbridge.field.${field.key}`)}</Typography>
+            <TextField
+              size="small"
+              type={field.secret ? 'password' : 'text'}
+              value={field.value}
+              placeholder={field.secret ? t('settings.botbridge.secretPlaceholder') : undefined}
+              onChange={(e) => vm.setField(field.key, e.target.value)}
+              sx={styles.input}
+            />
+          </Box>
+        ))}
 
         <Box sx={styles.statusRow}>
           <Chip
@@ -79,4 +80,3 @@ export const Botbridge = () => {
     </Box>
   );
 };
-

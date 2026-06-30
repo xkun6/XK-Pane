@@ -150,6 +150,8 @@ export {
   BotBridgeService,
   type BotBridgeStatus,
   type BotBridgeConfigInput,
+  type BotBridgePlatformSpec,
+  type BotBridgeCredentialField,
 } from './botbridge/BotBridgeService';
 export {
   MCPEService,
