@@ -420,9 +420,11 @@ func (s *Service) pushAskCard(sessionID string, p PendingAsk) {
 		s.pollMu.Unlock()
 		return
 	}
+	// 先占去重位，避免后续轮询重复推；若本轮一张都没投递成功，再回滚占位让下一轮重推。
 	s.pushedAsk[sessionID] = p.ToolUseID
 	s.pollMu.Unlock()
 	cards := askCards(p)
+	delivered := false
 	for _, scope := range scopes {
 		sent := 0
 		for _, card := range cards {
@@ -432,7 +434,22 @@ func (s *Service) pushAskCard(sessionID string, p PendingAsk) {
 			}
 			sent++
 		}
+		if sent > 0 {
+			delivered = true
+		}
 		s.log.Info("已推送 AskUserQuestion 卡片", "session", sessionID, "scope", scope, "toolUseId", p.ToolUseID, "cards", sent, "total", len(cards))
+	}
+	if !delivered {
+		// 全部 scope 都没投递成功（常见于平台 WS 尚未握手 / 临时断连）：清掉去重占位，
+		// 让下一轮轮询自动重推，避免待答卡因一次失败被去重永久挡住。仅当占位仍指向本
+		// toolUseID 时才清，防止覆盖期间已登记的更新待答。用「至少投递一张=成功」而非
+		// 「全成才算成功」，避免多绑定里个别坏 scope 导致对正常 scope 每轮重发刷屏。
+		s.pollMu.Lock()
+		if s.pushedAsk[sessionID] == p.ToolUseID {
+			delete(s.pushedAsk, sessionID)
+		}
+		s.pollMu.Unlock()
+		s.log.Warn("AskUserQuestion 卡片全部发送失败，已清除去重占位，下一轮轮询将重推", "session", sessionID, "toolUseId", p.ToolUseID)
 	}
 }
 

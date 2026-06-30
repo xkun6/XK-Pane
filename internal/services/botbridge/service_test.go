@@ -97,6 +97,43 @@ func TestPushAskCardOnlyPushesWhenToolUseChanges(t *testing.T) {
 	}
 }
 
+func TestPushAskCardRetriesAfterSendFailure(t *testing.T) {
+	p := &fakePlatform{sendErr: errors.New("platform offline")}
+	s := New(testHolder(t))
+	s.platformMu.Lock()
+	s.platform = p
+	s.connected = true
+	s.platformMu.Unlock()
+	s.dispatch.setBinding("scope-a", "sid-1")
+
+	ask := PendingAsk{
+		ToolUseID: "tool-1",
+		Questions: []events.AskQuestion{
+			{Question: "Pick", Options: []events.AskOption{{Label: "A"}}},
+		},
+	}
+
+	// 首推：平台离线 → 全部发送失败，去重占位应被回滚，没有任何卡投递。
+	s.pushAskCard("sid-1", ask)
+	if len(p.cards) != 0 {
+		t.Fatalf("after failed push, delivered cards = %d, want 0", len(p.cards))
+	}
+
+	// 平台恢复后下一轮重推：dedup 已清，应真正投递（验证「失败清 dedup 重推」）。
+	p.sendErr = nil
+	s.pushAskCard("sid-1", ask)
+	if len(p.cards) == 0 {
+		t.Fatalf("after recovery, expected re-push to deliver cards, got 0")
+	}
+
+	// 同一 toolUseID 再推：dedup 生效，不应重复发送。
+	before := len(p.cards)
+	s.pushAskCard("sid-1", ask)
+	if len(p.cards) != before {
+		t.Fatalf("duplicate push delivered extra cards: before=%d after=%d", before, len(p.cards))
+	}
+}
+
 func TestConnectionStatusCallbackDrivesStatus(t *testing.T) {
 	s := New(testHolder(t))
 
@@ -130,7 +167,8 @@ func testHolder(t *testing.T) *storage.Holder {
 }
 
 type fakePlatform struct {
-	cards []*Card
+	cards   []*Card
+	sendErr error
 }
 
 func (f *fakePlatform) Name() string { return "fake" }
@@ -144,6 +182,9 @@ func (f *fakePlatform) Send(context.Context, any, string) error { return nil }
 func (f *fakePlatform) Stop() error { return nil }
 
 func (f *fakePlatform) SendCard(_ context.Context, _ any, card *Card) error {
+	if f.sendErr != nil {
+		return f.sendErr
+	}
 	f.cards = append(f.cards, card)
 	return nil
 }
