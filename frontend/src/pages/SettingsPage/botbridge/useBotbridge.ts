@@ -63,6 +63,24 @@ export const useBotbridge = (): UseBotbridgeResult => {
     };
   }, [refresh]);
 
+  // 连接状态是异步握手（WS OnReady 在 Start 返回后才触发），保存时一次性读取会读到尚未连上的快照。
+  // 轮询只刷新 connected / error 这两个「实时态」字段，绝不回写正在编辑的表单（platform/appId/enabled/appSecret）。
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void (async () => {
+        try {
+          const s = await BotBridgeService.getStatus();
+          if (!aliveRef.current) return;
+          setConnected(s.connected);
+          setError(s.error || '');
+        } catch {
+          // 瞬时读取失败忽略，下一拍重试
+        }
+      })();
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const save = useCallback(async () => {
     setStatus({ kind: 'saving' });
     try {
