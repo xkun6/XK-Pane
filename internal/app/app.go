@@ -52,6 +52,7 @@ import (
 	_ "xkpane/internal/services/botbridge/platform/feishu"
 	_ "xkpane/internal/services/botbridge/platform/qq"
 	_ "xkpane/internal/services/botbridge/platform/qqbot"
+	_ "xkpane/internal/services/botbridge/platform/wecom"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	wailsevents "github.com/wailsapp/wails/v3/pkg/events"
