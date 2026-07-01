@@ -14,6 +14,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/larksuite/oapi-sdk-go/v3 v3.9.7
 	github.com/modelcontextprotocol/go-sdk v1.6.1
+	github.com/open-dingtalk/dingtalk-stream-sdk-go v0.9.1
 	github.com/pelletier/go-toml/v2 v2.3.1
 	github.com/sergi/go-diff v1.4.0
 	github.com/wailsapp/wails/v3 v3.0.0-alpha.96

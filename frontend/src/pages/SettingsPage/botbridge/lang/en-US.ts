@@ -21,7 +21,6 @@ export const botbridgeEnUS: Messages = {
         client_id: 'Client ID',
         client_secret: 'Client Secret',
         robot_code: 'Robot Code',
-        card_template_id: 'Card Template ID',
         bot_id: 'Bot ID',
         bot_secret: 'Bot Secret',
         ws_url: 'WebSocket URL',

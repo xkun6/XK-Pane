@@ -20,7 +20,7 @@ var platformSpecs = []PlatformSpec{
 	{ID: "feishu", Fields: []CredentialField{{Key: "app_id"}, {Key: "app_secret", Secret: true}}},
 	{ID: "qqbot", Fields: []CredentialField{{Key: "app_id"}, {Key: "app_secret", Secret: true}}},
 	{ID: "dingtalk", Fields: []CredentialField{
-		{Key: "client_id"}, {Key: "client_secret", Secret: true}, {Key: "robot_code"}, {Key: "card_template_id"},
+		{Key: "client_id"}, {Key: "client_secret", Secret: true}, {Key: "robot_code"},
 	}},
 	{ID: "wecom", Fields: []CredentialField{{Key: "bot_id"}, {Key: "bot_secret", Secret: true}}},
 	{ID: "qq", Fields: []CredentialField{{Key: "ws_url"}, {Key: "token", Secret: true}}},

@@ -21,7 +21,6 @@ export const botbridgeZhCN: Messages = {
         client_id: 'Client ID',
         client_secret: 'Client Secret',
         robot_code: '机器人编码',
-        card_template_id: '卡片模板 ID',
         bot_id: '机器人 ID',
         bot_secret: '机器人密钥',
         ws_url: 'WebSocket 地址',

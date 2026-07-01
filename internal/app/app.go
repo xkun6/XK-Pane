@@ -49,6 +49,7 @@ import (
 	"xkpane/internal/utils/logx"
 	"xkpane/internal/webapi"
 
+	_ "xkpane/internal/services/botbridge/platform/dingtalk"
 	_ "xkpane/internal/services/botbridge/platform/feishu"
 	_ "xkpane/internal/services/botbridge/platform/qq"
 	_ "xkpane/internal/services/botbridge/platform/qqbot"
