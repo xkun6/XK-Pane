@@ -42,6 +42,9 @@ type dispatcher struct {
 	seen       map[string]map[string]bool
 	messageIDs map[string]time.Time
 	deps       dispatchDeps
+
+	fallbackLocksMu sync.Mutex
+	fallbackLocks   map[string]*sync.Mutex
 }
 
 func newDispatcher(deps dispatchDeps) *dispatcher {
@@ -186,12 +189,18 @@ func (d *dispatcher) handleMessage(ctx context.Context, scopeKey, messageID, con
 		return true, nil
 	}
 	// 文本作答兜底：纯文本平台（无按钮）下，待答期内的纯编号回复（如「1」「1,3」「1;2」）
-	// 解析为选项选择 → 走 BuildAnswerKeys 提交，与按钮作答同一套键位。非编号回复继续透传到 PTY。
+	// 解析为选项选择 → 走 BuildAnswerKeys 提交，与按钮作答同一套键位。
 	if p, ok := d.effectivePending(sid); ok {
 		if sel, isAnswer := parseTextSelections(content, p.Questions); isAnswer {
 			d.applyTextSelections(p.ToolUseID, sel)
 			return true, d.submitAsk(ctx, scopeKey, p.ToolUseID)
 		}
+		// 待答期 PTY 处于选择器表单态：Ink 会忽略普通字符却消费末尾 \r（等价「按当前聚焦项作答」），
+		// 透传普通文本会以第 0 项误提交表单。非编号回复一律拦下并提示，不写 PTY。
+		if d.deps.sendText != nil {
+			_ = d.deps.sendText(ctx, scopeKey, nil, "当前有待答问题，请回复选项编号作答（如「1」或「1,3」）；其它文本已忽略，作答完成后再发。")
+		}
+		return true, nil
 	}
 	return true, d.writeText(ctx, sid, content+"\r")
 }
@@ -294,6 +303,10 @@ func (d *dispatcher) handleAction(ctx context.Context, scopeKey, messageID, acti
 }
 
 func (d *dispatcher) handleAskQ(ctx context.Context, scopeKey, action string) error {
+	toolUseID, qIdx, optIdx, ok := parseAskQ(action)
+	if !ok {
+		return nil
+	}
 	sid := d.boundSession(scopeKey)
 	if sid == "" {
 		return nil
@@ -302,8 +315,12 @@ func (d *dispatcher) handleAskQ(ctx context.Context, scopeKey, action string) er
 	if !ok {
 		return nil
 	}
-	qIdx, optIdx, ok := parseAskQ(action)
-	if !ok || qIdx < 0 || qIdx >= len(p.Questions) {
+	// IM 聊天记录里旧 ask 卡的按钮永远可点：toolUseID 与当前待答不符即静默忽略，
+	// 防止历史卡片污染/误提交当前问答。
+	if p.ToolUseID != toolUseID {
+		return nil
+	}
+	if qIdx < 0 || qIdx >= len(p.Questions) {
 		return nil
 	}
 	if optIdx < 0 || optIdx >= len(p.Questions[qIdx].Options) {
@@ -343,6 +360,12 @@ func (d *dispatcher) submitAsk(ctx context.Context, scopeKey, toolUseID string) 
 	if sid == "" {
 		return nil
 	}
+	// 必须先拿会话写锁、锁内再复查待答：pending 的删除发生在首个提交者写完整套按键之后，
+	// 若检查在锁外（check-then-act），双击提交/并发作答的第二个调用会等锁后把按键序列
+	// 再写一遍到已离开表单的 PTY（末尾 Enter 可能盲触后续交互）。
+	lock := d.sessionWriteLock(sid)
+	lock.Lock()
+	defer lock.Unlock()
 	p, ok := d.effectivePending(sid)
 	if !ok || p.ToolUseID != toolUseID {
 		return nil
@@ -358,9 +381,6 @@ func (d *dispatcher) submitAsk(ctx context.Context, scopeKey, toolUseID string) 
 		questions = append(questions, AnswerQuestion{MultiSelect: q.MultiSelect, Options: make([]AnswerOption, len(q.Options))})
 	}
 	keys := BuildAnswerKeys(questions, sel)
-	lock := d.sessionWriteLock(sid)
-	lock.Lock()
-	defer lock.Unlock()
 	for _, key := range keys {
 		if err := d.deps.writer.WriteInput(ctx, sid, key); err != nil {
 			return err
@@ -395,7 +415,16 @@ func (d *dispatcher) sessionWriteLock(sessionID string) *sync.Mutex {
 	if d.deps.sessionWriteLock != nil {
 		return d.deps.sessionWriteLock(sessionID)
 	}
-	return &sync.Mutex{}
+	// fallback 必须按会话缓存：每次返回新 mutex 等于没有互斥。
+	d.fallbackLocksMu.Lock()
+	defer d.fallbackLocksMu.Unlock()
+	if d.fallbackLocks == nil {
+		d.fallbackLocks = map[string]*sync.Mutex{}
+	}
+	if d.fallbackLocks[sessionID] == nil {
+		d.fallbackLocks[sessionID] = &sync.Mutex{}
+	}
+	return d.fallbackLocks[sessionID]
 }
 
 func (d *dispatcher) sendSessions(ctx context.Context, scopeKey string, replyCtx any) error {
@@ -432,15 +461,25 @@ func (d *dispatcher) switchSession(ctx context.Context, scopeKey string, replyCt
 	return nil
 }
 
-func parseAskQ(action string) (int, int, bool) {
+// parseAskQ 解析「askq:<toolUseID>:<qIdx>:<optIdx>」，从右往左拆两段数字、剩余为 toolUseID
+// （兼容 toolUseID 自身含冒号）。旧版两段格式（无 toolUseID）解析失败返回 false，
+// 历史卡片按钮点击即被忽略。
+func parseAskQ(action string) (string, int, int, bool) {
 	rest := strings.TrimPrefix(action, "askq:")
-	a, b, ok := strings.Cut(rest, ":")
-	if !ok {
-		return 0, 0, false
+	i := strings.LastIndex(rest, ":")
+	if i < 0 {
+		return "", 0, 0, false
 	}
-	q, err1 := strconv.Atoi(a)
-	opt, err2 := strconv.Atoi(b)
-	return q, opt, err1 == nil && err2 == nil
+	j := strings.LastIndex(rest[:i], ":")
+	if j < 0 {
+		return "", 0, 0, false
+	}
+	q, err1 := strconv.Atoi(rest[j+1 : i])
+	opt, err2 := strconv.Atoi(rest[i+1:])
+	if err1 != nil || err2 != nil {
+		return "", 0, 0, false
+	}
+	return rest[:j], q, opt, true
 }
 
 func copySelections(in map[int][]int) map[int][]int {

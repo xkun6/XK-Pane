@@ -134,9 +134,11 @@ func askCard(p PendingAsk) *Card {
 				label = fmt.Sprintf("Option %d", oi+1)
 			}
 			buttons = append(buttons, CardButton{
-				Text:  label,
-				Type:  "default",
-				Value: fmt.Sprintf("askq:%d:%d", qi, oi),
+				Text: label,
+				Type: "default",
+				// value 携带 toolUseID：IM 里历史卡片按钮永远可点，dispatcher 靠它拒绝
+				// 与当前待答不符的点击（见 handleAskQ）。
+				Value: fmt.Sprintf("askq:%s:%d:%d", p.ToolUseID, qi, oi),
 				Extra: map[string]string{
 					"askq_label":    label,
 					"askq_question": q.Question,
@@ -185,7 +187,7 @@ func askCards(p PendingAsk) []*Card {
 			buttons = append(buttons, CardButton{
 				Text:  label,
 				Type:  "default",
-				Value: fmt.Sprintf("askq:%d:%d", qi, oi),
+				Value: fmt.Sprintf("askq:%s:%d:%d", p.ToolUseID, qi, oi),
 				Extra: map[string]string{
 					"askq_label":    label,
 					"askq_question": q.Question,

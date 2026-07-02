@@ -3,6 +3,7 @@ package botbridge
 import (
 	"context"
 	"reflect"
+	"sync"
 	"testing"
 
 	"xkpane/internal/events"
@@ -40,10 +41,10 @@ func TestDispatchAskSelectionAccumulatesAndSubmits(t *testing.T) {
 		},
 	})
 
-	if handled, err := d.handleAction(context.Background(), "scope-a", "", "askq:0:2"); err != nil || !handled {
+	if handled, err := d.handleAction(context.Background(), "scope-a", "", "askq:tool-1:0:2"); err != nil || !handled {
 		t.Fatalf("askq handled=%v err=%v", handled, err)
 	}
-	if handled, err := d.handleAction(context.Background(), "scope-a", "", "askq:1:1"); err != nil || !handled {
+	if handled, err := d.handleAction(context.Background(), "scope-a", "", "askq:tool-1:1:1"); err != nil || !handled {
 		t.Fatalf("askq handled=%v err=%v", handled, err)
 	}
 	if handled, err := d.handleAction(context.Background(), "scope-a", "", "asksubmit:tool-1"); err != nil || !handled {
@@ -71,7 +72,7 @@ func TestDispatchMultiSelectToggleWaitsForSubmit(t *testing.T) {
 		},
 	})
 
-	for _, action := range []string{"askq:0:1", "askq:0:1", "askq:0:2"} {
+	for _, action := range []string{"askq:tool-1:0:1", "askq:tool-1:0:1", "askq:tool-1:0:2"} {
 		handled, err := d.handleAction(context.Background(), "scope-a", "", action)
 		if err != nil || !handled {
 			t.Fatalf("%s handled=%v err=%v", action, handled, err)
@@ -113,7 +114,7 @@ func TestDispatchSingleSelectAskQSubmitsImmediately(t *testing.T) {
 		},
 	})
 
-	if handled, err := d.handleAction(context.Background(), "scope-a", "", "askq:0:1"); err != nil || !handled {
+	if handled, err := d.handleAction(context.Background(), "scope-a", "", "askq:tool-1:0:1"); err != nil || !handled {
 		t.Fatalf("askq handled=%v err=%v", handled, err)
 	}
 
@@ -173,7 +174,7 @@ func TestDispatchStaleAskSelectionIsDropped(t *testing.T) {
 	d := newDispatcher(dispatchDeps{writer: writer})
 	d.setBinding("scope-a", "sid-1")
 
-	handled, err := d.handleAction(context.Background(), "scope-a", "", "askq:0:1")
+	handled, err := d.handleAction(context.Background(), "scope-a", "", "askq:tool-1:0:1")
 	if err != nil {
 		t.Fatalf("handleAction err=%v", err)
 	}
@@ -182,6 +183,65 @@ func TestDispatchStaleAskSelectionIsDropped(t *testing.T) {
 	}
 	if len(writer.writes) != 0 {
 		t.Fatalf("stale askq wrote %#v", writer.writes)
+	}
+}
+
+func TestAskQFromStaleCardIgnored(t *testing.T) {
+	// 历史 ask 卡（toolUseID 与当前待答不符）与旧版两段格式的按钮点击都必须被忽略，
+	// 不得污染当前待答的 selections。
+	writer := &fakeWriter{}
+	d := newDispatcher(dispatchDeps{writer: writer})
+	d.setBinding("scope-a", "sid-1")
+	d.setPending("sid-1", PendingAsk{
+		ToolUseID: "tool-2",
+		Questions: []events.AskQuestion{
+			{Question: "Pick", Options: []events.AskOption{{Label: "A"}, {Label: "B"}}},
+		},
+	})
+
+	for _, action := range []string{"askq:tool-1:0:1", "askq:0:1"} {
+		handled, err := d.handleAction(context.Background(), "scope-a", "", action)
+		if err != nil || !handled {
+			t.Fatalf("%s handled=%v err=%v", action, handled, err)
+		}
+	}
+	if len(writer.writes) != 0 {
+		t.Fatalf("stale card askq wrote %#v", writer.writes)
+	}
+	d.mu.Lock()
+	sel := d.selections["tool-2"]
+	d.mu.Unlock()
+	if len(sel) != 0 {
+		t.Fatalf("stale card askq polluted selections: %#v", sel)
+	}
+}
+
+func TestSubmitAskConcurrentDuplicateWritesOnce(t *testing.T) {
+	// TOCTOU 回归：两个并发提交（双击「提交」）只允许一份按键序列落 PTY——
+	// 第二个调用等到写锁后必须在锁内复查发现 pending 已清而直接返回。
+	writer := &fakeWriter{}
+	d := newDispatcher(dispatchDeps{writer: writer})
+	d.setBinding("scope-a", "sid-1")
+	d.setPending("sid-1", PendingAsk{
+		ToolUseID: "tool-1",
+		Questions: []events.AskQuestion{
+			{Question: "Pick", Options: []events.AskOption{{Label: "A"}, {Label: "B"}}},
+		},
+	})
+
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = d.submitAsk(context.Background(), "scope-a", "tool-1")
+		}()
+	}
+	wg.Wait()
+
+	want := []string{keyEnter}
+	if !reflect.DeepEqual(writer.writes, want) {
+		t.Fatalf("writes = %#v, want %#v", writer.writes, want)
 	}
 }
 
@@ -261,11 +321,19 @@ func TestTextAnswerMultiSelectComma(t *testing.T) {
 	}
 }
 
-func TestTextNonAnswerDuringPendingFallsThrough(t *testing.T) {
-	// 待答期内的非编号回复（普通文本 / 越界编号）不得误判为作答，必须原样透传到 PTY。
+func TestTextNonAnswerDuringPendingIsBlocked(t *testing.T) {
+	// 待答期内的非编号回复（普通文本 / 越界编号）不得写入 PTY：选择器态下 Ink 会消费
+	// 末尾 \r 以第 0 项误提交表单。应拦下并回提示文本。
 	for _, in := range []string{"hello", "9"} {
 		writer := &fakeWriter{}
-		d := newDispatcher(dispatchDeps{writer: writer})
+		var hints []string
+		d := newDispatcher(dispatchDeps{
+			writer: writer,
+			sendText: func(_ context.Context, _ string, _ any, content string) error {
+				hints = append(hints, content)
+				return nil
+			},
+		})
 		d.setBinding("scope-a", "sid-1")
 		d.setPending("sid-1", PendingAsk{
 			ToolUseID: "tool-1",
@@ -278,9 +346,11 @@ func TestTextNonAnswerDuringPendingFallsThrough(t *testing.T) {
 		if err != nil || !handled {
 			t.Fatalf("handleMessage(%q) handled=%v err=%v", in, handled, err)
 		}
-		want := []string{in + "\r"}
-		if !reflect.DeepEqual(writer.writes, want) {
-			t.Fatalf("in=%q writes = %#v, want %#v", in, writer.writes, want)
+		if len(writer.writes) != 0 {
+			t.Fatalf("in=%q wrote to PTY during pending ask: %#v", in, writer.writes)
+		}
+		if len(hints) != 1 {
+			t.Fatalf("in=%q hints = %#v, want one hint message", in, hints)
 		}
 	}
 }
