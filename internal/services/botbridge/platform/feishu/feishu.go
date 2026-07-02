@@ -107,11 +107,23 @@ func (p *Platform) Start(handler botbridge.MessageHandler) error {
 func (p *Platform) Stop() error {
 	p.mu.Lock()
 	cancel := p.cancel
+	wsClient := p.wsClient
 	p.cancel = nil
 	p.wsClient = nil
+	// 先静默回调：Close 会触发 SDK 的 OnDisconnected 等回调，且断开前可能仍有在途
+	// 消息——置 nil 后 emit/reportConnection 不再上报，避免已停实例污染新平台状态
+	// 或继续驱动 PTY。
+	p.handler = nil
+	p.conn = nil
 	p.mu.Unlock()
 	if cancel != nil {
 		cancel()
+	}
+	// SDK 的 Start(ctx) 以 select{} 常驻、完全不响应 ctx 取消，唯一正确的停止方式是
+	// Close()（内部置 autoReconnect=false 并断开连接）。只 cancel 会让旧连接继续在线、
+	// 消息照常回调（「停用」形同虚设），并伴随 goroutine 泄漏与断线期无限重连。
+	if wsClient != nil {
+		wsClient.Close()
 	}
 	return nil
 }
