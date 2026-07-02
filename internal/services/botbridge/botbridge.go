@@ -125,11 +125,14 @@ func (s *Service) Start() error {
 	if err := s.loadBindings(); err != nil {
 		s.setErr(err)
 	}
+	// pollLoop 必须先于 reloadPlatform 无条件启动：一旦先 reload 且失败即 return，
+	// s.ctx 已赋值使二次 Start 变 no-op、SetConfig 又只 reload 平台不补启轮询，
+	// 用户事后在设置页修好凭据会得到「已连接」但镜像/ask 卡永不推送的假活状态。
+	go s.pollLoop(ctx)
 	if err := s.reloadPlatform(ctx); err != nil {
 		s.setErr(err)
 		return err
 	}
-	go s.pollLoop(ctx)
 	return nil
 }
 

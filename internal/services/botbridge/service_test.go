@@ -7,8 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"xkpane/internal/events"
+	"xkpane/internal/services/terminal"
 	"xkpane/internal/storage"
 	"xkpane/internal/utils/cryptox"
 )
@@ -188,6 +190,46 @@ func TestConnectionStatusCallbackDrivesStatus(t *testing.T) {
 		t.Fatalf("status after error = %#v", st)
 	}
 }
+
+func TestStartFailureStillRunsPollLoop(t *testing.T) {
+	// 回归：Start 时平台创建失败（凭据错误等）不得连带跳过 pollLoop——
+	// 否则 s.ctx 已赋值使二次 Start no-op、SetConfig 只 reload 平台，
+	// 事后修好凭据也永远没有镜像/ask 卡推送。
+	holder := testHolder(t)
+	const name = "failing-start"
+	if _, ok := platformFactories[name]; !ok {
+		RegisterPlatform(name, func(map[string]any) (Platform, error) {
+			return nil, errors.New("bad credentials")
+		})
+	}
+	if err := holder.Current().GORM.Save(&storage.BotBridgeConfig{ID: 1, Platform: name, Enabled: true, BindingsJSON: "{}"}).Error; err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+	s := New(holder)
+	s.AttachServices(BotDeps{Sessions: &fakeLister{snaps: []terminal.SessionSnapshot{{ID: "sid-1"}}}})
+	if err := s.Start(); err == nil {
+		t.Fatalf("Start err=nil, want platform create failure")
+	}
+	t.Cleanup(func() { _ = s.Stop() })
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		s.pollMu.Lock()
+		_, ok := s.pollers["sid-1"]
+		s.pollMu.Unlock()
+		if ok {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("pollLoop 未在 Start 失败后运行（sid-1 无 poller）")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+type fakeLister struct{ snaps []terminal.SessionSnapshot }
+
+func (f *fakeLister) SessionSnapshots() []terminal.SessionSnapshot { return f.snaps }
 
 func testHolder(t *testing.T) *storage.Holder {
 	t.Helper()
