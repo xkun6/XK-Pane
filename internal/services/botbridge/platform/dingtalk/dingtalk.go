@@ -141,6 +141,16 @@ func (p *Platform) Start(handler botbridge.MessageHandler) error {
 	// text.isReplyMsg / text.repliedMsg 字段。
 	p.streamClient.RegisterRouter(dingtalkutils.SubscriptionTypeKCallback, payload.BotMessageCallbackTopic,
 		func(_ context.Context, df *payload.DataFrame) (*payload.DataFrameResponse, error) {
+			// SDK 的 reconnect() 是不检查 AutoReconnect 的无限循环，Stop 管不住在途
+			// 重连——已停实例的孤儿连接若对消息 ACK 成功，钉钉即认为已送达、不再重推，
+			// 消息永久黑洞。返回错误让钉钉重推给后继连接，并顺手关掉孤儿连接
+			// （processLoop 退出时 AutoReconnect 已为 false，不会再重连）。
+			if p.stopped.Load() {
+				if sc := p.streamClient; sc != nil {
+					go sc.Close()
+				}
+				return nil, fmt.Errorf("dingtalk: adapter stopped")
+			}
 			p.onRawMessage(df.Data)
 			return payload.NewSuccessDataFrameResponse(), nil
 		})
@@ -178,6 +188,12 @@ func (p *Platform) connectLoop(ctx context.Context) {
 		}
 		err := p.streamClient.Start(ctx)
 		if err == nil {
+			// Stop 可能与在途 Start 竞争完成（彼时 conn 尚为 nil，Stop 的 Close 是
+			// no-op）：这里补一次收尾，防止孤儿连接存活并把「已连入」污染回 service。
+			if p.stopped.Load() {
+				p.streamClient.Close()
+				return
+			}
 			logx.For("botbridge.dingtalk").Info("stream connected", "client_id", p.clientID)
 			p.reportConnection(true, nil)
 			return
@@ -553,6 +569,10 @@ func reconstructReplyCtx(scope string) (*replyContext, bool) {
 }
 
 func (p *Platform) reportConnection(connected bool, err error) {
+	// 已停实例的迟到回调（connectLoop 尾声 / SDK 断线）不得覆盖新平台实例的连接状态。
+	if p.stopped.Load() {
+		return
+	}
 	p.connMu.Lock()
 	h := p.connHandler
 	p.connMu.Unlock()
