@@ -14,6 +14,11 @@ export const Botbridge = () => {
   const t = useT();
 
   const saving = vm.status.kind === 'saving' || vm.status.kind === 'loading';
+  // 保存中锁整个表单：SetConfig 内含平台重连（可耗时数秒），完成后会用后端快照
+  // 全量回写表单，期间的用户编辑会被静默吞掉。未成功加载（loaded=false）时禁止
+  // 保存——空壳表单保存会清空后端已存凭据。
+  const formDisabled = saving;
+  const saveDisabled = saving || !vm.loaded;
 
   return (
     <Box sx={shared.section}>
@@ -25,7 +30,7 @@ export const Botbridge = () => {
       <Box sx={styles.card}>
         <Box sx={styles.row}>
           <Typography sx={styles.label}>{t('settings.botbridge.enabled')}</Typography>
-          <Switch checked={vm.enabled} onChange={(e) => vm.setEnabled(e.target.checked)} />
+          <Switch checked={vm.enabled} disabled={formDisabled} onChange={(e) => vm.setEnabled(e.target.checked)} />
         </Box>
 
         <Box sx={styles.row}>
@@ -34,6 +39,7 @@ export const Botbridge = () => {
             select
             size="small"
             value={vm.platform}
+            disabled={formDisabled}
             onChange={(e) => vm.setPlatform(e.target.value)}
             sx={styles.input}
           >
@@ -52,6 +58,7 @@ export const Botbridge = () => {
               size="small"
               type={field.secret ? 'password' : 'text'}
               value={field.value}
+              disabled={formDisabled}
               placeholder={field.secret ? t('settings.botbridge.secretPlaceholder') : undefined}
               onChange={(e) => vm.setField(field.key, e.target.value)}
               sx={styles.input}
@@ -72,7 +79,7 @@ export const Botbridge = () => {
           {vm.status.kind === 'failed' && <Typography sx={styles.statusError}>{vm.status.message}</Typography>}
         </Box>
 
-        <Box component="button" type="button" sx={styles.actionPrimary} disabled={saving} onClick={() => void vm.save()}>
+        <Box component="button" type="button" sx={styles.actionPrimary} disabled={saveDisabled} onClick={() => void vm.save()}>
           <SaveRoundedIcon fontSize="small" />
           {t('settings.botbridge.save')}
         </Box>

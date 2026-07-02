@@ -22,6 +22,8 @@ export interface UseBotbridgeResult {
   connected: boolean;
   error: string;
   status: BotbridgeSaveStatus;
+  /** refresh 成功过才为 true；为 false 时禁止保存（表单是默认空壳，保存会清空后端已存凭据）。 */
+  loaded: boolean;
   setPlatform: (value: string) => void;
   setField: (key: string, value: string) => void;
   setEnabled: (value: boolean) => void;
@@ -40,6 +42,7 @@ export const useBotbridge = (): UseBotbridgeResult => {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState<BotbridgeSaveStatus>({ kind: 'loading' });
+  const [loaded, setLoaded] = useState(false);
   const aliveRef = useRef(true);
   // 已保存的非敏感凭据值 + 它们属于哪个平台；切回该平台时回填（敏感字段始终留空）。
   const savedCredsRef = useRef<Record<string, string>>({});
@@ -63,6 +66,7 @@ export const useBotbridge = (): UseBotbridgeResult => {
       if (!aliveRef.current) return;
       setSpecs(list);
       applyStatus(s);
+      setLoaded(true);
       setStatus({ kind: 'idle' });
     } catch (err) {
       if (!aliveRef.current) return;
@@ -107,6 +111,9 @@ export const useBotbridge = (): UseBotbridgeResult => {
   }, []);
 
   const save = useCallback(async () => {
+    // 初始加载失败时表单是默认空壳（platform 落 'feishu'、凭据空、enabled=false），
+    // 此时保存会把后端已存整份凭据清空并停桥——必须先 refresh 成功。
+    if (!loaded) return;
     setStatus({ kind: 'saving' });
     try {
       const spec = specOf(specs, platform);
@@ -124,7 +131,7 @@ export const useBotbridge = (): UseBotbridgeResult => {
       if (!aliveRef.current) return;
       setStatus({ kind: 'failed', message: messageOf(err) });
     }
-  }, [applyStatus, enabled, platform, specs, values]);
+  }, [applyStatus, enabled, loaded, platform, specs, values]);
 
   const spec = specOf(specs, platform);
   const fields: BotbridgeFieldView[] = (spec?.fields ?? []).map((f) => ({
@@ -142,6 +149,7 @@ export const useBotbridge = (): UseBotbridgeResult => {
     connected,
     error,
     status,
+    loaded,
     setPlatform,
     setField,
     setEnabled,
