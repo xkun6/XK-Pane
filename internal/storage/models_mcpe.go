@@ -63,6 +63,9 @@ type MCWorldConfig struct {
 	LevelType       MCLevelType `json:"levelType"`
 	EnableCheats    bool        `json:"enableCheats"`
 	KeepInventory   bool        `json:"keepInventory"`
+	// ShowCoordinates 显示坐标（HUD 左上角）。用指针：存量包的 World JSON 没有此字段 → 反序列化为 nil，
+	// 应用时按 true 处理，让“默认显示坐标”对历史包也生效；新包在 NewMCPackage 里显式置 true。
+	ShowCoordinates *bool       `json:"showCoordinates"`
 	DoDaylightCycle bool        `json:"doDaylightCycle"`
 	DoWeatherCycle  bool        `json:"doWeatherCycle"`
 	// SourceDir 可选存档源目录：启动时若 minecraftWorlds/<folderName> 不存在，从此目录复制副本（不改原图）。
@@ -107,6 +110,7 @@ func NewMCPackage(projectPath, name string) MCPackage {
 			resolved = "MC PE Package"
 		}
 	}
+	showCoords := true // 新包默认显示坐标
 	return MCPackage{
 		ID:              uuid.NewString(),
 		Name:            resolved,
@@ -120,6 +124,7 @@ func NewMCPackage(projectPath, name string) MCPackage {
 			LevelType:       MCLevelTypeDefault,
 			EnableCheats:    true,
 			KeepInventory:   false,
+			ShowCoordinates: &showCoords,
 			DoDaylightCycle: true,
 			DoWeatherCycle:  true,
 			ResetOnLaunch:   false,

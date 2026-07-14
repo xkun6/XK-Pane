@@ -78,6 +78,7 @@ export const mcpePageEnUS: Messages = {
       levelTypeImportedHint: 'Imported maps keep their own world type; this only applies to newly created maps',
       enableCheats: 'Enable cheats',
       keepInventory: 'Keep inventory',
+      showCoordinates: 'Show coordinates',
       doDaylightCycle: 'Daylight cycle',
       doWeatherCycle: 'Weather cycle',
     },

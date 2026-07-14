@@ -478,6 +478,9 @@ func (s *Service) Launch(id string) (storage.MCRunSessionInfo, error) {
 	info.putString("LevelName", pkg.Name)
 	info.putLong("RandomSeed", pkg.World.Seed)
 	info.putInt("GameType", pkg.World.GameMode.Code())
+	// ForceGameType=1：进世界时强制把 GameType 套到玩家身上。否则 Bedrock 只把 GameType 当
+	// “新玩家默认模式”，导入地图 / 重复进入的老玩家会各自保留存档里的个人模式，导致 UI 切游戏模式不生效。
+	info.putBool("ForceGameType", true)
 	// Generator 只在新建世界时按 LevelType 写；导入的现成地图保留它自己的 Generator——
 	// 网易自定义维度地图通常为 Generator=2，被覆盖成默认 1 会使自定义维度退回 0-255、
 	// Y<0 地形不渲染、无法放置（dim 0 不受影响）。这是 Y<0 不显示的真正根因。
@@ -485,7 +488,11 @@ func (s *Service) Launch(id string) (storage.MCRunSessionInfo, error) {
 		info.putInt("Generator", pkg.World.LevelType.Code())
 	}
 	info.putBool("cheatsEnabled", pkg.World.EnableCheats)
-	info.putBool("keepInventory", pkg.World.KeepInventory)
+	// Bedrock level.dat 的游戏规则键名全小写。命令 /gamerule keepInventory 大小写不敏感，但持久化到
+	// NBT 的键是 keepinventory；写成驼峰 keepInventory 会被引擎当未知键在存盘时丢弃 → 死亡不掉落永不生效。
+	info.putBool("keepinventory", pkg.World.KeepInventory)
+	// ShowCoordinates 用指针：nil（历史包未存该字段）按“默认显示”处理。NBT 键全小写 showcoordinates。
+	info.putBool("showcoordinates", pkg.World.ShowCoordinates == nil || *pkg.World.ShowCoordinates)
 	info.putBool("dodaylightcycle", pkg.World.DoDaylightCycle)
 	info.putBool("doweathercycle", pkg.World.DoWeatherCycle)
 	info.putInt("permissionsLevel", 1)

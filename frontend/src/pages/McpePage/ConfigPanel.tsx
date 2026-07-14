@@ -40,9 +40,14 @@ const Field = ({ label, hint, children }: { label: string; hint?: string; childr
   );
 };
 
-const WORLD_BOOLS: Array<{ key: 'enableCheats' | 'keepInventory' | 'doDaylightCycle' | 'doWeatherCycle'; labelKey: string }> = [
+const WORLD_BOOLS: Array<{
+  key: 'enableCheats' | 'keepInventory' | 'showCoordinates' | 'doDaylightCycle' | 'doWeatherCycle';
+  labelKey: string;
+  def?: boolean; // 未设置（历史包 showCoordinates=null）时的默认勾选态
+}> = [
   { key: 'enableCheats', labelKey: 'mcpe.world.enableCheats' },
   { key: 'keepInventory', labelKey: 'mcpe.world.keepInventory' },
+  { key: 'showCoordinates', labelKey: 'mcpe.world.showCoordinates', def: true },
   { key: 'doDaylightCycle', labelKey: 'mcpe.world.doDaylightCycle' },
   { key: 'doWeatherCycle', labelKey: 'mcpe.world.doWeatherCycle' },
 ];
@@ -380,11 +385,15 @@ export const ConfigPanel = ({ pkg }: { pkg: MCPackage }) => {
 
       {/* ⑪ 四布尔 */}
       <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, mt: 1 }}>
-        {WORLD_BOOLS.map(({ key, labelKey }) => (
+        {WORLD_BOOLS.map(({ key, labelKey, def }) => (
           <FormControlLabel
             key={key}
             control={
-              <Checkbox size="small" checked={!!local.world[key]} onChange={(e) => patchWorld({ [key]: e.target.checked })} />
+              <Checkbox
+                size="small"
+                checked={local.world[key] ?? def ?? false}
+                onChange={(e) => patchWorld({ [key]: e.target.checked })}
+              />
             }
             label={<Typography sx={{ fontSize: 11 }}>{t(labelKey)}</Typography>}
           />
