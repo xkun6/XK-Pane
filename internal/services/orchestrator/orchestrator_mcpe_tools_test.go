@@ -60,7 +60,6 @@ func (f *fakeMCPE) RecentLogs(runID string, lines int) []string {
 	f.gotLines = lines
 	return f.logs
 }
-func (f *fakeMCPE) ActiveRunPIDs() []int                       { return nil }
 func (f *fakeMCPE) ActiveRunSummaries() []storage.MCRunSummary { return f.summaries }
 
 // resultText 取 CallToolResult 的首个 TextContent 文本。
@@ -303,5 +302,89 @@ func TestToolGetMcPeLogsMultiClientSections(t *testing.T) {
 	}
 	if !strings.Contains(txt, "包A") || !strings.Contains(txt, "包B") {
 		t.Errorf("分节应带包名，实际 %q", txt)
+	}
+}
+
+// ── list_mc_pe_runs ────────────────────────────────────────────────────────
+
+func TestToolListMcPeRuns(t *testing.T) {
+	ctx := context.Background()
+
+	// nil MCPE → 兜底错误。
+	sNil := New(Deps{})
+	resNil, _, _ := sNil.toolListMcPeRuns(ctx, nil, struct{}{})
+	if txt := resultText(t, resNil); !strings.Contains(txt, "错误") {
+		t.Errorf("nil MCPE 应返回错误文本，实际 %q", txt)
+	}
+
+	// 0 run → 「没有正在运行」提示（非「错误:」——属正常空态）。
+	fmEmpty := &fakeMCPE{}
+	sEmpty := New(Deps{MCPE: fmEmpty})
+	resEmpty, _, _ := sEmpty.toolListMcPeRuns(ctx, nil, struct{}{})
+	if txt := resultText(t, resEmpty); !strings.Contains(txt, "没有正在运行") {
+		t.Errorf("0 run 应提示没有正在运行，实际 %q", txt)
+	}
+
+	// 2 run + 桥上 run-a 已连入、另有一个旧版无 runId 连接 → run-a 已连入 / run-b 未连入 / 有旧版提示。
+	pidA := 111
+	fm := &fakeMCPE{
+		summaries: []storage.MCRunSummary{
+			{RunID: "run-a", PackageID: "pkg-a", PackageName: "包A", PID: &pidA},
+			{RunID: "run-b", PackageID: "pkg-b", PackageName: "包B"},
+		},
+	}
+	fb := &fakeBridge{clientRuns: []string{"run-a", ""}}
+	s := New(Deps{MCPE: fm, Bridge: fb})
+	res, _, _ := s.toolListMcPeRuns(ctx, nil, struct{}{})
+	txt := resultText(t, res)
+	if !strings.Contains(txt, "共 2 个 MC PE 客户端在运行") {
+		t.Errorf("应报告总数 2，实际 %q", txt)
+	}
+	if !strings.Contains(txt, "runId=run-a 包=[包A] pid=111 调试桥=已连入") {
+		t.Errorf("run-a 行异常，实际 %q", txt)
+	}
+	if !strings.Contains(txt, "runId=run-b 包=[包B] pid=? 调试桥=未连入") {
+		t.Errorf("run-b 行异常，实际 %q", txt)
+	}
+	if !strings.Contains(txt, "旧版桥连接") {
+		t.Errorf("应含旧版桥连接提示行，实际 %q", txt)
+	}
+}
+
+// ── pickMCPERun ────────────────────────────────────────────────────────────
+
+func TestPickMCPERun(t *testing.T) {
+	sums := []storage.MCRunSummary{
+		{RunID: "run-a", PackageName: "包A"},
+		{RunID: "run-b", PackageName: "包B"},
+	}
+
+	// 显式 runId 命中。
+	s := New(Deps{MCPE: &fakeMCPE{summaries: sums}})
+	got, err := s.pickMCPERun("run-b")
+	if err != nil || got.RunID != "run-b" {
+		t.Errorf("命中 run-b 失败：got=%+v err=%v", got, err)
+	}
+
+	// 显式 runId 不存在 → 报错并指向 list_mc_pe_runs。
+	if _, err := s.pickMCPERun("run-zzz"); err == nil || !strings.Contains(err.Error(), "list_mc_pe_runs") {
+		t.Errorf("runId 不存在应报错并指向 list_mc_pe_runs，实际 %v", err)
+	}
+
+	// 0 run + 空 runId → 报错。
+	s0 := New(Deps{MCPE: &fakeMCPE{}})
+	if _, err := s0.pickMCPERun(""); err == nil || !strings.Contains(err.Error(), "未找到活跃") {
+		t.Errorf("0 run 应报未找到活跃，实际 %v", err)
+	}
+
+	// 单 run + 空 runId → 兜底选中。
+	s1 := New(Deps{MCPE: &fakeMCPE{summaries: sums[:1]}})
+	if got, err := s1.pickMCPERun(""); err != nil || got.RunID != "run-a" {
+		t.Errorf("单 run 空 runId 应兜底选中 run-a：got=%+v err=%v", got, err)
+	}
+
+	// 多 run + 空 runId → 报「请传 runId」。
+	if _, err := s.pickMCPERun(""); err == nil || !strings.Contains(err.Error(), "请传 runId") {
+		t.Errorf("多 run 空 runId 应报请传 runId，实际 %v", err)
 	}
 }

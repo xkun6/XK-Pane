@@ -134,21 +134,9 @@ func (s *Service) getPkg(id string) (storage.MCPackage, bool) {
 
 // ─────────────────────── 供 orchestrator 用 ───────────────────────
 
-// ActiveRunPIDs 当前所有活跃 run 的 PID（nil pid 跳过）。orchestrator MCDK 工具用它定位 MC PE 窗口。
-func (s *Service) ActiveRunPIDs() []int {
-	s.runsMu.RLock()
-	defer s.runsMu.RUnlock()
-	var pids []int
-	for _, rt := range s.runs {
-		if rt.session.pid != nil {
-			pids = append(pids, *rt.session.pid)
-		}
-	}
-	return pids
-}
-
 // ActiveRunSummaries 注册表内全部 run 的摘要（含包名，按启动时间升序）。
-// 供 get_mc_pe_logs 多客户端分节输出与 execute/reload 消歧提示。
+// 供 list_mc_pe_runs / get_mc_pe_logs 多客户端分节输出、execute/reload 消歧提示，
+// capture/click 也经其 PID 定位目标窗口。
 func (s *Service) ActiveRunSummaries() []storage.MCRunSummary {
 	s.runsMu.RLock()
 	type entry struct {
@@ -211,7 +199,7 @@ func (s *Service) RecentLogs(runID string, lines int) []string {
 
 // removeRun 把一个 run 从注册表移除。进程自然退出（MC PE 自身重启 / 崩溃 / 外部关闭——
 // 只走 mc_pe:exited 不经 Stop）时由 capturingEmit 调用：否则死 run 的冻结日志缓冲长留，
-// get_mc_pe_logs 会把旧日志当现役返回（「卡在旧日志」），ActiveRunPIDs 也会把死进程 PID
+// get_mc_pe_logs 会把旧日志当现役返回（「卡在旧日志」），ActiveRunSummaries 也会把死进程 PID
 // 误算进活跃、害 capture/click 定位到死窗口。
 func (s *Service) removeRun(runID string) {
 	s.runsMu.Lock()

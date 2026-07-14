@@ -67,11 +67,10 @@ type Notifier interface {
 }
 
 // MCPE 是 MC PE 启动子系统的只读子集（*mcpe.Service 满足）。nil = MC PE 工具返回「错误: …」。
-// RecentLogs 供 get_mc_pe_logs；ActiveRunPIDs 供 P6e-7 capture/click 定位窗口（一并声明，接口稳定）；
-// ActiveRunSummaries 供多客户端场景 get_mc_pe_logs 分节输出与 execute/reload 消歧提示。
+// RecentLogs 供 get_mc_pe_logs；ActiveRunSummaries 供 list_mc_pe_runs / get_mc_pe_logs 多客户端
+// 分节输出、execute/reload 消歧提示，capture/click 也经其 PID 定位目标窗口。
 type MCPE interface {
 	RecentLogs(runID string, lines int) []string
-	ActiveRunPIDs() []int
 	ActiveRunSummaries() []storage.MCRunSummary
 }
 
