@@ -48,6 +48,11 @@ const (
 	// 劫持 stdout 时，mod 日志仍能在进程内截获并经本桥送回。原桥是单向（XK→游戏），
 	// 这是第一个游戏→XK 方向的帧类型。
 	PacketLogLine PacketType = 100
+
+	// PacketHello 是反向帧（游戏内桥模组 → XK-Pane）：连接建立后模组发送的第一帧，
+	// payload=UTF-8 runId（来自 MCDEV_DEBUG_RUN_ID 环境变量）。多开 MC PE 时 XK-Pane
+	// 据此把该连接后续的 PacketLogLine 归属到正确的 run。老模组不发此帧（runID 按空处理）。
+	PacketHello PacketType = 101
 )
 
 // Packet IPC 数据帧。

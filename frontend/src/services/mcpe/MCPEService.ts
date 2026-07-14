@@ -78,18 +78,19 @@ export const MCPEService = {
     if (!isDesktop) return desktopOnly();
     return Binding.OpenWorldFolder(id);
   },
-  async getBridgeStatus(): Promise<McdkBridgeStatus> {
+  // runId 缺省（ConfigPanel 尚未运行时的预览态调用）时按空串处理，等价于「取最新连入的客户端」。
+  async getBridgeStatus(runId: string = ''): Promise<McdkBridgeStatus> {
     if (!isDesktop) return desktopOnly();
-    return Binding.GetMcdkBridgeStatus();
+    return Binding.GetMcdkBridgeStatus(runId);
   },
-  // 经 MCDK 桥触发游戏内热重载（fire-and-forget）；桥未连入时后端返回错误。
-  async reloadScript(): Promise<void> {
+  // 经 MCDK 桥触发游戏内热重载（fire-and-forget）；桥未连入时后端返回错误。多开时 runId 定向目标客户端。
+  async reloadScript(runId: string): Promise<void> {
     if (!isDesktop) return desktopOnly();
-    await Binding.ReloadScript();
+    await Binding.ReloadScript(runId);
   },
-  async reloadWorld(): Promise<void> {
+  async reloadWorld(runId: string): Promise<void> {
     if (!isDesktop) return desktopOnly();
-    await Binding.ReloadWorld();
+    await Binding.ReloadWorld(runId);
   },
 
   // 事件订阅（全局，按 runId 在调用方路由）。返回取消函数，务必在 useEffect 里 return。

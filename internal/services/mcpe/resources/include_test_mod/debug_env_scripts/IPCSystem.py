@@ -3,7 +3,7 @@ import socket
 import threading
 import collections
 import mod.client.extraClientApi as clientApi
-from .Config import GET_DEBUG_IPC_PORT
+from .Config import GET_DEBUG_IPC_PORT, GET_DEBUG_RUN_ID
 
 def U16_BE(b):
     # type: (bytearray | str) -> int
@@ -19,6 +19,8 @@ def U32_BE(b):
 
 # Route A 最小验证：反向日志帧类型（与后端 mcdkbridge.PacketLogLine 一致）。
 LOG_TYPE_ID = 100
+# 连接后第一帧，payload=runId（与后端 mcdkbridge.PacketHello 一致）。
+HELLO_TYPE_ID = 101
 
 class IPCSystem:
     def __init__(self, port=None):
@@ -91,7 +93,8 @@ class IPCSystem:
     def sendFrame(self, typeID, payload):
         # type: (int, bytes) -> None
         # 反向发一帧 [2B TypeID][4B DataLength][payload]（与后端 protocol.go Decode 对称）。
-        # 仅由 _senderLoop（发送线程）调用——故无需 mLock，sendall 阻塞也只阻塞发送线程。
+        # 由 _senderLoop（发送线程）与连接线程的一次性 hello 调用——hello 发生在发送线程启动前，
+        # 无并发，故无需 mLock，sendall 阻塞也只阻塞调用者所在线程。
         # 未连/出错一律静默吞，绝不 print（会经 STD_OUT_WRAPPER 递归回来）。
         sock = self.sock
         if not sock:
@@ -115,6 +118,11 @@ class IPCSystem:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock = self.sock
         sock.connect(("localhost", self.port))
+        # 先发 hello 帧（runId 归属），再开日志闸——保证 hello 是本连接第一帧，
+        # XK-Pane 据此把本连接后续日志归到对应 run（多开客户端互不串台）。
+        runId = GET_DEBUG_RUN_ID()
+        if runId:
+            self.sendFrame(HELLO_TYPE_ID, runId.encode("utf-8") if isinstance(runId, unicode) else runId)
         # 连上后开闸 + 起发送线程，自此 stdout 每行经队列异步发往 XK-Pane。
         self._connected = True
         threading.Thread(target=self._senderLoop).start()

@@ -146,6 +146,14 @@ type MCRunSessionInfo struct {
 	PID       *int   `json:"pid,omitempty"`
 }
 
+// MCRunSummary 一个活跃 run 的摘要（get_mc_pe_logs 多客户端分节 / execute·reload 消歧提示用）。
+type MCRunSummary struct {
+	RunID       string `json:"runId"`
+	PackageID   string `json:"packageId"`
+	PackageName string `json:"packageName"`
+	PID         *int   `json:"pid,omitempty"`
+}
+
 // McdkBridgeStatus MCDK 调试桥状态（前端运行面板轮询）。未连接时 RemoteAddr/ConnectedAtMs 为 null。
 type McdkBridgeStatus struct {
 	Port          int     `json:"port"`

@@ -67,16 +67,21 @@ type Notifier interface {
 }
 
 // MCPE 是 MC PE 启动子系统的只读子集（*mcpe.Service 满足）。nil = MC PE 工具返回「错误: …」。
-// RecentLogs 供 get_mc_pe_logs；ActiveRunPIDs 供 P6e-7 capture/click 定位窗口（一并声明，接口稳定）。
+// RecentLogs 供 get_mc_pe_logs；ActiveRunPIDs 供 P6e-7 capture/click 定位窗口（一并声明，接口稳定）；
+// ActiveRunSummaries 供多客户端场景 get_mc_pe_logs 分节输出与 execute/reload 消歧提示。
 type MCPE interface {
 	RecentLogs(runID string, lines int) []string
 	ActiveRunPIDs() []int
+	ActiveRunSummaries() []storage.MCRunSummary
 }
 
 // Bridge 是 MCDK 调试桥的发送 + 状态子集（*mcdkbridge.Service 满足）。nil = 桥工具返回「错误: …」。
+// SendPacketToRun/ClientRunIDs 支撑多开时按 runId 精确定向发帧。
 type Bridge interface {
 	SendPacket(p mcdkbridge.Packet) error
+	SendPacketToRun(runID string, p mcdkbridge.Packet) error
 	Status() mcdkbridge.ClientStatus
+	ClientRunIDs() []string
 }
 
 // Todos 是待办 CRUD/查询能力（*todo.Service 满足）。nil = todo MCP 工具返回「错误: …」。

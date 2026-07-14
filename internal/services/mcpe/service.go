@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,6 +35,7 @@ type runtimeRun struct {
 	// useBridge：本 run 的日志一旦开始从 MCDK 桥（游戏内 tee）进来就置 true，
 	// 此后 stdout/ConPTY 来源的日志被抑制以防重复（桥日志是 Python 层超集且不受 MC Studio 抢占）。
 	useBridge atomic.Bool
+	startedAt time.Time // 供 ActiveRunSummaries 按启动顺序排序
 }
 
 // Service 是 MC PE 总编排服务（注册为 Wails service，前端可调）。
@@ -72,19 +74,15 @@ func (s *Service) SetBridge(b *mcdkbridge.Service) {
 }
 
 // handleBridgeLog 处理一行经 MCDK 桥反向 tee 回来的游戏内 stdout（在桥 readDrain goroutine 上）。
-// 走与 stdout 同一套白名单过滤（parseStdoutLine）后 emit + 入缓冲，并把活跃 run 标记为 useBridge
-// 以抑制其 stdout 来源、防重复。无活跃 run 时丢弃。
-func (s *Service) handleBridgeLog(line string) {
+// runID 取自本连接的 hello 帧归属；走与 stdout 同一套白名单过滤（parseStdoutLine）后 emit + 入缓冲，
+// 并把对应 run 标记为 useBridge 以抑制其 stdout 来源、防重复。无归属 run 时丢弃。
+func (s *Service) handleBridgeLog(runID, line string) {
 	s.runsMu.RLock()
-	var rt *runtimeRun
-	var runID string
-	for id, r := range s.runs {
-		if rt == nil {
-			rt, runID = r, id
-		}
-		if r.session != nil && r.session.alive() {
-			rt, runID = r, id
-			break
+	rt := s.runs[runID]
+	if rt == nil && runID == "" && len(s.runs) == 1 {
+		// 老版本桥模组不发 hello（runID 空）：仅单 run 时才兜底归属，多 run 并存宁可丢弃也不猜。
+		for id, r := range s.runs {
+			runID, rt = id, r
 		}
 	}
 	s.runsMu.RUnlock()
@@ -147,6 +145,42 @@ func (s *Service) ActiveRunPIDs() []int {
 		}
 	}
 	return pids
+}
+
+// ActiveRunSummaries 注册表内全部 run 的摘要（含包名，按启动时间升序）。
+// 供 get_mc_pe_logs 多客户端分节输出与 execute/reload 消歧提示。
+func (s *Service) ActiveRunSummaries() []storage.MCRunSummary {
+	s.runsMu.RLock()
+	type entry struct {
+		runID     string
+		pkgID     string
+		pid       *int
+		startedAt time.Time
+	}
+	entries := make([]entry, 0, len(s.runs))
+	for id, rt := range s.runs {
+		e := entry{runID: id, startedAt: rt.startedAt}
+		if rt.session != nil {
+			e.pkgID = rt.session.packageID
+			e.pid = rt.session.pid
+		}
+		entries = append(entries, e)
+	}
+	s.runsMu.RUnlock()
+
+	sort.Slice(entries, func(i, j int) bool { return entries[i].startedAt.Before(entries[j].startedAt) })
+
+	out := make([]storage.MCRunSummary, 0, len(entries))
+	for _, e := range entries {
+		sum := storage.MCRunSummary{RunID: e.runID, PackageID: e.pkgID, PID: e.pid}
+		if e.pkgID != "" && s.holder != nil {
+			if pkg, ok := s.getPkg(e.pkgID); ok {
+				sum.PackageName = pkg.Name
+			}
+		}
+		out = append(out, sum)
+	}
+	return out
 }
 
 // RecentLogs 读最近 N 行日志（已格式化）。runID="" 时取当前活跃 run（MC PE 单实例）。供 get_mc_pe_logs。
@@ -292,12 +326,18 @@ func (s *Service) OpenWorldFolder(id string) (string, error) {
 	return filepath.Join(worlds, pkg.World.FolderName), nil
 }
 
-// GetMcdkBridgeStatus 返回 MCDK 调试桥当前状态（前端运行面板轮询）。
-func (s *Service) GetMcdkBridgeStatus() storage.McdkBridgeStatus {
+// GetMcdkBridgeStatus 返回 MCDK 调试桥当前状态（前端运行面板轮询）。runID 空取最新连入者
+// （单开语义）；非空取该 run 对应的 client。
+func (s *Service) GetMcdkBridgeStatus(runID string) storage.McdkBridgeStatus {
 	if s.bridge == nil {
 		return storage.McdkBridgeStatus{}
 	}
-	st := s.bridge.Status()
+	var st mcdkbridge.ClientStatus
+	if runID == "" {
+		st = s.bridge.Status()
+	} else {
+		st = s.bridge.StatusForRun(runID)
+	}
 	out := storage.McdkBridgeStatus{Port: s.bridge.Port(), Connected: st.Connected}
 	if st.Connected {
 		ra := st.RemoteAddr
@@ -311,22 +351,29 @@ func (s *Service) GetMcdkBridgeStatus() storage.McdkBridgeStatus {
 // ─────────────────────── 调试桥热重载（Wails 方法） ───────────────────────
 
 // ReloadScript 经 MCDK 桥触发游戏内脚本热重载（typeID=1 AUTO_RELOAD → 游戏内 RELOAD_MOD，
-// 等价于游戏内按「重载脚本」热键，但无需窗口聚焦）。fire-and-forget。
-func (s *Service) ReloadScript() error {
-	return s.sendBridgeReload(mcdkbridge.ReloadMod())
+// 等价于游戏内按「重载脚本」热键，但无需窗口聚焦）。多开时 runID 必填以精确定向，
+// 单开可传空串沿用旧的最新连接语义。fire-and-forget。
+func (s *Service) ReloadScript(runID string) error {
+	return s.sendBridgeReload(runID, mcdkbridge.ReloadMod())
 }
 
 // ReloadWorld 经 MCDK 桥触发重启本地世界（typeID=5 → 游戏内 RELOAD_WORLD，等价于游戏内
-// 按「重载世界」热键，不退游戏）。fire-and-forget。
-func (s *Service) ReloadWorld() error {
-	return s.sendBridgeReload(mcdkbridge.ReloadGame())
+// 按「重载世界」热键，不退游戏）。多开时 runID 必填。fire-and-forget。
+func (s *Service) ReloadWorld(runID string) error {
+	return s.sendBridgeReload(runID, mcdkbridge.ReloadGame())
 }
 
-func (s *Service) sendBridgeReload(pkt mcdkbridge.Packet) error {
+func (s *Service) sendBridgeReload(runID string, pkt mcdkbridge.Packet) error {
 	if s.bridge == nil {
 		return fmt.Errorf("MCDK 调试桥不可用")
 	}
-	if err := s.bridge.SendPacket(pkt); err != nil {
+	var err error
+	if runID == "" {
+		err = s.bridge.SendPacket(pkt)
+	} else {
+		err = s.bridge.SendPacketToRun(runID, pkt)
+	}
+	if err != nil {
 		return fmt.Errorf("发送热重载失败（调试桥未连入？）: %w", err)
 	}
 	return nil
@@ -545,6 +592,7 @@ func (s *Service) Launch(id string) (storage.MCRunSessionInfo, error) {
 	}
 
 	// 10. 环境变量（reload_key/reload_world_key 为数字，reload_addon_key/reload_shaders_key 为字符串——忠实 cc-pane）
+	runID := uuid.NewString() // 提前到 env 构造前：MCDEV_DEBUG_RUN_ID 需要它，供桥模组 hello 帧回传归属
 	debugOpts := map[string]any{
 		"reload_key":         pkg.DebugOptions.ReloadKey,
 		"reload_world_key":   pkg.DebugOptions.ReloadWorldKey,
@@ -563,14 +611,14 @@ func (s *Service) Launch(id string) (storage.MCRunSessionInfo, error) {
 	if pkg.DebugOptions.IncludeTestMod && s.bridge != nil {
 		if port := s.bridge.Port(); port > 0 {
 			env["MCDEV_DEBUG_IPC_PORT"] = strconv.Itoa(port)
+			env["MCDEV_DEBUG_RUN_ID"] = runID
 		}
 	}
 
 	// 11. 启动（emitter 包装：把本 run 的 mc_pe:output 也抄进环形缓冲供 MCP/HTTP 读取）
 	args := []string{"config=" + cppconfigPath}
-	runID := uuid.NewString()
 	buf := newLogBuffer(mcLogBufferCap)
-	rt := &runtimeRun{logs: buf}
+	rt := &runtimeRun{logs: buf, startedAt: time.Now()}
 	capturingEmit := func(name string, payload any) {
 		switch name {
 		case events.MCPeOutput:

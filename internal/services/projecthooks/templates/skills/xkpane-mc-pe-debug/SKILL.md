@@ -42,7 +42,7 @@ XK-Pane 自带全套 MC PE（我的世界中国版）调试原语，子实例可
 | `capture_window` | 截取 MC PE 窗口（480p JPEG，多模态可直接看图），无参数 |
 | `click_window` | 在 MC PE 窗口客户区模拟左键点击（归一化坐标，先强制窗口前置） |
 | `execute_mc_code` | 向桥模组发送 Python 2.7 代码，在游戏进程内 `exec`（区分客户端 / 服务端） |
-| `get_mc_pe_logs` | 读最近 N 行 MC PE 日志（环形缓冲，cap=2000，等同 MC PE Panel 左下日志区） |
+| `get_mc_pe_logs` | 读最近 N 行 MC PE 日志（环形缓冲，cap=2000，等同 MC PE Panel 左下日志区）。多开 MC PE 时不带 `runId` 会分节返回全部客户端日志，可传 `runId` 只看某一个；`execute_mc_code` / `reload_mc` 在多开时必须传 `runId` |
 | `reload_mc` | 热重载世界 / addon 资源 / 着色器（四种 kind） |
 
 ### 2.2 知识库（写代码前核对）

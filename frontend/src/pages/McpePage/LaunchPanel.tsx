@@ -49,6 +49,7 @@ export const LaunchPanel = ({ pkg, runtime }: { pkg: MCPackage; runtime?: MCRunR
   const [bridge, setBridge] = useState<{ port: number | null; connected: boolean }>({ port: null, connected: false });
 
   const running = !!runtime && !runtime.exited;
+  const runId = runtime && !runtime.exited ? runtime.info.runId : '';
   // 桥仅在「运行中 + 启用调试桥」时有意义；据此驱动徽章 + 热重载按钮的可用态。
   const bridgeEnabled = running && pkg.debugOptions.includeTestMod;
 
@@ -104,15 +105,15 @@ export const LaunchPanel = ({ pkg, runtime }: { pkg: MCPackage; runtime?: MCRunR
     if (containerRef.current) containerRef.current.scrollTop = containerRef.current.scrollHeight;
   }, [output?.length]);
 
-  // 桥状态 2s 轮询（桥是全局单例）；仅在 bridgeEnabled 时拉，否则复位，避免空转。
+  // 桥状态 2s 轮询（多开时每个 run 各自的连接态，据 runId 定向查询）；仅在 bridgeEnabled 时拉，否则复位，避免空转。
   useEffect(() => {
-    if (!bridgeEnabled) {
+    if (!bridgeEnabled || !runId) {
       setBridge({ port: null, connected: false });
       return;
     }
     let alive = true;
     const fetchStatus = () => {
-      MCPEService.getBridgeStatus()
+      MCPEService.getBridgeStatus(runId)
         .then((s) => {
           if (alive) setBridge({ port: s.port, connected: s.connected });
         })
@@ -124,19 +125,21 @@ export const LaunchPanel = ({ pkg, runtime }: { pkg: MCPackage; runtime?: MCRunR
       alive = false;
       clearInterval(timer);
     };
-  }, [bridgeEnabled]);
+  }, [bridgeEnabled, runId]);
 
   // 经桥热重载（fire-and-forget）；桥未连入时按钮已禁用，仅极端竞态下才会抛错 → 弹原生错误框。
   const handleReloadScript = async () => {
+    if (!runId) return;
     try {
-      await MCPEService.reloadScript();
+      await MCPEService.reloadScript(runId);
     } catch (e) {
       await fail(e);
     }
   };
   const handleReloadWorld = async () => {
+    if (!runId) return;
     try {
-      await MCPEService.reloadWorld();
+      await MCPEService.reloadWorld(runId);
     } catch (e) {
       await fail(e);
     }

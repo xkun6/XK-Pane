@@ -21,3 +21,9 @@ def GET_DEBUG_IPC_PORT():
     if port is None:
         return None
     return int(port)
+
+
+def GET_DEBUG_RUN_ID():
+    # run 归属标识：XK-Pane 每次启动注入，桥模组连上后用 hello 帧回传，
+    # 让多开客户端的日志在 XK-Pane 侧按 run 精确归属。
+    return os.getenv("MCDEV_DEBUG_RUN_ID") or ""

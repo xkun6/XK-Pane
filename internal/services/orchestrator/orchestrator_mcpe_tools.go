@@ -14,6 +14,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"xkpane/internal/services/mcdkbridge"
@@ -25,15 +26,15 @@ import (
 func (s *Service) registerMCPETools(srv *mcp.Server) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "execute_mc_code",
-		Description: "向 MC PE 桥模组发送一段 Python 2.7 代码并在游戏进程内 exec。isClient=true 在客户端执行，否则在服务端。fire-and-forget——执行结果通过 MC PE 日志观察（用 get_mc_pe_logs 读最近 N 行）。代码需遵守 ModSDK 规范：禁止 f-string / 必须用 print() 函数形式 / 禁止 type hints / async / 海象运算符。",
+		Description: "向 MC PE 桥模组发送一段 Python 2.7 代码并在游戏进程内 exec。isClient=true 在客户端执行，否则在服务端。fire-and-forget——执行结果通过 MC PE 日志观察（用 get_mc_pe_logs 读最近 N 行）。代码需遵守 ModSDK 规范：禁止 f-string / 必须用 print() 函数形式 / 禁止 type hints / async / 海象运算符。多开 MC PE 时必须传 runId 指定目标客户端（单开可省略）。",
 	}, s.toolExecuteMcCode)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "reload_mc",
-		Description: "向 MC PE 桥模组发送热重载指令。kind: game=重启游戏世界 / addon_and_game=重载 addon 资源+世界 / all_shaders=重编译全部着色器 / single_shader=重编译指定着色器（kind=single_shader 时 fileName 必填）。fire-and-forget。",
+		Description: "向 MC PE 桥模组发送热重载指令。kind: game=重启游戏世界 / addon_and_game=重载 addon 资源+世界 / all_shaders=重编译全部着色器 / single_shader=重编译指定着色器（kind=single_shader 时 fileName 必填）。fire-and-forget。多开 MC PE 时必须传 runId 指定目标客户端（单开可省略）。",
 	}, s.toolReloadMc)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "get_mc_pe_logs",
-		Description: "读取当前活跃 MC PE 运行的最近 N 行日志（环形缓冲，cap=2000）。返回纯文本，每行 `HH:MM:SS [Category] [LEVEL] message` 格式——内容跟 MC PE Panel 左下日志区一致（同样的 MC Studio 白名单过滤）。无活跃运行时返回错误。lines 默认 200，最大 2000。",
+		Description: "读取 MC PE 运行的最近 N 行日志（环形缓冲，cap=2000）。返回纯文本，每行 `HH:MM:SS [Category] [LEVEL] message` 格式——内容跟 MC PE Panel 左下日志区一致（同样的 MC Studio 白名单过滤）。多开 MC PE 时不传 runId 会按客户端分节返回全部日志，传 runId 只看某一个。没有任何运行时返回错误。lines 默认 200，最大 2000。",
 	}, s.toolGetMcPeLogs)
 	s.registerMCPECaptureTools(srv) // capture_window / click_window 仅 Windows 注册（P6e-7）；非 Windows no-op
 }
@@ -43,15 +44,30 @@ func (s *Service) registerMCPETools(srv *mcp.Server) {
 type executeMcCodeParams struct {
 	Code     string `json:"code" jsonschema:"要在游戏进程内 exec 的 Python 2.7 代码"`
 	IsClient bool   `json:"isClient,omitempty" jsonschema:"是否在客户端执行（传 true 客户端，省略或 false 服务端）"`
+	RunID    string `json:"runId,omitempty" jsonschema:"目标 MC PE 客户端的 runId（多开时必填；单开可省略）"`
 }
 
 type reloadMcParams struct {
 	Kind     string `json:"kind" jsonschema:"重载类型：game / addon_and_game / all_shaders / single_shader"`
 	FileName string `json:"fileName,omitempty" jsonschema:"要重编译的着色器文件名（kind 为 single_shader 时必填）"`
+	RunID    string `json:"runId,omitempty" jsonschema:"目标 MC PE 客户端的 runId（多开时必填；单开可省略）"`
 }
 
 type getMcPeLogsParams struct {
-	Lines int `json:"lines,omitempty" jsonschema:"返回最近多少行（默认 200，最大 2000）"`
+	Lines int    `json:"lines,omitempty" jsonschema:"返回最近多少行（默认 200，最大 2000）"`
+	RunID string `json:"runId,omitempty" jsonschema:"目标 MC PE 客户端的 runId（多开时必填；单开可省略）"`
+}
+
+// sendBridgePacket 决定 execute/reload 的目标客户端：显式 runId 直发；未指定且桥上
+// 多于一个客户端时报错（宁可打断，不可发错人），至多一个时沿用旧的最新连接语义。
+func (s *Service) sendBridgePacket(runID string, pkt mcdkbridge.Packet) error {
+	if runID != "" {
+		return s.deps.Bridge.SendPacketToRun(runID, pkt)
+	}
+	if len(s.deps.Bridge.ClientRunIDs()) > 1 {
+		return fmt.Errorf("有多个 MC PE 客户端连着调试桥，请传 runId 指定目标（用 get_mc_pe_logs 查看各客户端 runId）")
+	}
+	return s.deps.Bridge.SendPacket(pkt)
 }
 
 // ── 工具实现 ────────────────────────────────────────────────────────────
@@ -67,7 +83,7 @@ func (s *Service) toolExecuteMcCode(_ context.Context, _ *mcp.CallToolRequest, i
 	} else {
 		pkt = mcdkbridge.ExecuteServerCode(in.Code)
 	}
-	if err := s.deps.Bridge.SendPacket(pkt); err != nil {
+	if err := s.sendBridgePacket(in.RunID, pkt); err != nil {
 		return textResult(fmt.Sprintf("错误: 发送失败: %v", err)), nil, nil
 	}
 	return textResult(fmt.Sprintf("已发送 execute_mc_code (isClient=%t)，执行结果请用 get_mc_pe_logs 看日志", in.IsClient)), nil, nil
@@ -93,7 +109,7 @@ func (s *Service) toolReloadMc(_ context.Context, _ *mcp.CallToolRequest, in rel
 	default:
 		return textResult(fmt.Sprintf("错误: 未知 kind=%s（支持: game / addon_and_game / all_shaders / single_shader）", in.Kind)), nil, nil
 	}
-	if err := s.deps.Bridge.SendPacket(pkt); err != nil {
+	if err := s.sendBridgePacket(in.RunID, pkt); err != nil {
 		return textResult(fmt.Sprintf("错误: 发送失败: %v", err)), nil, nil
 	}
 	return textResult(fmt.Sprintf("已发送 reload_mc kind=%s", in.Kind)), nil, nil
@@ -111,6 +127,36 @@ func (s *Service) toolGetMcPeLogs(_ context.Context, _ *mcp.CallToolRequest, in 
 	if lines > 2000 {
 		lines = 2000
 	}
+
+	if in.RunID != "" {
+		logs := s.deps.MCPE.RecentLogs(in.RunID, lines)
+		if len(logs) == 0 {
+			return textResult(fmt.Sprintf("错误: runId=%s 不存在或还没有日志输出", in.RunID)), nil, nil
+		}
+		return textResult(strings.Join(logs, "\n")), nil, nil
+	}
+
+	sums := s.deps.MCPE.ActiveRunSummaries()
+	if len(sums) > 1 {
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf("当前有 %d 个 MC PE 客户端在运行，已分节返回各自日志（可传 runId 只看某一个）：\n", len(sums)))
+		for _, sum := range sums {
+			pid := "?"
+			if sum.PID != nil {
+				pid = strconv.Itoa(*sum.PID)
+			}
+			b.WriteString(fmt.Sprintf("\n━━ 客户端 [%s] runId=%s pid=%s ━━\n", sum.PackageName, sum.RunID, pid))
+			logs := s.deps.MCPE.RecentLogs(sum.RunID, lines)
+			if len(logs) == 0 {
+				b.WriteString("（还没有日志输出）")
+			} else {
+				b.WriteString(strings.Join(logs, "\n"))
+			}
+			b.WriteString("\n")
+		}
+		return textResult(b.String()), nil, nil
+	}
+
 	logs := s.deps.MCPE.RecentLogs("", lines)
 	if len(logs) == 0 {
 		return textResult("错误: 没有活跃的 MC PE 运行（在 MC PE Panel 启动后再试），或当前还没有日志输出"), nil, nil
