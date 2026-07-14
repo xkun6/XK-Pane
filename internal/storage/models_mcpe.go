@@ -121,12 +121,12 @@ func NewMCPackage(projectPath, name string) MCPackage {
 			Seed:            int64(rand.Uint64()), //nolint:gosec // 世界种子无需密码学随机
 			UserName:        "DevOps",
 			GameMode:        MCGameModeCreative,
-			LevelType:       MCLevelTypeDefault,
+			LevelType:       MCLevelTypeFlat,
 			EnableCheats:    true,
-			KeepInventory:   false,
+			KeepInventory:   true,
 			ShowCoordinates: &showCoords,
-			DoDaylightCycle: true,
-			DoWeatherCycle:  true,
+			DoDaylightCycle: false,
+			DoWeatherCycle:  false,
 			ResetOnLaunch:   false,
 		},
 		DebugOptions: MCDebugOptions{
