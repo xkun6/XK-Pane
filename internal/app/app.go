@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 
 	"xkpane/internal/events"
+	"xkpane/internal/services/agentcfg"
 	"xkpane/internal/services/agentusage"
 	"xkpane/internal/services/appsettings"
 	"xkpane/internal/services/bedrock"
@@ -204,6 +205,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(todoSvc), // 待办 CRUD（结合 ccpane；orchestrator 复用同实例）
 			application.NewService(tbSvc),   // 编排任务绑定 CRUD（结合 ccpane；orchestrator 复用同实例）
 			application.NewService(provider.New(holder)),
+			application.NewService(agentcfg.New(holder)),   // cc-switch 式全局配置 Provider（整份 CLI 配置文件切换）
 			application.NewService(sshmachine.New(holder)), // SSH 机器管理（CRUD + cryptox 密码 + 连通测试），同 provider 档
 			application.NewService(gitSvc),
 			application.NewService(lhSvc),
