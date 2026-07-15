@@ -46,7 +46,7 @@ func (s *Service) writeClaudeLive(settingsJSON string) error {
 		return err
 	}
 	path := s.claudeSettingsPath()
-	if err := s.backupClaudeLiveOnce(path); err != nil {
+	if err := backupLiveOnce(path); err != nil {
 		return fmt.Errorf("agentcfg: 备份 live 配置失败: %w", err)
 	}
 	if err := filex.WriteAtomic(path, data, 0o600); err != nil {
@@ -55,9 +55,10 @@ func (s *Service) writeClaudeLive(settingsJSON string) error {
 	return nil
 }
 
-// backupClaudeLiveOnce 若 live 文件存在且备份文件尚不存在，把原文件字节原样备份一份。
-// 已有备份 / live 尚不存在 → no-op。
-func (s *Service) backupClaudeLiveOnce(path string) error {
+// backupLiveOnce 若 live 文件存在且备份文件尚不存在，把原文件字节原样备份一份。
+// 已有备份 / live 尚不存在 → no-op。供 claude.go / codex.go 共用（第二单元泛化自
+// 原先仅 claude 专属的 backupClaudeLiveOnce）。
+func backupLiveOnce(path string) error {
 	bakPath := path + ".xkpane-bak"
 	if _, err := os.Stat(bakPath); err == nil {
 		return nil // 已备份过

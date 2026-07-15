@@ -76,14 +76,24 @@ func validateAppType(appType string) error {
 	return nil
 }
 
-// validateSettingsJSON 校验是合法 JSON 对象。codex 的形状（{"auth":...,"config":"..."}）
-// 也是对象，本单元不做更细的 codex 形状校验（留后续单元）。
+// validateSettingsJSON 校验是合法 JSON 对象（claude 用：settings.json 形状随意，只要求
+// 是对象）。
 func validateSettingsJSON(raw string) error {
 	var v map[string]any
 	if err := json.Unmarshal([]byte(raw), &v); err != nil {
 		return fmt.Errorf("agentcfg: settingsJson 不是合法的 JSON 对象: %w", err)
 	}
 	return nil
+}
+
+// validateProviderSettings 按 appType 分派校验规则：codex 走 validateCodexSettings
+// （额外校验 auth/config 形状与 config 的 TOML 合法性），其余（claude）走
+// validateSettingsJSON（只要求合法 JSON 对象）。
+func validateProviderSettings(appType, raw string) error {
+	if appType == appTypeCodex {
+		return validateCodexSettings(raw)
+	}
+	return validateSettingsJSON(raw)
 }
 
 func categoryOrDefault(c string) string {
@@ -120,7 +130,7 @@ func (s *Service) AddAgentProvider(ctx context.Context, in AgentProviderInput) (
 	if strings.TrimSpace(in.Name) == "" {
 		return nil, errors.New("agentcfg: name 不能为空")
 	}
-	if err := validateSettingsJSON(in.SettingsJSON); err != nil {
+	if err := validateProviderSettings(in.AppType, in.SettingsJSON); err != nil {
 		return nil, err
 	}
 	enc, err := cryptox.EncryptString(in.SettingsJSON)
@@ -146,13 +156,23 @@ func (s *Service) AddAgentProvider(ctx context.Context, in AgentProviderInput) (
 	return &dto, nil
 }
 
-// UpdateAgentProvider 修改一个 Provider（AppType 不可改）。若该行是 claude 且 IsCurrent，
-// 更新后立即把新 SettingsJSON 写入 live（写失败回滚整个更新——live 写放事务内最后一步）。
+// UpdateAgentProvider 修改一个 Provider（AppType 不可改）。若该行 IsCurrent，更新后立即
+// 把新 SettingsJSON 写入对应 CLI 的 live 配置（写失败回滚整个更新——live 写放事务内最后
+// 一步）。
 func (s *Service) UpdateAgentProvider(ctx context.Context, id string, in AgentProviderInput) (*AgentProviderDTO, error) {
 	if strings.TrimSpace(in.Name) == "" {
 		return nil, errors.New("agentcfg: name 不能为空")
 	}
-	if err := validateSettingsJSON(in.SettingsJSON); err != nil {
+	// AppType 不可改，但校验 SettingsJSON 的规则依 appType 而定 → 先查一次现有行拿
+	// AppType（Update 不允许改 AppType，这里只读不写，不存在并发风险）。
+	var existing storage.AgentProvider
+	if err := s.db().WithContext(ctx).First(&existing, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errNotFound
+		}
+		return nil, err
+	}
+	if err := validateProviderSettings(existing.AppType, in.SettingsJSON); err != nil {
 		return nil, err
 	}
 	enc, err := cryptox.EncryptString(in.SettingsJSON)
@@ -183,9 +203,16 @@ func (s *Service) UpdateAgentProvider(ctx context.Context, id string, in AgentPr
 			return err
 		}
 		result = row
-		if row.IsCurrent && row.AppType == appTypeClaude {
-			if err := s.writeClaudeLive(in.SettingsJSON); err != nil {
-				return err
+		if row.IsCurrent {
+			switch row.AppType {
+			case appTypeClaude:
+				if err := s.writeClaudeLive(in.SettingsJSON); err != nil {
+					return err
+				}
+			case appTypeCodex:
+				if err := s.writeCodexLive(ctx, tx, in.SettingsJSON); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -233,19 +260,20 @@ func (s *Service) SwitchAgentProvider(ctx context.Context, id string) error {
 	switch target.AppType {
 	case appTypeClaude:
 		return s.switchClaude(ctx, target)
+	case appTypeCodex:
+		return s.switchCodex(ctx, target)
 	default:
 		return fmt.Errorf("agentcfg: appType %q 尚未支持切换", target.AppType)
 	}
 }
 
 // ImportCurrentAgentConfig 是「从当前 live 导入」的手动入口（对齐 Startup 的自动导入）。
-// codex 本单元尚未支持。
 func (s *Service) ImportCurrentAgentConfig(ctx context.Context, appType string) (*AgentProviderDTO, error) {
 	if err := validateAppType(appType); err != nil {
 		return nil, err
 	}
 	if appType == appTypeCodex {
-		return nil, errors.New("agentcfg: codex 尚未支持")
+		return s.importCodexDefault(ctx, true)
 	}
 	return s.importClaudeDefault(ctx, true)
 }

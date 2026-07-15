@@ -2,8 +2,8 @@
 // 的全局配置文件整份存成一个 Provider，切换时原子性直写 live 配置文件，而不是像旧
 // providers 表那样只存几个零散字段再拼装启动 env。
 //
-// 本单元（第一单元）只做 Claude 部分：三张表骨架 + Claude 的导入/切换/回填全流程。
-// Codex 部分（auth.json + config.toml 双文件）留后续单元，本包当前不预置其路径方法。
+// 第一单元做了 Claude 部分：三张表骨架 + Claude 的导入/切换/回填全流程。
+// 第二单元补齐 Codex 部分（auth.json + config.toml 双文件，见 codex.go）。
 package agentcfg
 
 import (
@@ -43,4 +43,14 @@ func (s *Service) db() *gorm.DB {
 // claudeSettingsPath 是 Claude Code 全局配置文件路径：<home>/.claude/settings.json。
 func (s *Service) claudeSettingsPath() string {
 	return filepath.Join(s.home, ".claude", "settings.json")
+}
+
+// codexConfigPath 是 Codex CLI 全局配置文件路径：<home>/.codex/config.toml。
+func (s *Service) codexConfigPath() string {
+	return filepath.Join(s.home, ".codex", "config.toml")
+}
+
+// codexAuthPath 是 Codex CLI 全局登录态文件路径：<home>/.codex/auth.json。
+func (s *Service) codexAuthPath() string {
+	return filepath.Join(s.home, ".codex", "auth.json")
 }
