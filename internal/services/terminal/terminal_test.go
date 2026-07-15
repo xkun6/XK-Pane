@@ -239,6 +239,20 @@ func TestBuildEnvInjectsOrchestratorEndpoint(t *testing.T) {
 	}
 }
 
+func TestBuildEnvBypassesProxyForLocalOrchestrator(t *testing.T) {
+	t.Setenv("NO_PROXY", "example.com")
+
+	env := envToMap(buildEnv("s", "codex", 58387, "deadbeef", nil, nil, nil))
+	for _, want := range []string{"example.com", "127.0.0.1", "localhost", "::1"} {
+		if !strings.Contains(env["NO_PROXY"], want) {
+			t.Fatalf("NO_PROXY = %q, want to contain %q", env["NO_PROXY"], want)
+		}
+		if !strings.Contains(env["no_proxy"], want) {
+			t.Fatalf("no_proxy = %q, want to contain %q", env["no_proxy"], want)
+		}
+	}
+}
+
 // resolver 报错（如密钥损坏）应让 resolveLaunch 报错。
 func TestResolveLaunchProviderError(t *testing.T) {
 	svc := New(cliadapters.Default())

@@ -793,6 +793,9 @@ func buildEnv(sessionID, toolID string, orchPort int, orchToken string, provider
 			m[k] = v
 		}
 	}
+	for _, k := range []string{"XKPANE_CLI_TOOL", "XKPANE_API_PORT", "XKPANE_API_TOKEN", "XKPANE_API_BASE_URL"} {
+		delete(m, k)
+	}
 	if _, ok := m["TERM"]; !ok {
 		m["TERM"] = "xterm-256color"
 	}
@@ -810,6 +813,7 @@ func buildEnv(sessionID, toolID string, orchPort int, orchToken string, provider
 		m["XKPANE_API_PORT"] = strconv.Itoa(orchPort)
 		m["XKPANE_API_TOKEN"] = orchToken
 		m["XKPANE_API_BASE_URL"] = fmt.Sprintf("http://127.0.0.1:%d", orchPort)
+		ensureLocalNoProxy(m)
 	}
 	for k, v := range providerEnv { // Tier-A provider env（adapter inject 之前）
 		m[k] = v
@@ -825,6 +829,28 @@ func buildEnv(sessionID, toolID string, orchPort int, orchToken string, provider
 		out = append(out, k+"="+v)
 	}
 	return out
+}
+
+func ensureLocalNoProxy(m map[string]string) {
+	const local = "127.0.0.1,localhost,::1"
+	merged := appendNoProxy(m["NO_PROXY"], local)
+	if v := strings.TrimSpace(m["no_proxy"]); v != "" {
+		merged = appendNoProxy(merged, v)
+	}
+	m["NO_PROXY"] = merged
+	m["no_proxy"] = merged
+}
+
+func appendNoProxy(base, add string) string {
+	base = strings.TrimSpace(base)
+	add = strings.TrimSpace(add)
+	if base == "" {
+		return add
+	}
+	if add == "" {
+		return base
+	}
+	return base + "," + add
 }
 
 // utf8SafeProcess 处理跨 read() 的 UTF-8 多字节字符截断：
