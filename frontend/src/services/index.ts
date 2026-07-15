@@ -71,6 +71,12 @@ export {
   type ProviderInput,
 } from './provider/ProviderService';
 export {
+  AgentCfgService,
+  type AgentAppType,
+  type AgentProvider,
+  type AgentProviderInput,
+} from './agentcfg/AgentCfgService';
+export {
   SshMachineService,
   type SshMachine,
   type SshMachineInput,
