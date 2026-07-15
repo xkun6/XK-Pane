@@ -32,5 +32,23 @@ func (s *Service) ServiceStartup(ctx context.Context, options application.Servic
 			s.log.Warn("import default codex provider failed", "err", err)
 		}
 	}
+
+	var mcpCount int64
+	if err := s.db().WithContext(ctx).Model(&storage.AgentMcpServer{}).Count(&mcpCount).Error; err != nil {
+		s.log.Warn("count agent mcp servers failed", "err", err)
+	} else if mcpCount == 0 {
+		if _, err := s.ImportMcpFromLive(ctx); err != nil {
+			s.log.Warn("import mcp servers from live failed", "err", err)
+		}
+	}
+
+	var skillCount int64
+	if err := s.db().WithContext(ctx).Model(&storage.AgentSkill{}).Count(&skillCount).Error; err != nil {
+		s.log.Warn("count agent skills failed", "err", err)
+	} else if skillCount == 0 {
+		if _, err := s.ImportSkillsFromApps(ctx); err != nil {
+			s.log.Warn("import skills from apps failed", "err", err)
+		}
+	}
 	return nil
 }

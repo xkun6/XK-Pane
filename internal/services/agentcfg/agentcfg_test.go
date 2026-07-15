@@ -23,7 +23,8 @@ func newTestService(t *testing.T) *Service {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	svc := New(storage.NewHolder(db))
-	svc.home = t.TempDir() // 隔离真实 ~/.claude，测试专用主目录
+	svc.home = t.TempDir()    // 隔离真实 ~/.claude，测试专用主目录
+	svc.dataDir = t.TempDir() // 隔离真实应用数据目录，agent-skills SSOT 落在这里
 	return svc
 }
 
