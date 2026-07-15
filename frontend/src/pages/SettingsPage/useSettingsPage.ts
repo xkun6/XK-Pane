@@ -40,6 +40,16 @@ export const useSettingsPage = (): UseSettingsPageResult => {
         descriptionKey: 'settings.list.provider.description',
       },
       {
+        id: 'mcp',
+        labelKey: 'settings.list.mcp.label',
+        descriptionKey: 'settings.list.mcp.description',
+      },
+      {
+        id: 'skills',
+        labelKey: 'settings.list.skills.label',
+        descriptionKey: 'settings.list.skills.description',
+      },
+      {
         id: 'database',
         labelKey: 'settings.list.database.label',
         descriptionKey: 'settings.list.database.description',

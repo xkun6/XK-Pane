@@ -1,0 +1,110 @@
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  Switch,
+  TextField,
+  useTheme,
+} from '@mui/material';
+import { useT } from '@/i18n';
+import { mcpStyles } from './Mcp.styles';
+import type { JsonFieldError, McpDraft } from './useMcp';
+
+export interface McpFormDialogProps {
+  open: boolean;
+  editingId: string | null;
+  draft: McpDraft;
+  nameValid: boolean;
+  jsonError: JsonFieldError;
+  onFieldChange: <K extends keyof McpDraft>(key: K, value: McpDraft[K]) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}
+
+// 新增/编辑 MCP server 的对话框（View，无业务）：名称 + serverJson 编辑器 + 两个 CLI 启用开关。
+export const McpFormDialog = ({
+  open,
+  editingId,
+  draft,
+  nameValid,
+  jsonError,
+  onFieldChange,
+  onCancel,
+  onSubmit,
+}: McpFormDialogProps) => {
+  const theme = useTheme();
+  const styles = mcpStyles(theme);
+  const t = useT();
+
+  const jsonErrorHelper = (): string | undefined => {
+    if (jsonError === 'empty') return t('settings.mcp.form.jsonEmptyError');
+    if (jsonError === 'invalid') return t('settings.mcp.form.jsonInvalidError');
+    return undefined;
+  };
+
+  const nameTouched = draft.name.trim() !== '';
+  const canSave = nameValid && jsonError === '';
+
+  return (
+    <Dialog open={open} onClose={onCancel} maxWidth="sm" fullWidth>
+      <DialogTitle>
+        {editingId ? t('settings.mcp.form.editTitle') : t('settings.mcp.form.addTitle')}
+      </DialogTitle>
+      <DialogContent>
+        <TextField
+          label={t('settings.mcp.form.name')}
+          placeholder={t('settings.mcp.form.namePlaceholder')}
+          value={draft.name}
+          onChange={(e) => onFieldChange('name', e.target.value)}
+          fullWidth
+          size="small"
+          error={nameTouched && !nameValid}
+          helperText={nameTouched && !nameValid ? t('settings.mcp.form.nameError') : undefined}
+          sx={styles.formField}
+        />
+        <TextField
+          label={t('settings.mcp.form.serverJson')}
+          value={draft.serverJson}
+          onChange={(e) => onFieldChange('serverJson', e.target.value)}
+          multiline
+          minRows={10}
+          fullWidth
+          size="small"
+          error={jsonError !== ''}
+          helperText={jsonErrorHelper()}
+          sx={jsonError !== '' ? styles.editorError : styles.editor}
+        />
+        <FormControlLabel
+          sx={styles.formField}
+          control={
+            <Switch
+              checked={draft.enabledClaude}
+              onChange={(e) => onFieldChange('enabledClaude', e.target.checked)}
+            />
+          }
+          label={t('settings.mcp.form.enableClaude')}
+        />
+        <FormControlLabel
+          control={
+            <Switch
+              checked={draft.enabledCodex}
+              onChange={(e) => onFieldChange('enabledCodex', e.target.checked)}
+            />
+          }
+          label={t('settings.mcp.form.enableCodex')}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onCancel} sx={{ textTransform: 'none' }}>
+          {t('settings.mcp.form.cancel')}
+        </Button>
+        <Button onClick={onSubmit} variant="contained" disabled={!canSave} sx={{ textTransform: 'none' }}>
+          {t('settings.mcp.form.save')}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};

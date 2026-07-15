@@ -22,6 +22,14 @@ export const settingsPageZhCN: Messages = {
         label: '接入 Provider',
         description: '管理 CLI 启动用的 API 凭据与端点',
       },
+      mcp: {
+        label: 'MCP 管理',
+        description: '统一管理 MCP server 并投影到各 CLI',
+      },
+      skills: {
+        label: 'Skills 管理',
+        description: '统一管理 Skill 并投影到各 CLI',
+      },
       database: {
         label: '数据存储',
         description: '数据库位置与占用空间',

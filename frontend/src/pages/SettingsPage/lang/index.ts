@@ -6,6 +6,8 @@ import { registerLanguageLocales } from '../language';
 import { registerDatabaseLocales } from '../database';
 import { registerKnowledgeLocales } from '../knowledge';
 import { registerProviderSettingsLocales } from '../provider';
+import { registerMcpLocales } from '../mcp';
+import { registerSkillsLocales } from '../skills';
 import { registerWebAccessLocales } from '../webaccess';
 import { registerScreenshotLocales } from '../screenshot';
 import { registerBotbridgeLocales } from '../botbridge';
@@ -24,6 +26,8 @@ export const registerSettingsPageLocales = (): void => {
   registerDatabaseLocales();
   registerKnowledgeLocales();
   registerProviderSettingsLocales();
+  registerMcpLocales();
+  registerSkillsLocales();
   registerWebAccessLocales();
   registerBotbridgeLocales();
   registerScreenshotLocales();

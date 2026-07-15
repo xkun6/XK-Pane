@@ -19,6 +19,14 @@ export const settingsPageEnUS: Messages = {
         label: 'Providers',
         description: 'Manage API credentials and endpoints for launching CLIs',
       },
+      mcp: {
+        label: 'MCP management',
+        description: 'Manage MCP servers and project them to each CLI',
+      },
+      skills: {
+        label: 'Skills management',
+        description: 'Manage Skills and project them to each CLI',
+      },
       database: {
         label: 'Data storage',
         description: 'Database location and disk usage',

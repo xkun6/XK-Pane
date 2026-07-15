@@ -86,6 +86,18 @@ export const databaseEnUS: Messages = {
           label: 'Recent directories',
           description: 'Directories recently opened in the file browser — safe to rebuild.',
         },
+        agentProviders: {
+          label: 'CLI providers',
+          description: 'Full config snapshots for Claude Code / Codex etc. (including encrypted credentials). Not eligible for bulk clear.',
+        },
+        agentMcpServers: {
+          label: 'MCP servers',
+          description: 'MCP server definitions (SSOT), projected to each CLI via switches. Not eligible for bulk clear.',
+        },
+        agentSkills: {
+          label: 'Skills',
+          description: 'Skill metadata (SSOT), projected to each CLI via switches. Not eligible for bulk clear.',
+        },
       },
     },
   },

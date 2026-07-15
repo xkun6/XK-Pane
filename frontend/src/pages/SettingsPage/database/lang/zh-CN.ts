@@ -91,6 +91,18 @@ export const databaseZhCN: Messages = {
           label: '最近目录',
           description: '文件浏览器最近打开过的目录列表，可重建。',
         },
+        agentProviders: {
+          label: 'CLI 接入 Provider',
+          description: 'Claude Code / Codex 等 CLI 的全局配置整份存档（含加密凭据），不允许一键清空。',
+        },
+        agentMcpServers: {
+          label: 'MCP server',
+          description: 'MCP server 定义（SSOT），按开关投影到各 CLI，不允许一键清空。',
+        },
+        agentSkills: {
+          label: 'Skills',
+          description: 'Skill 元数据（SSOT），按开关投影到各 CLI，不允许一键清空。',
+        },
       },
     },
   },

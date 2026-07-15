@@ -75,6 +75,9 @@ export {
   type AgentAppType,
   type AgentProvider,
   type AgentProviderInput,
+  type AgentMcpServer,
+  type AgentMcpServerInput,
+  type AgentSkill,
 } from './agentcfg/AgentCfgService';
 export {
   SshMachineService,
