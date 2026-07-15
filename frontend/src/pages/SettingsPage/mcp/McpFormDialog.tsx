@@ -1,4 +1,5 @@
 import {
+  Box,
   Button,
   Dialog,
   DialogActions,
@@ -46,6 +47,8 @@ export const McpFormDialog = ({
   };
 
   const nameTouched = draft.name.trim() !== '';
+  const jsonTouched = draft.serverJson.trim() !== '';
+  const showJsonError = jsonTouched && jsonError !== '';
   const canSave = nameValid && jsonError === '';
 
   return (
@@ -73,29 +76,30 @@ export const McpFormDialog = ({
           minRows={10}
           fullWidth
           size="small"
-          error={jsonError !== ''}
-          helperText={jsonErrorHelper()}
-          sx={jsonError !== '' ? styles.editorError : styles.editor}
+          error={showJsonError}
+          helperText={showJsonError ? jsonErrorHelper() : undefined}
+          sx={showJsonError ? styles.editorError : styles.editor}
         />
-        <FormControlLabel
-          sx={styles.formField}
-          control={
-            <Switch
-              checked={draft.enabledClaude}
-              onChange={(e) => onFieldChange('enabledClaude', e.target.checked)}
-            />
-          }
-          label={t('settings.mcp.form.enableClaude')}
-        />
-        <FormControlLabel
-          control={
-            <Switch
-              checked={draft.enabledCodex}
-              onChange={(e) => onFieldChange('enabledCodex', e.target.checked)}
-            />
-          }
-          label={t('settings.mcp.form.enableCodex')}
-        />
+        <Box sx={styles.toggleRow}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={draft.enabledClaude}
+                onChange={(e) => onFieldChange('enabledClaude', e.target.checked)}
+              />
+            }
+            label={t('settings.mcp.form.enableClaude')}
+          />
+          <FormControlLabel
+            control={
+              <Switch
+                checked={draft.enabledCodex}
+                onChange={(e) => onFieldChange('enabledCodex', e.target.checked)}
+              />
+            }
+            label={t('settings.mcp.form.enableCodex')}
+          />
+        </Box>
       </DialogContent>
       <DialogActions>
         <Button onClick={onCancel} sx={{ textTransform: 'none' }}>
