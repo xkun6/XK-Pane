@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AgentCfgService, NativeDialogs, type AgentMcpServer, type AgentMcpServerInput } from '@/services';
+import { normalizeServerJson } from './mcpServerJson';
 
 // Mcp 子页面的 ViewModel：MCP server SSOT 的列表 + 增删改 + 逐 CLI 开关 + 从 live 导入。
 // 不返回 JSX、不持翻译串——提示文案由 View（持 t()）传入（MVVM 铁律）。
@@ -15,18 +16,7 @@ export interface McpDraft {
 
 const emptyDraft: McpDraft = { name: '', serverJson: '', enabledClaude: false, enabledCodex: false };
 
-export type JsonFieldError = '' | 'empty' | 'invalid';
-
-function jsonObjectError(raw: string): JsonFieldError {
-  const trimmed = raw.trim();
-  if (trimmed === '') return 'empty';
-  try {
-    const v: unknown = JSON.parse(trimmed);
-    return typeof v === 'object' && v !== null && !Array.isArray(v) ? '' : 'invalid';
-  } catch {
-    return 'invalid';
-  }
-}
+export type JsonFieldError = '' | 'empty' | 'invalid' | 'multiple';
 
 function draftFromServer(s: AgentMcpServer): McpDraft {
   let pretty = s.serverJson;
@@ -71,6 +61,7 @@ export interface UseMcpResult {
   openEdit: (s: AgentMcpServer) => void;
   cancel: () => void;
   setField: <K extends keyof McpDraft>(key: K, value: McpDraft[K]) => void;
+  formatJson: () => void;
   submit: (strings: ErrorStrings) => Promise<void>;
   remove: (s: AgentMcpServer, strings: RemoveStrings) => Promise<void>;
   toggleEnabled: (
@@ -117,14 +108,33 @@ export const useMcp = (): UseMcpResult => {
   const cancel = useCallback(() => setFormOpen(false), []);
 
   const setField = useCallback(<K extends keyof McpDraft>(key: K, value: McpDraft[K]) => {
+    if (key === 'serverJson') {
+      const result = normalizeServerJson(value as McpDraft['serverJson']);
+      if (result.kind === 'unwrapped') {
+        // 粘贴包裹层：编辑器内容保留原样，名称字段自动回填解出的 server 名
+        setDraft((prev) => ({ ...prev, serverJson: value as McpDraft['serverJson'], name: result.name }));
+        return;
+      }
+    }
     setDraft((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const formatJson = useCallback(() => {
+    setDraft((prev) => {
+      const result = normalizeServerJson(prev.serverJson);
+      if (result.kind === 'bare') return { ...prev, serverJson: result.json };
+      if (result.kind === 'unwrapped') return { ...prev, serverJson: result.json, name: result.name };
+      return prev;
+    });
   }, []);
 
   const submit = useCallback(
     async (strings: ErrorStrings): Promise<void> => {
+      const result = normalizeServerJson(draft.serverJson);
+      if (result.kind !== 'bare' && result.kind !== 'unwrapped') return;
       const input: AgentMcpServerInput = {
         name: draft.name,
-        serverJson: draft.serverJson.trim(),
+        serverJson: result.json,
         enabledClaude: draft.enabledClaude,
         enabledCodex: draft.enabledCodex,
       };
@@ -198,6 +208,10 @@ export const useMcp = (): UseMcpResult => {
     [refresh],
   );
 
+  const jsonResult = normalizeServerJson(draft.serverJson);
+  const jsonError: JsonFieldError =
+    jsonResult.kind === 'bare' || jsonResult.kind === 'unwrapped' ? '' : jsonResult.kind;
+
   return {
     servers,
     loading,
@@ -205,11 +219,12 @@ export const useMcp = (): UseMcpResult => {
     editingId,
     draft,
     nameValid: NAME_PATTERN.test(draft.name),
-    jsonError: jsonObjectError(draft.serverJson),
+    jsonError,
     openAdd,
     openEdit,
     cancel,
     setField,
+    formatJson,
     submit,
     remove,
     toggleEnabled,

@@ -20,6 +20,7 @@ interface McpSx {
   toggleRow: S;
   editor: S;
   editorError: S;
+  formatRow: S;
 }
 
 export const mcpStyles = (theme: Theme): McpSx => {
@@ -86,5 +87,6 @@ export const mcpStyles = (theme: Theme): McpSx => {
       },
       '& .MuiOutlinedInput-notchedOutline': { borderColor: fp.status.danger },
     },
+    formatRow: { mt: 1, display: 'flex', justifyContent: 'flex-end' },
   };
 };

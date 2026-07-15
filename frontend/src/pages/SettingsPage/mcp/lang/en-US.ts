@@ -34,8 +34,12 @@ export const mcpEnUS: Messages = {
         namePlaceholder: 'e.g. filesystem',
         nameError: 'Letters, digits, dot, underscore, hyphen only, and non-empty',
         serverJson: 'Server definition JSON',
+        serverJsonPlaceholder:
+          '{"type": "sse", "url": "http://..."}; pasting {"servers": {...}} / {"mcpServers": {...}} snippets is supported',
         jsonEmptyError: 'Cannot be empty',
         jsonInvalidError: 'Not a valid JSON object',
+        jsonMultipleError: 'Multiple server definitions detected; add one at a time',
+        format: 'Format JSON',
         enableClaude: 'Enable for Claude Code',
         enableCodex: 'Enable for Codex',
         save: 'Save',

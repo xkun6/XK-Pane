@@ -143,6 +143,7 @@ export const Mcp = () => {
         nameValid={vm.nameValid}
         jsonError={vm.jsonError}
         onFieldChange={vm.setField}
+        onFormat={vm.formatJson}
         onCancel={vm.cancel}
         onSubmit={handleSubmit}
       />

@@ -34,8 +34,12 @@ export const mcpZhCN: Messages = {
         namePlaceholder: '例如：filesystem',
         nameError: '仅允许字母、数字、点、下划线、连字符，且非空',
         serverJson: 'Server 定义 JSON',
+        serverJsonPlaceholder:
+          '{"type": "sse", "url": "http://..."}，支持直接粘贴 {"servers": {...}} / {"mcpServers": {...}} 片段',
         jsonEmptyError: '不能为空',
         jsonInvalidError: '不是合法的 JSON 对象',
+        jsonMultipleError: '检测到多个 server 定义，请一次只添加一个',
+        format: '格式化 JSON',
         enableClaude: '启用于 Claude Code',
         enableCodex: '启用于 Codex',
         save: '保存',
