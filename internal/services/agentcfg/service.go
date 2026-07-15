@@ -50,5 +50,11 @@ func (s *Service) ServiceStartup(ctx context.Context, options application.Servic
 			s.log.Warn("import skills from apps failed", "err", err)
 		}
 	}
+
+	// 一次性迁移：旧 internal/services/provider 里 claude/codex 相关类型迁移成 agentcfg
+	// Provider（见 migrate_legacy.go）。放在以上导入步骤之后，与其它步骤同一容错模式。
+	if err := s.migrateLegacyProviders(ctx); err != nil {
+		s.log.Warn("migrate legacy providers failed", "err", err)
+	}
 	return nil
 }

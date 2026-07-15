@@ -56,8 +56,13 @@ func ResolveLaunchEnv(ctx context.Context, db *gorm.DB, id string) (map[string]s
 }
 
 // envVarsFor 是纯映射：解密后的 provider → 启动 env（每变量仅源字段非空才写）。
-// codex 易错点：open_ai(codex)→CODEX_API_KEY（非 OPENAI_API_KEY）；opencode→OPENAI_API_KEY。
-// config_profile 仅 dir-mode（CLAUDE_CONFIG_DIR）；file-mode（ccswitch JSON env{}）延后。
+// codex 易错点：opencode→OPENAI_API_KEY。
+//
+// claude/codex 相关类型（anthropic/proxy/bedrock/vertex/config_profile/open_ai）已迁移至
+// agentcfg（cc-switch 式全局配置 Provider，直写 ~/.claude/settings.json 或
+// ~/.codex/config.toml+auth.json，见 internal/services/agentcfg/migrate_legacy.go）并从本
+// switch 退场；未命中下面任何 case 的类型（含这些历史类型）与「未知类型」同等对待——返回空
+// map、不报错，stale 的 LaunchHistory/workspace.providerId 引用不该炸启动。
 func envVarsFor(p *storage.Provider) map[string]string {
 	out := map[string]string{}
 	if p == nil {
@@ -69,22 +74,6 @@ func envVarsFor(p *storage.Provider) map[string]string {
 		}
 	}
 	switch p.ProviderType {
-	case "anthropic", "proxy":
-		set("ANTHROPIC_API_KEY", p.APIKey)
-		set("ANTHROPIC_BASE_URL", p.BaseURL)
-	case "bedrock":
-		out["CLAUDE_CODE_USE_BEDROCK"] = "1"
-		set("AWS_REGION", p.Region)
-		set("AWS_PROFILE", p.AWSProfile)
-	case "vertex":
-		out["CLAUDE_CODE_USE_VERTEX"] = "1"
-		set("CLOUD_ML_REGION", p.Region)
-		set("ANTHROPIC_VERTEX_PROJECT_ID", p.ProjectID)
-	case "config_profile":
-		set("CLAUDE_CONFIG_DIR", p.ConfigDir) // 仅 dir-mode；file-mode 延后
-	case "open_ai":
-		set("CODEX_API_KEY", p.APIKey) // codex 用 CODEX_API_KEY，非 OPENAI_API_KEY
-		set("OPENAI_BASE_URL", p.BaseURL)
 	case "gemini":
 		set("GEMINI_API_KEY", p.APIKey)
 		set("GEMINI_API_BASE", p.BaseURL)

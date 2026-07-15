@@ -36,7 +36,7 @@ func init() {
 type Provider struct {
 	ID           string `gorm:"primaryKey;size:36" json:"id"`
 	Name         string `gorm:"type:text;not null" json:"name"`
-	ProviderType string `gorm:"type:text;not null;default:'anthropic'" json:"providerType"` // snake_case: anthropic|bedrock|vertex|proxy|config_profile|open_ai|gemini|kimi|glm|cursor|opencode
+	ProviderType string `gorm:"type:text;not null;default:'anthropic'" json:"providerType"` // snake_case，现役可写入类型: gemini|kimi|glm|cursor|opencode（provider.Service 白名单）；anthropic|proxy|bedrock|vertex|open_ai 已一次性迁移至 agentcfg 并从本表删除（见 internal/services/agentcfg/migrate_legacy.go）；config_profile 无法用全局配置表达，历史行原地保留但永久休眠（对 List 不可见，Get/Remove/SetDefault 仍可操作）
 	APIKey       string `gorm:"type:text;column:api_key" json:"-"`                          // 密文（cryptox）；json:"-" 防意外序列化；"" = 未设
 	BaseURL      string `gorm:"type:text;column:base_url" json:"baseUrl,omitempty"`
 	Region       string `gorm:"type:text" json:"region,omitempty"`

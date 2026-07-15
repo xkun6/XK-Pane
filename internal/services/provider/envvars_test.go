@@ -3,6 +3,9 @@ package provider
 import (
 	"context"
 	"testing"
+
+	"xkpane/internal/storage"
+	"xkpane/internal/utils/cryptox"
 )
 
 // ResolveLaunchEnv：一次加载返回 Tier-A env + Tier-B cli provider（含解密明文 key）。
@@ -57,55 +60,46 @@ func TestEnvVarsUnknownId(t *testing.T) {
 	}
 }
 
-// 加密落库 → ResolveLaunchEnv 解密注入 的完整往返：apiKey 值应是明文。
-func TestEnvVarsAnthropicDecryptsKey(t *testing.T) {
-	svc := newTestService(t)
-	const key = "sk-ant-secret"
-	dto := mustAdd(t, svc, ProviderInput{
-		Name: "a", ProviderType: "anthropic", APIKey: key, BaseURL: "https://api.example.com",
-	})
-	m, _, err := ResolveLaunchEnv(context.Background(), svc.db(), dto.ID)
+// insertRawProvider 绕过 Service.Add 的类型白名单，直接向 providers 表插入一行（APIKey 走
+// cryptox 加密，模拟历史遗留数据——升级前的老用户 / 迁移失败兜底残留）。claude/codex 相关旧
+// 类型现已被 Add 拒绝新增（见 provider_test.go 的 TestAddRejectsLegacyClaudeCodexTypes），
+// 只能这样构造出对应的行来验证运行期兜底行为。
+func insertRawProvider(t *testing.T, svc *Service, p storage.Provider) {
+	t.Helper()
+	enc, err := cryptox.EncryptString(p.APIKey)
 	if err != nil {
-		t.Fatalf("ResolveLaunchEnv: %v", err)
+		t.Fatalf("cryptox.EncryptString: %v", err)
 	}
-	if m["ANTHROPIC_API_KEY"] != key {
-		t.Errorf("ANTHROPIC_API_KEY = %q, want decrypted %q", m["ANTHROPIC_API_KEY"], key)
-	}
-	if m["ANTHROPIC_BASE_URL"] != "https://api.example.com" {
-		t.Errorf("ANTHROPIC_BASE_URL = %q", m["ANTHROPIC_BASE_URL"])
+	p.APIKey = enc
+	if err := svc.db().Create(&p).Error; err != nil {
+		t.Fatalf("insert raw provider: %v", err)
 	}
 }
 
-func TestEnvVarsBedrockNoKey(t *testing.T) {
+// claude/codex 相关旧类型（anthropic/proxy/bedrock/vertex/config_profile/open_ai）已从
+// envVarsFor 退场，与「未知类型」同等对待：ResolveLaunchEnv 必须返回空 env、不报错——stale 的
+// LaunchHistory/workspace.providerId 引用不该炸启动。
+func TestEnvVarsLegacyTypesYieldEmptyEnv(t *testing.T) {
 	svc := newTestService(t)
-	dto := mustAdd(t, svc, ProviderInput{
-		Name: "b", ProviderType: "bedrock", Region: "us-east-1", AWSProfile: "prod",
-	})
-	m, _, _ := ResolveLaunchEnv(context.Background(), svc.db(), dto.ID)
-	if m["CLAUDE_CODE_USE_BEDROCK"] != "1" {
-		t.Errorf("CLAUDE_CODE_USE_BEDROCK = %q, want 1", m["CLAUDE_CODE_USE_BEDROCK"])
+	cases := []storage.Provider{
+		{ID: "legacy-anthropic", Name: "a", ProviderType: "anthropic", APIKey: "sk-ant", BaseURL: "https://api.example.com"},
+		{ID: "legacy-proxy", Name: "p", ProviderType: "proxy", APIKey: "sk-proxy", BaseURL: "https://proxy.example.com"},
+		{ID: "legacy-bedrock", Name: "b", ProviderType: "bedrock", Region: "us-east-1", AWSProfile: "prod"},
+		{ID: "legacy-vertex", Name: "v", ProviderType: "vertex", Region: "us-central1", ProjectID: "proj"},
+		{ID: "legacy-config-profile", Name: "c", ProviderType: "config_profile", ConfigDir: "/tmp/dir"},
+		{ID: "legacy-openai", Name: "o", ProviderType: "open_ai", APIKey: "k", BaseURL: "u"},
 	}
-	if m["AWS_REGION"] != "us-east-1" || m["AWS_PROFILE"] != "prod" {
-		t.Errorf("bedrock env wrong: %v", m)
+	for _, c := range cases {
+		insertRawProvider(t, svc, c)
 	}
-	if _, ok := m["ANTHROPIC_API_KEY"]; ok {
-		t.Error("bedrock should not set ANTHROPIC_API_KEY")
-	}
-}
-
-// codex 易错点：open_ai → CODEX_API_KEY（非 OPENAI_API_KEY）。
-func TestEnvVarsOpenAIUsesCodexKey(t *testing.T) {
-	svc := newTestService(t)
-	dto := mustAdd(t, svc, ProviderInput{Name: "x", ProviderType: "open_ai", APIKey: "k", BaseURL: "u"})
-	m, _, _ := ResolveLaunchEnv(context.Background(), svc.db(), dto.ID)
-	if m["CODEX_API_KEY"] != "k" {
-		t.Errorf("open_ai must set CODEX_API_KEY=k, got %v", m)
-	}
-	if _, ok := m["OPENAI_API_KEY"]; ok {
-		t.Error("open_ai must NOT set OPENAI_API_KEY (that's opencode)")
-	}
-	if m["OPENAI_BASE_URL"] != "u" {
-		t.Errorf("OPENAI_BASE_URL = %q", m["OPENAI_BASE_URL"])
+	for _, c := range cases {
+		env, _, err := ResolveLaunchEnv(context.Background(), svc.db(), c.ID)
+		if err != nil {
+			t.Fatalf("ResolveLaunchEnv(%s): %v", c.ProviderType, err)
+		}
+		if len(env) != 0 {
+			t.Errorf("providerType %q should yield empty env, got %v", c.ProviderType, env)
+		}
 	}
 }
 
@@ -130,12 +124,12 @@ func TestEnvVarsGlm(t *testing.T) {
 // 空源字段不写入对应变量（faithful：仅 Some 才插入）。
 func TestEnvVarsOmitsEmptyBaseUrl(t *testing.T) {
 	svc := newTestService(t)
-	dto := mustAdd(t, svc, ProviderInput{Name: "a", ProviderType: "anthropic", APIKey: "k"})
+	dto := mustAdd(t, svc, ProviderInput{Name: "k", ProviderType: "kimi", APIKey: "k"})
 	m, _, _ := ResolveLaunchEnv(context.Background(), svc.db(), dto.ID)
-	if _, ok := m["ANTHROPIC_BASE_URL"]; ok {
-		t.Error("empty baseUrl should not set ANTHROPIC_BASE_URL")
+	if _, ok := m["KIMI_BASE_URL"]; ok {
+		t.Error("empty baseUrl should not set KIMI_BASE_URL")
 	}
-	if m["ANTHROPIC_API_KEY"] != "k" {
-		t.Errorf("ANTHROPIC_API_KEY = %q", m["ANTHROPIC_API_KEY"])
+	if m["KIMI_API_KEY"] != "k" {
+		t.Errorf("KIMI_API_KEY = %q", m["KIMI_API_KEY"])
 	}
 }

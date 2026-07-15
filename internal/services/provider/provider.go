@@ -20,6 +20,7 @@ package provider
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"xkpane/internal/storage"
 	"xkpane/internal/utils/cryptox"
@@ -92,9 +93,33 @@ func providerTypeOrDefault(t string) string {
 	return t
 }
 
+// validProviderTypes 是 Add/Update 允许写入的 provider 类型白名单——本服务现只管理「非
+// claude/codex 的 CLI 类型」，claude/codex 已迁移到 agentcfg（cc-switch 式全局配置 Provider，
+// 见 internal/services/agentcfg）。历史类型 anthropic/proxy/bedrock/vertex/open_ai 已一次性
+// 迁移过去并从本表删除（agentcfg.migrateLegacyProviders）；config_profile 无法用「整份 live
+// 配置文件」的全局配置模型表达，旧行原地保留但永久休眠（List 不再返回，仅 Get/Remove/SetDefault
+// 仍可操作，避免僵尸行永远删不掉）。
+var validProviderTypes = map[string]bool{
+	"gemini":   true,
+	"kimi":     true,
+	"glm":      true,
+	"cursor":   true,
+	"opencode": true,
+}
+
+// validateProviderType 拒绝白名单外类型，给出明确中文错误引导用户改用正确入口。
+func validateProviderType(t string) error {
+	if validProviderTypes[t] {
+		return nil
+	}
+	return fmt.Errorf("provider 类型 %q 已不支持新增/修改：Claude/Codex 请使用设置页的全局配置 Provider", t)
+}
+
 // List 返回全部 provider（脱敏），按插入序（SQLite 隐式 rowid）——确定性，且与
 // cc-pane providers[] 数组（Vec 插入序）一致。不用 created_at：同 tick 多次 Add 的
 // 时间戳会撞，字典序非确定（同 storage UTC 修复处的教训）。空→非 nil []。
+// 只返回 validProviderTypes 白名单内的行——历史 claude/codex 类型已迁移删除、config_profile
+// 永久休眠，均不出现在这里（但 Get/Remove/SetDefault 仍可直接按 id 操作这些行）。
 func (s *Service) List(ctx context.Context) ([]ProviderDTO, error) {
 	var rows []storage.Provider
 	if err := s.db().WithContext(ctx).Order("rowid").Find(&rows).Error; err != nil {
@@ -102,6 +127,9 @@ func (s *Service) List(ctx context.Context) ([]ProviderDTO, error) {
 	}
 	out := make([]ProviderDTO, 0, len(rows))
 	for _, p := range rows {
+		if !validProviderTypes[p.ProviderType] {
+			continue // 休眠类型（历史 claude/codex 类型已迁移删除；config_profile 永久休眠）对 List 不可见
+		}
 		out = append(out, toDTO(p))
 	}
 	return out, nil
@@ -124,6 +152,10 @@ func (s *Service) Get(ctx context.Context, id string) (*ProviderDTO, error) {
 // Add 新增一个 provider（服务端生成 id），返回脱敏记录。默认标志不变式：
 // 表空→强制为默认；输入 isDefault=true→先清其它默认。apiKey 明文经 cryptox 加密落库。
 func (s *Service) Add(ctx context.Context, in ProviderInput) (ProviderDTO, error) {
+	providerType := providerTypeOrDefault(in.ProviderType)
+	if err := validateProviderType(providerType); err != nil {
+		return ProviderDTO{}, err
+	}
 	enc, err := cryptox.EncryptString(in.APIKey)
 	if err != nil {
 		return ProviderDTO{}, err
@@ -131,7 +163,7 @@ func (s *Service) Add(ctx context.Context, in ProviderInput) (ProviderDTO, error
 	p := storage.Provider{
 		ID:           uuid.NewString(),
 		Name:         in.Name,
-		ProviderType: providerTypeOrDefault(in.ProviderType),
+		ProviderType: providerType,
 		APIKey:       enc,
 		BaseURL:      in.BaseURL,
 		Region:       in.Region,
@@ -164,9 +196,13 @@ func (s *Service) Add(ctx context.Context, in ProviderInput) (ProviderDTO, error
 // Update 修改一个 provider（patch）。apiKey 为空则保留原密钥；不动 is_default。
 // 无匹配行报错。
 func (s *Service) Update(ctx context.Context, id string, in ProviderInput) error {
+	providerType := providerTypeOrDefault(in.ProviderType)
+	if err := validateProviderType(providerType); err != nil {
+		return err
+	}
 	updates := map[string]any{
 		"name":          in.Name,
-		"provider_type": providerTypeOrDefault(in.ProviderType),
+		"provider_type": providerType,
 		"base_url":      in.BaseURL,
 		"region":        in.Region,
 		"project_id":    in.ProjectID,
