@@ -20,7 +20,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { Terminal, type ITheme } from '@xterm/xterm';
-import { ScreenshotService, TerminalService, attachSessionOutput } from '@/services';
+import { ClipboardService, ScreenshotService, TerminalService, attachSessionOutput } from '@/services';
 import { isDesktop, lifecycleRole } from '@/services/transport';
 import { isMac, isWindows } from '@/shared/platform';
 import {
@@ -41,6 +41,7 @@ import {
   stripAlternateBufferSequences,
 } from './compat/terminalBufferMode';
 import { formatPastedPaths } from './compat/terminalClipboardPaste';
+import { parseOsc52ClipboardText } from './compat/terminalClipboardWrite';
 import { isTerminalCopyShortcut, isTerminalPasteShortcut } from './compat/terminalKeyboard';
 import {
   createTerminalWriteFlowControl,
@@ -244,6 +245,12 @@ export function useTerminalView({
       term.parser.registerOscHandler(4, (data) => oscReply(4, data)),
       term.parser.registerOscHandler(10, (data) => oscReply(10, data)),
       term.parser.registerOscHandler(11, (data) => oscReply(11, data)),
+      term.parser.registerOscHandler(52, (data) => {
+        const text = parseOsc52ClipboardText(data);
+        if (text === null) return false;
+        if (lifecycleRole === 'owner') void ClipboardService.writeText(text).catch(() => {});
+        return true;
+      }),
     ];
 
     // 写入流控：Windows 上启用 watermark（高吞吐输出防卡 webview 主线程）。

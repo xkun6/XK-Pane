@@ -6,6 +6,13 @@ import { Clipboard } from '@wailsio/runtime';
 import { isDesktop } from '@/services/transport';
 
 export const ClipboardService = {
+  // 写剪贴板文本（桌面端走 Wails 原生 Clipboard，避开 WebView Clipboard API 权限/焦点限制）。
+  async writeText(text: string): Promise<boolean> {
+    if (!isDesktop) return false;
+    await Clipboard.SetText(text);
+    return true;
+  },
+
   // 读剪贴板文本（无文本或非桌面端返回空串）。
   async readText(): Promise<string> {
     if (!isDesktop) return '';
