@@ -21,6 +21,7 @@ import (
 	"xkpane/internal/services/botbridge"
 	"xkpane/internal/services/cliadapters"
 	"xkpane/internal/services/clitools"
+	"xkpane/internal/services/cliupdate"
 	"xkpane/internal/services/file"
 	"xkpane/internal/services/filewatch"
 	"xkpane/internal/services/gitsvc"
@@ -206,6 +207,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(tbSvc),   // 编排任务绑定 CRUD（结合 ccpane；orchestrator 复用同实例）
 			application.NewService(provider.New(holder)),
 			application.NewService(agentcfg.New(holder)),   // cc-switch 式全局配置 Provider（整份 CLI 配置文件切换）
+			application.NewService(cliupdate.New()),        // CLI 工具版本检测与一键升级（Provider 页 Claude/Codex 标签）
 			application.NewService(sshmachine.New(holder)), // SSH 机器管理（CRUD + cryptox 密码 + 连通测试），同 provider 档
 			application.NewService(gitSvc),
 			application.NewService(lhSvc),

@@ -8,6 +8,25 @@ export const providerSettingsEnUS: Messages = {
         codex: 'Codex',
         other: 'Other CLIs',
       },
+      // CLI version bar (top of the Claude Code / Codex tabs, borrowed from cc-switch's local environment check).
+      cliUpdate: {
+        name: {
+          claude: 'Claude Code CLI',
+          codex: 'Codex CLI',
+        },
+        checking: 'Checking version…',
+        notInstalled: 'Not installed',
+        upToDate: 'Up to date',
+        updateAvailable: 'Update available',
+        versionLine: 'Current v{{current}} · Latest v{{latest}}',
+        versionUnknown: 'Unknown',
+        upgrade: 'Upgrade',
+        refresh: 'Recheck',
+        doneTitle: 'Upgrade complete',
+        doneMessage: 'Upgraded to v{{version}}',
+        warnTitle: 'Upgrade result needs review',
+        failTitle: 'Upgrade failed',
+      },
       // cc-switch style global config Provider (shared by the Claude Code / Codex tabs).
       global: {
         add: 'Add',

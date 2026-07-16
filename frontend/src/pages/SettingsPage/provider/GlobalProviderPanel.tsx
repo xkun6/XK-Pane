@@ -10,6 +10,7 @@ import type { AgentAppType, AgentProvider } from '@/services';
 import { extractBaseUrlHint } from './agentProviderDisplay';
 import { globalProviderPanelStyles } from './GlobalProviderPanel.styles';
 import { GlobalProviderFormDialog } from './GlobalProviderFormDialog';
+import { CliVersionBar } from './CliVersionBar';
 import { useGlobalProviderPanel, type ClaudeTemplateId } from './useGlobalProviderPanel';
 
 export interface GlobalProviderPanelProps {
@@ -55,6 +56,7 @@ export const GlobalProviderPanel = ({ appType }: GlobalProviderPanelProps) => {
 
   return (
     <Box sx={styles.root}>
+      <CliVersionBar appType={appType} />
       <Box sx={styles.toolbar}>
         <Button
           size="small"

@@ -8,6 +8,25 @@ export const providerSettingsZhCN: Messages = {
         codex: 'Codex',
         other: '其它 CLI',
       },
+      // CLI 版本条（Claude Code / Codex 两标签顶部，借鉴 cc-switch 的本地环境检查）。
+      cliUpdate: {
+        name: {
+          claude: 'Claude Code CLI',
+          codex: 'Codex CLI',
+        },
+        checking: '检测版本中…',
+        notInstalled: '未安装',
+        upToDate: '已是最新',
+        updateAvailable: '可升级',
+        versionLine: '当前 v{{current}} · 最新 v{{latest}}',
+        versionUnknown: '版本未知',
+        upgrade: '升级',
+        refresh: '重新检测',
+        doneTitle: '升级完成',
+        doneMessage: '已升级到 v{{version}}',
+        warnTitle: '升级结果需要确认',
+        failTitle: '升级失败',
+      },
       // cc-switch 式全局配置 Provider（Claude Code / Codex 两标签共用）。
       global: {
         add: '新增',

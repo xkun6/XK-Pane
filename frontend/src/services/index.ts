@@ -136,6 +136,11 @@ export {
   type TokenWindow,
 } from './agentusage/AgentUsageService';
 export {
+  CliUpdateService,
+  type CliToolStatus,
+  type CliUpgradeResult,
+} from './cliupdate/CliUpdateService';
+export {
   TranscriptService,
   type Timeline,
   type TimelineEvent,
