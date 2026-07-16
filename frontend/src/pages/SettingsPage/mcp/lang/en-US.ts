@@ -39,7 +39,6 @@ export const mcpEnUS: Messages = {
         jsonEmptyError: 'Cannot be empty',
         jsonInvalidError: 'Not a valid JSON object',
         jsonMultipleError: 'Multiple server definitions detected; add one at a time',
-        format: 'Format JSON',
         enableClaude: 'Enable for Claude Code',
         enableCodex: 'Enable for Codex',
         save: 'Save',

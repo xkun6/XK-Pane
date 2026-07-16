@@ -39,7 +39,6 @@ export const mcpZhCN: Messages = {
         jsonEmptyError: '不能为空',
         jsonInvalidError: '不是合法的 JSON 对象',
         jsonMultipleError: '检测到多个 server 定义，请一次只添加一个',
-        format: '格式化 JSON',
         enableClaude: '启用于 Claude Code',
         enableCodex: '启用于 Codex',
         save: '保存',

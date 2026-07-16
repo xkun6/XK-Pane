@@ -20,8 +20,6 @@ interface GlobalProviderPanelSx {
   rowActions: S;
   bottomHint: S;
   formField: S;
-  editor: S;
-  editorError: S;
   currentEditWarning: S;
 }
 
@@ -89,21 +87,6 @@ export const globalProviderPanelStyles = (theme: Theme): GlobalProviderPanelSx =
     rowActions: { display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 },
     bottomHint: { fontSize: 12, color: fp.text.muted, lineHeight: 1.6 },
     formField: { mt: 2 },
-    editor: {
-      mt: 2,
-      '& .MuiInputBase-input': {
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: 12.5,
-      },
-    },
-    editorError: {
-      mt: 2,
-      '& .MuiInputBase-input': {
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: 12.5,
-      },
-      '& .MuiOutlinedInput-notchedOutline': { borderColor: fp.status.danger },
-    },
     currentEditWarning: {
       mt: 2,
       px: 1.5,

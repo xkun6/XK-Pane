@@ -68,6 +68,10 @@ export const enUS: Locale = {
       save: 'Save',
       cancel: 'Cancel',
       loading: 'Loading…',
+      jsonEditor: {
+        format: 'Format',
+        markerAt: 'Line {{line}}, col {{column}}: ',
+      },
     },
   },
 };

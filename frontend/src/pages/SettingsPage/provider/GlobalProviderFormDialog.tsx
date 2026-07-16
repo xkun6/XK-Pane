@@ -11,6 +11,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { useT } from '@/i18n';
+import { JsonEditorField } from '@/components/JsonEditorField';
 import type { AgentAppType } from '@/services';
 import type { JsonFieldError } from './agentProviderJson';
 import { globalProviderPanelStyles } from './GlobalProviderPanel.styles';
@@ -66,7 +67,7 @@ export const GlobalProviderFormDialog = ({
     draft.name.trim() !== '' && (appType === 'claude' ? claudeJsonError === '' : codexAuthJsonError === '');
 
   return (
-    <Dialog open={open} onClose={onCancel} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onCancel} maxWidth="md" fullWidth>
       <DialogTitle>
         {editingId
           ? t('settings.provider.global.form.editTitle', { app: appLabel })
@@ -119,42 +120,32 @@ export const GlobalProviderFormDialog = ({
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
+            <JsonEditorField
               label={t('settings.provider.global.form.settingsJson')}
               value={draft.claudeJson}
-              onChange={(e) => onFieldChange('claudeJson', e.target.value)}
-              multiline
-              minRows={12}
-              fullWidth
-              size="small"
+              onChange={(v) => onFieldChange('claudeJson', v)}
+              height={320}
               error={claudeJsonError !== ''}
               helperText={jsonErrorHelper(claudeJsonError)}
-              sx={claudeJsonError !== '' ? styles.editorError : styles.editor}
             />
           </>
         ) : (
           <>
-            <TextField
+            <JsonEditorField
               label={t('settings.provider.global.form.authJson')}
               value={draft.codexAuthJson}
-              onChange={(e) => onFieldChange('codexAuthJson', e.target.value)}
-              multiline
-              minRows={6}
-              fullWidth
-              size="small"
+              onChange={(v) => onFieldChange('codexAuthJson', v)}
+              height={180}
               error={codexAuthJsonError !== ''}
               helperText={jsonErrorHelper(codexAuthJsonError) ?? t('settings.provider.global.form.authJsonHelper')}
-              sx={codexAuthJsonError !== '' ? styles.editorError : styles.editor}
             />
-            <TextField
+            <JsonEditorField
               label={t('settings.provider.global.form.configToml')}
               value={draft.codexConfigToml}
-              onChange={(e) => onFieldChange('codexConfigToml', e.target.value)}
-              multiline
-              minRows={10}
-              fullWidth
-              size="small"
-              sx={styles.editor}
+              onChange={(v) => onFieldChange('codexConfigToml', v)}
+              height={260}
+              language="ini"
+              helperText={t('settings.provider.global.form.configTomlHelper')}
             />
           </>
         )}

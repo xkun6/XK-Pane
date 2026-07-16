@@ -18,9 +18,6 @@ interface McpSx {
   rowActions: S;
   formField: S;
   toggleRow: S;
-  editor: S;
-  editorError: S;
-  formatRow: S;
 }
 
 export const mcpStyles = (theme: Theme): McpSx => {
@@ -72,21 +69,5 @@ export const mcpStyles = (theme: Theme): McpSx => {
     rowActions: { display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 },
     formField: { mt: 2 },
     toggleRow: { mt: 2, display: 'flex', alignItems: 'center', gap: 2 },
-    editor: {
-      mt: 2,
-      '& .MuiInputBase-input': {
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: 12.5,
-      },
-    },
-    editorError: {
-      mt: 2,
-      '& .MuiInputBase-input': {
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: 12.5,
-      },
-      '& .MuiOutlinedInput-notchedOutline': { borderColor: fp.status.danger },
-    },
-    formatRow: { mt: 1, display: 'flex', justifyContent: 'flex-end' },
   };
 };

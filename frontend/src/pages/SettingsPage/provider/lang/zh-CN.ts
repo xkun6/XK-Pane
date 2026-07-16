@@ -57,6 +57,7 @@ export const providerSettingsZhCN: Messages = {
           authJson: 'auth.json（登录态，可选）',
           authJsonHelper: '留空 = 不管理登录态（切换到该 Provider 时不会改动 auth.json）',
           configToml: 'config.toml',
+          configTomlHelper: 'TOML 格式；保存时由后端校验合法性',
           save: '保存',
           cancel: '取消',
         },

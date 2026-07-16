@@ -10,8 +10,8 @@ import {
   TextField,
   useTheme,
 } from '@mui/material';
-import DataObjectRoundedIcon from '@mui/icons-material/DataObjectRounded';
 import { useT } from '@/i18n';
+import { JsonEditorField } from '@/components/JsonEditorField';
 import { mcpStyles } from './Mcp.styles';
 import type { JsonFieldError, McpDraft } from './useMcp';
 
@@ -56,7 +56,7 @@ export const McpFormDialog = ({
   const canSave = nameValid && jsonError === '';
 
   return (
-    <Dialog open={open} onClose={onCancel} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onCancel} maxWidth="md" fullWidth>
       <DialogTitle>
         {editingId ? t('settings.mcp.form.editTitle') : t('settings.mcp.form.addTitle')}
       </DialogTitle>
@@ -72,29 +72,16 @@ export const McpFormDialog = ({
           helperText={nameTouched && !nameValid ? t('settings.mcp.form.nameError') : undefined}
           sx={styles.formField}
         />
-        <TextField
+        <JsonEditorField
           label={t('settings.mcp.form.serverJson')}
           placeholder={t('settings.mcp.form.serverJsonPlaceholder')}
           value={draft.serverJson}
-          onChange={(e) => onFieldChange('serverJson', e.target.value)}
-          multiline
-          minRows={10}
-          fullWidth
-          size="small"
+          onChange={(v) => onFieldChange('serverJson', v)}
+          height={280}
           error={showJsonError}
           helperText={showJsonError ? jsonErrorHelper() : undefined}
-          sx={showJsonError ? styles.editorError : styles.editor}
+          onFormat={onFormat}
         />
-        <Box sx={styles.formatRow}>
-          <Button
-            size="small"
-            onClick={onFormat}
-            startIcon={<DataObjectRoundedIcon fontSize="small" />}
-            sx={{ textTransform: 'none' }}
-          >
-            {t('settings.mcp.form.format')}
-          </Button>
-        </Box>
         <Box sx={styles.toggleRow}>
           <FormControlLabel
             control={

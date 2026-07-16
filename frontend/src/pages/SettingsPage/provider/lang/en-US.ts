@@ -57,6 +57,7 @@ export const providerSettingsEnUS: Messages = {
           authJson: 'auth.json (login state, optional)',
           authJsonHelper: 'Leave blank = do not manage login state (switching to this provider will not touch auth.json)',
           configToml: 'config.toml',
+          configTomlHelper: 'TOML format; validity is checked by the backend on save.',
           save: 'Save',
           cancel: 'Cancel',
         },

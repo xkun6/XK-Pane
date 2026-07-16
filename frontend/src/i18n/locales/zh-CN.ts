@@ -75,6 +75,10 @@ export const zhCN: Locale = {
       save: '保存',
       cancel: '取消',
       loading: '加载中…',
+      jsonEditor: {
+        format: '格式化',
+        markerAt: '第 {{line}} 行第 {{column}} 列：',
+      },
     },
   },
 };
