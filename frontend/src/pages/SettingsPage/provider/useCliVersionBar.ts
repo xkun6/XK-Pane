@@ -50,6 +50,10 @@ export const useCliVersionBar = (appType: AgentAppType): UseCliVersionBarResult 
       setUpgrading(true);
       try {
         const result = await CliUpdateService.upgrade(appType);
+        // 先复位按钮态、后台触发复检，再弹结果——状态复位不依赖弹窗 promise
+        //（曾因 Windows 上 info/warning/error 弹窗 promise 不 resolve 卡死「升级中」形态）。
+        setUpgrading(false);
+        void refresh();
         if (result.ok && result.message === '') {
           await NativeDialogs.info(strings.doneTitle, strings.doneMessage(result.newVersion));
         } else if (result.ok) {
@@ -58,10 +62,11 @@ export const useCliVersionBar = (appType: AgentAppType): UseCliVersionBarResult 
           await NativeDialogs.error(strings.failTitle, result.message);
         }
       } catch (e) {
+        setUpgrading(false);
+        void refresh();
         await NativeDialogs.error(strings.failTitle, messageOf(e));
       } finally {
         setUpgrading(false);
-        await refresh();
       }
     },
     [appType, refresh],

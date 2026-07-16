@@ -139,15 +139,21 @@ export const NativeDialogs = {
     return choice === okLabel;
   },
 
+  // Info / Warning / Error 必须显式传一个 Label 为 "Ok" 的按钮：Windows 侧这三类对话框
+  // 走 MB_OK MessageBox，点击「确定」后返回值被映射为字符串 "Ok"（精确大小写，见 wails
+  // dialogs_windows.go 的 responses 表），随后仅当 Buttons 里存在 Label 字面等于 "Ok" 的
+  // 按钮时才触发其回调——没有匹配按钮则后端 resp 通道永远收不到值，前端 Promise 永久
+  // 挂起（与上方 confirm 注释描述的 Question/MB_YESNO 是同一机制）。macOS / Linux 会把
+  // 该按钮真实渲染出来并回传 label 本身，同样可靠 resolve。
   async info(title: string, message: string): Promise<void> {
-    await Dialogs.Info({ Title: title, Message: message });
+    await Dialogs.Info({ Title: title, Message: message, Buttons: [{ Label: 'Ok', IsDefault: true }] });
   },
 
   async warning(title: string, message: string): Promise<void> {
-    await Dialogs.Warning({ Title: title, Message: message });
+    await Dialogs.Warning({ Title: title, Message: message, Buttons: [{ Label: 'Ok', IsDefault: true }] });
   },
 
   async error(title: string, message: string): Promise<void> {
-    await Dialogs.Error({ Title: title, Message: message });
+    await Dialogs.Error({ Title: title, Message: message, Buttons: [{ Label: 'Ok', IsDefault: true }] });
   },
 } as const;
