@@ -23,7 +23,7 @@ interface OtherCliProvidersSx {
 export const otherCliProvidersStyles = (theme: Theme): OtherCliProvidersSx => {
   const fp = theme.palette.foundation;
   return {
-    root: { display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 720 },
+    root: { display: 'flex', flexDirection: 'column', gap: 2 },
     hint: { fontSize: 13, color: fp.text.muted, lineHeight: 1.6 },
     toolbar: { display: 'flex', justifyContent: 'flex-end' },
     addBtn: { textTransform: 'none', borderRadius: 1.5 },

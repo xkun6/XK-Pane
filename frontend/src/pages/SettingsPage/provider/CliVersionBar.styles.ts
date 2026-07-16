@@ -26,7 +26,6 @@ export const cliVersionBarStyles = (theme: Theme): CliVersionBarSx => {
       px: 2,
       py: 1.25,
       mb: 2,
-      maxWidth: 760,
       borderRadius: 1,
       border: `1px solid ${fp.divider}`,
       backgroundColor: fp.bg.surface,

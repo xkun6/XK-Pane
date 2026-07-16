@@ -156,7 +156,6 @@ export const settingsPageStyles = (theme: Theme): Record<string, SxProps<Theme>>
       fontSize: 14,
       color: fp.text.secondary,
       lineHeight: 1.55,
-      maxWidth: 640,
     },
 
     // —— 子页面共享：section 容器 + 标题（被各 Subpage View 复用） ——
@@ -164,7 +163,6 @@ export const settingsPageStyles = (theme: Theme): Record<string, SxProps<Theme>>
       display: 'flex',
       flexDirection: 'column',
       gap: 1.5,
-      maxWidth: 720,
     },
     sectionHeader: {
       display: 'flex',

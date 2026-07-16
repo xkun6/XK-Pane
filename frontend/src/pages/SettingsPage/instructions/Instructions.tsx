@@ -1,4 +1,5 @@
 import { Box, Button, CircularProgress, Tab, Tabs, Typography, useTheme } from '@mui/material';
+import type { SxProps, Theme } from '@mui/material';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import { useT } from '@/i18n';
@@ -37,7 +38,7 @@ export const Instructions = () => {
   };
 
   return (
-    <Box sx={shared.section}>
+    <Box sx={[shared.section, styles.sectionGrow] as SxProps<Theme>}>
       <Box sx={shared.sectionHeader}>
         <Typography sx={shared.sectionTitle}>{t('settings.instructions.title')}</Typography>
         <Typography sx={shared.sectionHint}>{t('settings.instructions.hint')}</Typography>

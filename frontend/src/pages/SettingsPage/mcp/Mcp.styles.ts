@@ -23,7 +23,7 @@ interface McpSx {
 export const mcpStyles = (theme: Theme): McpSx => {
   const fp = theme.palette.foundation;
   return {
-    root: { display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 760 },
+    root: { display: 'flex', flexDirection: 'column', gap: 2 },
     toolbar: { display: 'flex', justifyContent: 'flex-end', gap: 1 },
     toolbarBtn: { textTransform: 'none', borderRadius: 1.5 },
     list: { display: 'flex', flexDirection: 'column', gap: 1 },
