@@ -7,6 +7,7 @@ import { registerDatabaseLocales } from '../database';
 import { registerKnowledgeLocales } from '../knowledge';
 import { registerProviderSettingsLocales } from '../provider';
 import { registerMcpLocales } from '../mcp';
+import { registerInstructionsLocales } from '../instructions';
 import { registerSkillsLocales } from '../skills';
 import { registerWebAccessLocales } from '../webaccess';
 import { registerScreenshotLocales } from '../screenshot';
@@ -27,6 +28,7 @@ export const registerSettingsPageLocales = (): void => {
   registerKnowledgeLocales();
   registerProviderSettingsLocales();
   registerMcpLocales();
+  registerInstructionsLocales();
   registerSkillsLocales();
   registerWebAccessLocales();
   registerBotbridgeLocales();

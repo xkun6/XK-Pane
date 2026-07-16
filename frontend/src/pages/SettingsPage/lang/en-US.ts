@@ -23,6 +23,10 @@ export const settingsPageEnUS: Messages = {
         label: 'MCP management',
         description: 'Manage MCP servers and project them to each CLI',
       },
+      instructions: {
+        label: 'Global instructions',
+        description: 'Edit the CLAUDE.md / AGENTS.md global instruction files',
+      },
       skills: {
         label: 'Skills management',
         description: 'Manage Skills and project them to each CLI',

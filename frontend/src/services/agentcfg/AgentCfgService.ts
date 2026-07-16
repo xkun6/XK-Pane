@@ -226,4 +226,12 @@ export const AgentCfgService = {
   async importSkillsFromApps(): Promise<number> {
     return Binding.ImportSkillsFromApps();
   },
+
+  // —— 全局指令文件（~/.claude/CLAUDE.md / ~/.codex/AGENTS.md） ——
+  async readInstructionFile(appType: AgentAppType): Promise<string> {
+    return (await Binding.ReadInstructionFile(appType)) ?? '';
+  },
+  async writeInstructionFile(appType: AgentAppType, content: string): Promise<void> {
+    await Binding.WriteInstructionFile(appType, content);
+  },
 } as const;

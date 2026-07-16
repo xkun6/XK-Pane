@@ -8,6 +8,7 @@ import { Database } from './database';
 import { Knowledge } from './knowledge';
 import { ProviderSettings } from './provider';
 import { Mcp } from './mcp';
+import { Instructions } from './instructions';
 import { Skills } from './skills';
 import { WebAccess } from './webaccess';
 import { Screenshot } from './screenshot';
@@ -67,6 +68,7 @@ export const SettingsPage = () => {
         {vm.activeItem.id === 'language' && <Language />}
         {vm.activeItem.id === 'provider' && <ProviderSettings />}
         {vm.activeItem.id === 'mcp' && <Mcp />}
+        {vm.activeItem.id === 'instructions' && <Instructions />}
         {vm.activeItem.id === 'skills' && <Skills />}
         {vm.activeItem.id === 'database' && <Database />}
         {vm.activeItem.id === 'knowledge' && <Knowledge />}

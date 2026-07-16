@@ -26,6 +26,10 @@ export const settingsPageZhCN: Messages = {
         label: 'MCP 管理',
         description: '统一管理 MCP server 并投影到各 CLI',
       },
+      instructions: {
+        label: '全局指令',
+        description: '编辑 CLAUDE.md / AGENTS.md 全局指令文件',
+      },
       skills: {
         label: 'Skills 管理',
         description: '统一管理 Skill 并投影到各 CLI',

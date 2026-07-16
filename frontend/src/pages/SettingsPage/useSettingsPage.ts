@@ -45,6 +45,11 @@ export const useSettingsPage = (): UseSettingsPageResult => {
         descriptionKey: 'settings.list.mcp.description',
       },
       {
+        id: 'instructions',
+        labelKey: 'settings.list.instructions.label',
+        descriptionKey: 'settings.list.instructions.description',
+      },
+      {
         id: 'skills',
         labelKey: 'settings.list.skills.label',
         descriptionKey: 'settings.list.skills.description',
