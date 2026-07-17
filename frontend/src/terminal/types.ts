@@ -14,8 +14,8 @@
 
 import type { SSHSpec } from '@/services/terminal/TerminalService';
 
-/** CLI 工具 id（已知值自动补全 + 允许任意字符串，对齐后端 cliadapters 保留的 3 适配器）。 */
-export type KnownCliTool = 'none' | 'claude' | 'reclaude' | 'codex';
+/** CLI 工具 id（已知值自动补全 + 允许任意字符串，对齐后端 cliadapters 保留的 4 适配器）。 */
+export type KnownCliTool = 'none' | 'claude' | 'reclaude' | 'codex' | 'grok';
 export type CliTool = KnownCliTool | (string & {});
 
 /** Tab 视图模式：terminal = xterm 终端镜像；card = SessionTimeline 结构化对话卡片（仅 claude/reclaude）。 */

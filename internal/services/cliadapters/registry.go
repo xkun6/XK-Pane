@@ -44,14 +44,15 @@ func (r *Registry) DetectAll() []ToolInfo {
 	return out
 }
 
-// Default 返回注册表，仅含 Claude / Reclaude / Codex 三个适配器（用户决策 2026-05-30：
-// 其余 5 个 CLI——Gemini/Kimi/GLM/OpenCode/Cursor——已完全移除）。
+// Default 返回注册表，含 Claude / Reclaude / Codex / Grok Build 四个适配器（用户决策
+// 2026-05-30：另 5 个 CLI——Gemini/Kimi/GLM/OpenCode/Cursor——已完全移除）。
 //
-// 注册顺序 = 前端启动菜单 / DetectAll 的展示顺序（Reclaude 紧跟 Claude）。
+// 注册顺序 = 前端启动菜单 / DetectAll 的展示顺序（Reclaude 紧跟 Claude，Grok Build 紧跟 Codex）。
 func Default() *Registry {
 	r := NewRegistry()
 	r.Register(NewClaude())
 	r.Register(NewReclaude())
 	r.Register(NewCodex())
+	r.Register(NewGrok())
 	return r
 }

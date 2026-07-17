@@ -1,4 +1,4 @@
-// Package cliupdate 是 CLI 工具（claude / codex）版本检测与一键升级的 Wails 门面。
+// Package cliupdate 是 CLI 工具（claude / codex / grok）版本检测与一键升级的 Wails 门面。
 //
 // 命令全部在后端拼装，不信任前端传入的任何命令字符串——前端只传 tool 名，本包按白名单
 // （toolDefs）校验后再拼出实际要执行的命令行。
@@ -29,6 +29,7 @@ type toolDef struct {
 var toolDefs = map[string]toolDef{
 	"claude": {displayName: "Claude Code", npmPackage: "@anthropic-ai/claude-code", selfUpdate: "claude update"},
 	"codex":  {displayName: "Codex", npmPackage: "@openai/codex"},
+	"grok":   {displayName: "Grok Build", npmPackage: "@xai-official/grok", selfUpdate: "grok update"},
 }
 
 // ToolStatusDTO 是前端可见的版本检测结果。

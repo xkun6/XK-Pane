@@ -36,10 +36,11 @@ func TestAddDirSkippedWhenWorkspaceAbsent(t *testing.T) {
 
 // ── 注册表 ──
 
-// 守门：Default() 仅注册 Claude / Reclaude / Codex（用户 2026-05-30 移除其余 5 个 CLI），
-// 顺序对齐 cc-pane 生产注册点（Reclaude 紧跟 Claude）。
-func TestDefaultRegistersClaudeReclaudeCodex(t *testing.T) {
-	want := []string{"claude", "reclaude", "codex"}
+// 守门：Default() 注册 Claude / Reclaude / Codex / Grok Build（用户 2026-05-30 移除其余 5 个
+// CLI；2026-07-17 新增 Grok Build），顺序对齐 cc-pane 生产注册点（Reclaude 紧跟 Claude，Grok
+// Build 紧跟 Codex）。
+func TestDefaultRegistersClaudeReclaudeCodexGrok(t *testing.T) {
+	want := []string{"claude", "reclaude", "codex", "grok"}
 	tools := Default().ListTools()
 	got := make([]string, 0, len(tools))
 	for _, ti := range tools {
@@ -50,8 +51,8 @@ func TestDefaultRegistersClaudeReclaudeCodex(t *testing.T) {
 	}
 }
 
-// 守门：保留的三个适配器关键元信息/能力正确（reclaude 版本子命令=version；codex 可执行=codex；
-// 三者均支持多目录 --add-dir/cwd 能力）。
+// 守门：保留的适配器关键元信息/能力正确（reclaude 版本子命令=version；codex 可执行=codex；
+// claude/reclaude/codex 均支持多目录 --add-dir/cwd 能力）。
 func TestAdapterMetadataAndCapabilities(t *testing.T) {
 	r := Default()
 
