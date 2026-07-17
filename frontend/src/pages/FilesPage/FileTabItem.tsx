@@ -15,12 +15,11 @@ interface Props {
   closeLabel: string;
   onRef: (el: HTMLDivElement | null) => void;
   onActivate: () => void;
-  onPin: () => void;
   onClose: () => void;
   onContextMenu: (e: ReactMouseEvent<HTMLDivElement>) => void;
 }
 
-// 单个可拖拽排序的标签（VS Code 式）：单击激活 / 双击固定预览 / 中键关闭 / 右键菜单 / 拖拽排序。
+// 单个可拖拽排序的标签（VS Code 式）：单击激活（预览 tab 单击即固定）/ 中键关闭 / 右键菜单 / 拖拽排序。
 // 拖拽整体绑在 tab 本体（无独立把手），靠 PointerSensor 的 activationConstraint 距离阈值
 // 保证单击不会被误判成拖拽。
 export const FileTabItem = (p: Props) => {
@@ -47,7 +46,6 @@ export const FileTabItem = (p: Props) => {
       title={p.path}
       sx={p.active ? p.styles.tabActive : p.styles.tab}
       onClick={p.onActivate}
-      onDoubleClick={p.onPin}
       onContextMenu={p.onContextMenu}
       onAuxClick={(e) => {
         if (e.button === 1) p.onClose();

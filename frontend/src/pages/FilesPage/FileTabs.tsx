@@ -26,7 +26,7 @@ interface TabMenuState {
   path: string;
 }
 
-// 顶部多文件标签条（VS Code 式）：单击激活 / 双击固定预览 tab / 关闭按钮或鼠标中键关闭 /
+// 顶部多文件标签条（VS Code 式）：单击激活（预览 tab 单击即固定）/ 关闭按钮或鼠标中键关闭 /
 // 右键菜单（关闭 / 关闭其它 / 关闭右侧 / 全部关闭）/ 拖拽排序。
 // 脏 tab 默认显示圆点，悬停换成关闭按钮；同名文件在文件名后追加压暗父目录名消歧。
 export const FileTabs = ({ vm }: { vm: UseFilesPageResult }) => {
@@ -94,8 +94,10 @@ export const FileTabs = ({ vm }: { vm: UseFilesPageResult }) => {
                     if (el) tabRefs.current.set(tb.path, el);
                     else tabRefs.current.delete(tb.path);
                   }}
-                  onActivate={() => vm.activateTab(tb.path)}
-                  onPin={() => vm.pinTab(tb.path)}
+                  onActivate={() => {
+                    vm.activateTab(tb.path);
+                    if (tb.preview) vm.pinTab(tb.path);
+                  }}
                   onClose={() => void vm.closeTab(tb.path)}
                   onContextMenu={(e) => {
                     e.preventDefault();

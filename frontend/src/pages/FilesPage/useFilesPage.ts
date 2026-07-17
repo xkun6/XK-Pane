@@ -243,6 +243,10 @@ export const useFilesPage = (): UseFilesPageResult => {
 
       const existing = tabsRef.current.find((tb) => tb.path === path);
       if (existing) {
+        // 再次打开已是预览态的文件 → 固定（点击文件即固定，不再要求双击 tab）。
+        if (existing.preview) {
+          setTabs((prev) => prev.map((tb) => (tb.path === path ? { ...tb, preview: false } : tb)));
+        }
         setActivePath(path);
         revealForTab(existing, revealTarget);
         return;
