@@ -52,8 +52,15 @@ export const filesPageEnUS: Messages = {
       close: 'Close tab',
       closeDirtyTitle: 'Unsaved changes',
       closeDirtyMessage: '"{{name}}" has unsaved changes. Closing will discard them.',
+      closeManyDirtyMessage: '{{n}} files have unsaved changes. Closing will discard them.',
       discard: 'Discard & close',
       cancel: 'Cancel',
+      menu: {
+        close: 'Close',
+        closeOthers: 'Close others',
+        closeRight: 'Close to the right',
+        closeAll: 'Close all',
+      },
     },
     menu: {
       newDir: 'New folder…',

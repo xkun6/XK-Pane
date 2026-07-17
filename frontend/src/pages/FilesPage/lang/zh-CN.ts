@@ -52,8 +52,15 @@ export const filesPageZhCN: Messages = {
       close: '关闭标签',
       closeDirtyTitle: '未保存的更改',
       closeDirtyMessage: '「{{name}}」有未保存的更改，关闭将丢失这些更改。',
+      closeManyDirtyMessage: '{{n}} 个文件有未保存的更改，关闭将丢失这些更改。',
       discard: '放弃更改并关闭',
       cancel: '取消',
+      menu: {
+        close: '关闭',
+        closeOthers: '关闭其它',
+        closeRight: '关闭右侧',
+        closeAll: '全部关闭',
+      },
     },
     menu: {
       newDir: '新建文件夹…',

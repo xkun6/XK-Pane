@@ -103,6 +103,10 @@ export interface UseFilesPageResult {
   activateTab: (path: string) => void;
   closeTab: (path: string) => Promise<void>;
   pinTab: (path: string) => void;
+  closeOtherTabs: (path: string) => Promise<void>;
+  closeTabsToRight: (path: string) => Promise<void>;
+  closeAllTabs: () => Promise<void>;
+  reorderTabs: (fromPath: string, toPath: string) => void;
 }
 
 const dirOf = (p: string): string => p.replace(/[\\/][^\\/]*$/, '');
@@ -389,6 +393,86 @@ export const useFilesPage = (): UseFilesPageResult => {
     [t, setCurrentFile, setCurrentDir],
   );
 
+  // 批量关闭 tabs 的公共逻辑：脏 tab 数 > 0 时弹一次聚合确认（取消则整体不关）；
+  // 确认通过后统一 dispose model + 从 tabs 移除。返回关闭后的最新 tabs；用户取消返回 null。
+  const closeMany = useCallback(
+    async (victims: FileTab[]): Promise<FileTab[] | null> => {
+      if (victims.length === 0) return tabsRef.current;
+      const dirtyCount = victims.filter((tb) => tb.editValue !== tb.originalValue).length;
+      if (dirtyCount > 0) {
+        const ok = await NativeDialogs.confirm({
+          title: t('files.tabs.closeDirtyTitle'),
+          message: t('files.tabs.closeManyDirtyMessage', { n: String(dirtyCount) }),
+          okLabel: t('files.tabs.discard'),
+          cancelLabel: t('files.tabs.cancel'),
+        });
+        if (!ok) return null;
+      }
+      // 确认等待期间 tabs 可能已变化，用最新 tabsRef 重新过滤受害者路径集合。
+      const victimPaths = new Set(victims.map((tb) => tb.path));
+      const latest = tabsRef.current;
+      for (const tb of latest) {
+        if (victimPaths.has(tb.path)) pendingDisposeRef.current.push(tb.path);
+      }
+      const next = latest.filter((tb) => !victimPaths.has(tb.path));
+      setTabs(next);
+      return next;
+    },
+    [t],
+  );
+
+  // 关闭除 path 外的全部 tab；若当前激活的不是 path，关闭后激活它。
+  const closeOtherTabs = useCallback(
+    async (path: string) => {
+      const victims = tabsRef.current.filter((tb) => tb.path !== path);
+      const next = await closeMany(victims);
+      if (next === null) return;
+      if (activePathRef.current !== path) activateTab(path);
+    },
+    [closeMany, activateTab],
+  );
+
+  // 关闭 path 右侧（含之后）全部 tab；若当前激活的 tab 被关闭，改激活 path。
+  const closeTabsToRight = useCallback(
+    async (path: string) => {
+      const all = tabsRef.current;
+      const idx = all.findIndex((tb) => tb.path === path);
+      if (idx < 0) return;
+      const victims = all.slice(idx + 1);
+      const wasActiveClosed = victims.some((tb) => tb.path === activePathRef.current);
+      const next = await closeMany(victims);
+      if (next === null) return;
+      if (wasActiveClosed) activateTab(path);
+    },
+    [closeMany, activateTab],
+  );
+
+  // 关闭全部 tab：清空激活态 + 当前文件，并退出 diff 视图。
+  const closeAllTabs = useCallback(async () => {
+    const next = await closeMany(tabsRef.current);
+    if (next === null) return;
+    setActivePath(null);
+    setCurrentFile(null);
+    setDiffMode(false);
+    setDiffSource(null);
+    setGitDiff(null);
+    setDiffError(null);
+  }, [closeMany, setCurrentFile]);
+
+  // 拖拽排序：把 fromPath 从原位置移到 toPath 所在位置（纯数组重排，不碰 Monaco model）。
+  const reorderTabs = useCallback((fromPath: string, toPath: string) => {
+    setTabs((prev) => {
+      const fromIdx = prev.findIndex((tb) => tb.path === fromPath);
+      const toIdx = prev.findIndex((tb) => tb.path === toPath);
+      if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(fromIdx, 1);
+      if (!moved) return prev;
+      next.splice(toIdx, 0, moved);
+      return next;
+    });
+  }, []);
+
   // Ctrl/Cmd+P 在文件页内打开快速检索浮层（仅当前路由为 files 且已打开根目录时；避让终端 Ctrl+P）。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -401,6 +485,33 @@ export const useFilesPage = (): UseFilesPageResult => {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // Ctrl+Tab / Ctrl+Shift+Tab 循环切换标签、Ctrl+W 关闭当前标签。capture 阶段注册，
+  // 确保焦点落在 Monaco 编辑器内时依然能拦到；仅当前路由为 files 且存在 tab 时生效。
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (activeIdRef.current !== 'files' || tabsRef.current.length === 0) return;
+      if (e.ctrlKey && e.key === 'Tab') {
+        e.preventDefault();
+        e.stopPropagation();
+        const list = tabsRef.current;
+        const curIdx = list.findIndex((tb) => tb.path === activePathRef.current);
+        const base = curIdx >= 0 ? curIdx : 0;
+        const delta = e.shiftKey ? -1 : 1;
+        const nextTab = list[(base + delta + list.length) % list.length];
+        if (nextTab) activateTab(nextTab.path);
+        return;
+      }
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'w' || e.key === 'W')) {
+        e.preventDefault();
+        e.stopPropagation();
+        const path = activePathRef.current;
+        if (path) void closeTab(path);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [activateTab, closeTab]);
 
   const closeQuickOpen = useCallback(() => setQuickOpenOpen(false), []);
 
@@ -660,6 +771,10 @@ export const useFilesPage = (): UseFilesPageResult => {
     activateTab,
     closeTab,
     pinTab,
+    closeOtherTabs,
+    closeTabsToRight,
+    closeAllTabs,
+    reorderTabs,
   };
 };
 
