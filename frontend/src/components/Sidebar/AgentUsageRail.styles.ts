@@ -28,13 +28,14 @@ export const agentUsageRailStyles = (theme: Theme): Record<string, SxProps<Theme
       alignItems: 'center',
       justifyContent: 'center',
       gap: '1px',
-      py: 0.5, // 4px
-      borderRadius: 1, // 8px
+      py: 0.55,
+      borderRadius: '9px',
       backgroundColor: fp.bg.elevated,
+      border: `1px solid ${fp.divider}`,
       cursor: 'default',
     },
     value: {
-      fontSize: 12.5,
+      fontSize: 12,
       fontWeight: 700,
       lineHeight: 1.1,
       color: fp.text.primary,
@@ -43,16 +44,16 @@ export const agentUsageRailStyles = (theme: Theme): Record<string, SxProps<Theme
     label: {
       fontSize: 9,
       lineHeight: 1.1,
-      color: fp.text.secondary,
+      color: fp.text.muted,
       letterSpacing: 0.2,
     },
     // —— Tooltip 明细面板（覆盖 MUI 默认深色气泡，改用 foundation 表面）——
     tooltipSurface: {
-      backgroundColor: fp.bg.elevated,
+      backgroundColor: fp.bg.surface,
       color: fp.text.primary,
       border: `1px solid ${fp.divider}`,
-      borderRadius: 2, // 8px
-      boxShadow: theme.shadows[6],
+      borderRadius: '12px',
+      boxShadow: theme.shadows[4],
       p: 1.25,
       maxWidth: 260,
     },

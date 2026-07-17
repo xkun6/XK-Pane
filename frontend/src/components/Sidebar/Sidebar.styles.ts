@@ -1,13 +1,14 @@
 import type { SxProps, Theme } from '@mui/material';
 
-// Sidebar 扁平化设计：
-//  - 未选中：完全透明，仅图标颜色（text.secondary），不喧宾夺主
-//  - hover：bg.hover 半透明覆盖 + text.primary，让"可点"信号清晰
-//  - 选中：bg.active 半透明底色 + accent 图标 + 左侧 3px accent indicator bar
-//  - 圆角 12px（设计语言：柔和方形圆角）
-//  - 颜色全部从 theme.palette.foundation.* 取，三主题自动适配
+// Sidebar 现代扁平化：
+//  - 未选中：透明底 + secondary 图标
+//  - hover：soft hover 底 + primary 图标
+//  - 选中：accent 轻底 + accent 图标 + 左侧胶囊 indicator
+//  - 品牌块：accent 轻 tint + 柔和方圆
+//  - 颜色全部从 theme.palette.foundation.* 取
 export const sidebarStyles = (theme: Theme): Record<string, SxProps<Theme>> => {
   const fp = theme.palette.foundation;
+  const isDark = theme.palette.mode === 'dark';
   return {
     root: {
       width: 64,
@@ -17,35 +18,42 @@ export const sidebarStyles = (theme: Theme): Record<string, SxProps<Theme>> => {
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      py: 1.5, // 12px
-      gap: 1, // 8px
+      py: 1.5,
+      gap: 0.75,
+      // 与主内容轻微分层（亮色更明显）
+      boxShadow: isDark ? 'none' : '1px 0 0 transparent, 4px 0 24px rgba(15, 23, 42, 0.03)',
     },
     brand: {
       width: 40,
       height: 40,
-      borderRadius: 2.5, // 10px
+      borderRadius: '11px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: fp.bg.elevated,
+      backgroundColor: fp.bg.active,
       color: fp.accent,
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: 700,
-      letterSpacing: 0.5,
-      mb: 0.5,
+      letterSpacing: 0.3,
+      mb: 0.25,
+      border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(59, 130, 246, 0.14)'}`,
+      boxShadow: isDark
+        ? 'none'
+        : '0 1px 2px rgba(15, 23, 42, 0.04)',
     },
     brandDivider: {
-      width: 40,
+      width: 28,
       height: '1px',
       backgroundColor: fp.divider,
-      mb: 0.5,
+      mb: 0.75,
+      mt: 0.25,
     },
     section: {
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      gap: 1, // 8px
-      py: 0.5,
+      gap: 0.5,
+      py: 0.25,
     },
     spacer: {
       flex: 1,
@@ -53,39 +61,46 @@ export const sidebarStyles = (theme: Theme): Record<string, SxProps<Theme>> => {
     itemWrap: {
       position: 'relative',
       width: 48,
-      height: 48,
+      height: 44,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
     },
     indicator: {
       position: 'absolute',
-      left: -8, // 顶到 sidebar 左侧 8px gutter 的边
-      top: 12,
-      bottom: 12,
+      left: -8,
+      top: '50%',
+      transform: 'translateY(-50%)',
       width: 3,
-      borderRadius: '0 2px 2px 0',
+      height: 18,
+      borderRadius: 999,
       backgroundColor: fp.accent,
+      boxShadow: isDark ? `0 0 8px ${fp.accent}` : 'none',
     },
     item: {
-      width: 48,
-      height: 48,
-      borderRadius: 1.5, // 12px
+      width: 44,
+      height: 44,
+      borderRadius: '12px',
       color: fp.text.secondary,
       backgroundColor: 'transparent',
-      transition: 'background-color 160ms cubic-bezier(0.4, 0, 0.2, 1), color 160ms cubic-bezier(0.4, 0, 0.2, 1)',
+      transition:
+        'background-color 160ms cubic-bezier(0.4, 0, 0.2, 1), color 160ms cubic-bezier(0.4, 0, 0.2, 1), transform 100ms ease',
       '&:hover': {
         backgroundColor: fp.bg.hover,
         color: fp.text.primary,
       },
+      '&:active': {
+        transform: 'scale(0.96)',
+      },
     },
     itemActive: {
-      width: 48,
-      height: 48,
-      borderRadius: 1.5,
+      width: 44,
+      height: 44,
+      borderRadius: '12px',
       color: fp.accent,
       backgroundColor: fp.bg.active,
-      transition: 'background-color 160ms cubic-bezier(0.4, 0, 0.2, 1), color 160ms cubic-bezier(0.4, 0, 0.2, 1)',
+      transition:
+        'background-color 160ms cubic-bezier(0.4, 0, 0.2, 1), color 160ms cubic-bezier(0.4, 0, 0.2, 1)',
       '&:hover': {
         backgroundColor: fp.bg.active,
         color: fp.accent,

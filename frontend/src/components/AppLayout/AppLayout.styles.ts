@@ -17,6 +17,8 @@ export const appLayoutStyles = (theme: Theme): Record<string, SxProps<Theme>> =>
       flexDirection: 'column',
       backgroundColor: fp.bg.content,
       overflow: 'hidden',
+      // 主区相对侧栏的轻微内嵌感
+      position: 'relative',
     },
   };
 };

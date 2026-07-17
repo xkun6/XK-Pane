@@ -18,32 +18,50 @@ export const personalizationStyles = (theme: Theme): Record<string, SxProps<Them
     },
     card: {
       p: 2,
-      borderRadius: 1.5,
+      borderRadius: '12px',
       border: `1px solid ${fp.divider}`,
       backgroundColor: fp.bg.surface,
       cursor: 'pointer',
       textAlign: 'left',
-      transition: 'border-color 120ms ease, background-color 120ms ease',
+      transition:
+        'border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, transform 120ms ease',
       display: 'flex',
       flexDirection: 'column',
       gap: 0.5,
-      '&:hover': { backgroundColor: fp.bg.hover },
+      boxShadow:
+        theme.palette.mode === 'dark'
+          ? '0 1px 2px rgba(0,0,0,0.28)'
+          : '0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.03)',
+      '&:hover': {
+        backgroundColor: fp.bg.surface,
+        borderColor: theme.palette.mode === 'dark' ? 'rgba(148,163,184,0.22)' : 'rgba(15,23,42,0.12)',
+        boxShadow:
+          theme.palette.mode === 'dark'
+            ? '0 4px 14px rgba(0,0,0,0.4)'
+            : '0 4px 14px rgba(15, 23, 42, 0.07)',
+        transform: 'translateY(-1px)',
+      },
     },
     cardActive: {
       p: 2,
-      borderRadius: 1.5,
-      border: `1px solid ${fp.accent}`,
+      borderRadius: '12px',
+      border: `1.5px solid ${fp.accent}`,
       backgroundColor: fp.bg.active,
       cursor: 'pointer',
       textAlign: 'left',
       display: 'flex',
       flexDirection: 'column',
       gap: 0.5,
+      boxShadow:
+        theme.palette.mode === 'dark'
+          ? `0 0 0 1px ${fp.accent}22, 0 4px 14px rgba(0,0,0,0.35)`
+          : `0 0 0 3px ${fp.accent}18, 0 4px 14px rgba(37, 99, 235, 0.1)`,
     },
     cardLabel: {
       fontSize: 14,
       fontWeight: 600,
       color: fp.text.primary,
+      letterSpacing: '-0.01em',
     },
     cardDesc: {
       fontSize: 12,
@@ -63,9 +81,13 @@ export const personalizationStyles = (theme: Theme): Record<string, SxProps<Them
       gap: 3,
       px: 2.5,
       py: 2,
-      borderRadius: 1.5,
+      borderRadius: '12px',
       border: `1px solid ${fp.divider}`,
       backgroundColor: fp.bg.surface,
+      boxShadow:
+        theme.palette.mode === 'dark'
+          ? '0 1px 2px rgba(0,0,0,0.28)'
+          : '0 1px 2px rgba(15, 23, 42, 0.04)',
     },
     switchTexts: {
       display: 'flex',

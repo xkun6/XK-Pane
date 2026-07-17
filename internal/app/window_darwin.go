@@ -14,7 +14,8 @@ func windowOptions() application.WebviewWindowOptions {
 		Height:           800,
 		MinWidth:         960,
 		MinHeight:        600,
-		BackgroundColour: application.NewRGB(255, 255, 255),
+		// 与 foundation-light 的 bg.content (#f7f8fb) 对齐，避免启动闪纯白
+		BackgroundColour: application.NewRGB(247, 248, 251),
 		URL:              "/",
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 28,

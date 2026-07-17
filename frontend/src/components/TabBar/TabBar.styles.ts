@@ -23,12 +23,13 @@ export interface TabBarSx {
 
 export const tabBarStyles = (theme: Theme): TabBarSx => {
   const fp = theme.palette.foundation;
+  const isDark = theme.palette.mode === 'dark';
   return {
-    // 外壳：左侧可横向滚动的标签区 + 右侧固定「新建」按钮。
+    // 外壳：左侧可横向滚动的标签区 + 右侧固定视图切换。
     bar: {
       display: 'flex',
       alignItems: 'stretch',
-      height: 36,
+      height: 38,
       minWidth: 0,
       backgroundColor: fp.bg.sidebar,
       borderBottom: `1px solid ${fp.divider}`,
@@ -40,9 +41,11 @@ export const tabBarStyles = (theme: Theme): TabBarSx => {
       alignItems: 'stretch',
       overflowX: 'auto',
       overflowY: 'hidden',
+      gap: 0,
+      px: 0.5,
+      pt: 0.5,
       '&::-webkit-scrollbar': { height: 0, display: 'none' },
     },
-    // 拖拽外层包裹：@dnd-kit sortable 节点（承载 transform），不参与收缩，内部嵌真实 tab。
     dragWrap: {
       display: 'flex',
       alignItems: 'stretch',
@@ -55,24 +58,43 @@ export const tabBarStyles = (theme: Theme): TabBarSx => {
       px: 1.5,
       maxWidth: 220,
       minWidth: 120,
+      height: '100%',
       cursor: 'pointer',
       userSelect: 'none',
-      fontSize: 13,
+      fontSize: 12.5,
       fontWeight: 500,
-      borderRight: `1px solid ${fp.divider}`,
-      transition: 'background-color 120ms ease, color 120ms ease',
+      borderRadius: '8px 8px 0 0',
+      borderRight: 'none',
+      marginRight: 1,
+      transition: 'background-color 140ms ease, color 140ms ease, box-shadow 140ms ease',
       '& .tab-close': { opacity: 0 },
       '&:hover .tab-close': { opacity: 1 },
     },
     tabActive: {
       backgroundColor: fp.bg.content,
       color: fp.text.primary,
+      boxShadow: isDark
+        ? '0 -1px 0 rgba(255,255,255,0.04) inset'
+        : '0 1px 0 rgba(255,255,255,0.8) inset, 0 -1px 0 transparent',
+      borderTop: `1px solid ${fp.divider}`,
+      borderLeft: `1px solid ${fp.divider}`,
+      borderRight: `1px solid ${fp.divider}`,
+      // 底部与 content 相连，消掉下边框感
+      borderBottom: `1px solid ${fp.bg.content}`,
+      marginBottom: -1,
       '& .tab-close': { opacity: 1 },
     },
     tabInactive: {
       backgroundColor: 'transparent',
       color: fp.text.secondary,
-      '&:hover': { backgroundColor: fp.bg.hover, color: fp.text.primary },
+      borderTop: '1px solid transparent',
+      borderLeft: '1px solid transparent',
+      borderRight: '1px solid transparent',
+      borderBottom: '1px solid transparent',
+      '&:hover': {
+        backgroundColor: fp.bg.hover,
+        color: fp.text.primary,
+      },
     },
     pinIcon: {
       fontSize: 13,
@@ -90,30 +112,33 @@ export const tabBarStyles = (theme: Theme): TabBarSx => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      width: 20,
-      height: 20,
-      borderRadius: 1,
+      width: 18,
+      height: 18,
+      borderRadius: '5px',
       flexShrink: 0,
       color: 'inherit',
       transition: 'background-color 120ms ease, opacity 120ms ease',
       '&:hover': { backgroundColor: fp.bg.active },
     },
-    // 视图切换段控件（终端 ↔ 卡片）：右侧固定，取代原「新建」+ 按钮。仅 claude/reclaude 活动 Tab 显示。
     viewToggle: {
       display: 'flex',
       alignItems: 'center',
       flexShrink: 0,
-      gap: 0.5,
+      gap: 0.35,
       px: 0.75,
-      borderLeft: `1px solid ${fp.divider}`,
+      my: 0.5,
+      mr: 0.5,
+      borderRadius: '8px',
+      border: `1px solid ${fp.divider}`,
+      backgroundColor: fp.bg.elevated,
     },
     viewBtn: {
       display: 'flex',
       alignItems: 'center',
-      gap: 0.5,
+      gap: 0.4,
       height: 24,
       px: 1,
-      borderRadius: 1.5, // 6px：方圆设计的按钮圆角
+      borderRadius: '6px',
       cursor: 'pointer',
       fontSize: 12,
       fontWeight: 500,
@@ -121,8 +146,11 @@ export const tabBarStyles = (theme: Theme): TabBarSx => {
       transition: 'background-color 120ms ease, color 120ms ease',
     },
     viewBtnActive: {
-      backgroundColor: fp.bg.active,
+      backgroundColor: fp.bg.surface,
       color: fp.accent,
+      boxShadow: isDark
+        ? '0 1px 2px rgba(0,0,0,0.3)'
+        : '0 1px 2px rgba(15,23,42,0.06)',
     },
     viewBtnIdle: {
       color: fp.text.muted,

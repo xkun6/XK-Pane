@@ -43,19 +43,25 @@ export const sshPageStyles = (theme: Theme): SshPageSx => {
       backgroundColor: fp.bg.content,
     },
     body: {
-      maxWidth: 860,
+      maxWidth: 880,
       mx: 'auto',
-      px: 4,
-      py: 4,
+      px: { xs: 3, sm: 4 },
+      py: { xs: 3, sm: 4 },
       display: 'flex',
       flexDirection: 'column',
       gap: 2.5,
     },
     header: { display: 'flex', flexDirection: 'column', gap: 0.75 },
-    title: { fontSize: 22, fontWeight: 700, color: fp.text.primary },
-    hint: { fontSize: 13, color: fp.text.muted, lineHeight: 1.6 },
+    title: {
+      fontSize: 26,
+      fontWeight: 700,
+      color: fp.text.primary,
+      letterSpacing: '-0.025em',
+      lineHeight: 1.15,
+    },
+    hint: { fontSize: 13.5, color: fp.text.muted, lineHeight: 1.6, maxWidth: 560 },
     toolbar: { display: 'flex', justifyContent: 'flex-end', gap: 1 },
-    toolbarBtn: { textTransform: 'none', borderRadius: 1.5 },
+    toolbarBtn: { textTransform: 'none', borderRadius: 2 },
     list: { display: 'flex', flexDirection: 'column', gap: 1 },
     empty: {
       display: 'flex',
@@ -65,20 +71,34 @@ export const sshPageStyles = (theme: Theme): SshPageSx => {
       px: 2,
       py: 6,
       border: `1px dashed ${fp.divider}`,
-      borderRadius: 1,
+      borderRadius: '14px',
+      backgroundColor: fp.bg.surface,
     },
     emptyIcon: { fontSize: 40, color: fp.text.muted },
     emptyText: { fontSize: 13, color: fp.text.muted },
-    emptyAction: { textTransform: 'none', borderRadius: 1.5 },
+    emptyAction: { textTransform: 'none', borderRadius: 2 },
     row: {
       display: 'flex',
       alignItems: 'center',
       gap: 1.5,
       px: 2,
-      py: 1.25,
-      borderRadius: 1,
+      py: 1.35,
+      borderRadius: '12px',
       border: `1px solid ${fp.divider}`,
       backgroundColor: fp.bg.surface,
+      boxShadow:
+        theme.palette.mode === 'dark'
+          ? '0 1px 2px rgba(0,0,0,0.28)'
+          : '0 1px 2px rgba(15, 23, 42, 0.04)',
+      transition: 'border-color 140ms ease, box-shadow 140ms ease',
+      '&:hover': {
+        borderColor:
+          theme.palette.mode === 'dark' ? 'rgba(148,163,184,0.22)' : 'rgba(15,23,42,0.12)',
+        boxShadow:
+          theme.palette.mode === 'dark'
+            ? '0 4px 14px rgba(0,0,0,0.35)'
+            : '0 4px 14px rgba(15, 23, 42, 0.06)',
+      },
     },
     rowIconWrap: { position: 'relative', flexShrink: 0, display: 'flex' },
     rowIcon: { color: fp.text.secondary },

@@ -1,8 +1,7 @@
 import type { SxProps, Theme } from '@mui/material';
 
-// TitleBar 样式工厂：从 theme.palette.foundation 取色，避免硬编码。
-// 控制按钮遵循 Windows Fluent caption button 规范（46×32、0 圆角、透明），
-// 标题文字偏轻量，不抢主内容焦点。
+// TitleBar：轻量标题栏，不抢主内容焦点。
+// Windows Fluent caption buttons 保持 46×32、0 圆角。
 export const titleBarStyles = (theme: Theme): Record<string, SxProps<Theme>> => {
   const fp = theme.palette.foundation;
   return {
@@ -16,16 +15,19 @@ export const titleBarStyles = (theme: Theme): Record<string, SxProps<Theme>> => 
       borderBottom: `1px solid ${fp.divider}`,
       flexShrink: 0,
       color: fp.text.muted,
+      // 轻微底部分层，让标题栏与内容过渡更自然
+      backdropFilter: 'saturate(1.1)',
     },
     macSpacer: {
       width: 72,
       flexShrink: 0,
     },
     title: {
-      fontSize: 13,
+      fontSize: 12.5,
       fontWeight: 500,
-      letterSpacing: 0.2,
+      letterSpacing: 0.15,
       color: fp.text.secondary,
+      opacity: 0.9,
     },
     spacer: {
       flex: 1,
@@ -37,7 +39,6 @@ export const titleBarStyles = (theme: Theme): Record<string, SxProps<Theme>> => 
       pl: 1,
     },
     // Windows Fluent caption buttons：46×32、0 圆角、透明
-    // 不再继承全局 IconButton 默认样式（borderRadius / 默认底色）
     controlBtn: {
       width: 46,
       height: 32,
@@ -46,6 +47,7 @@ export const titleBarStyles = (theme: Theme): Record<string, SxProps<Theme>> => 
       backgroundColor: 'transparent',
       boxShadow: 'none',
       color: fp.text.secondary,
+      transition: 'background-color 120ms ease, color 120ms ease',
       '&:hover': {
         backgroundColor: fp.bg.hover,
         color: fp.text.primary,
@@ -59,6 +61,7 @@ export const titleBarStyles = (theme: Theme): Record<string, SxProps<Theme>> => 
       backgroundColor: 'transparent',
       boxShadow: 'none',
       color: fp.text.secondary,
+      transition: 'background-color 120ms ease, color 120ms ease',
       '&:hover': {
         backgroundColor: fp.status.danger,
         color: '#fff',
