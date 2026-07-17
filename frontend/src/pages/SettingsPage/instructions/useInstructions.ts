@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AgentCfgService, NativeDialogs, type AgentAppType } from '@/services';
+import { AgentCfgService, NativeDialogs } from '@/services';
 
 // 全局指令子页面的 ViewModel：Claude / Codex 两个 tab 各自懒加载 + 持有草稿，
 // 切 tab 不丢草稿；不返回 JSX、不持翻译串——对话框文案由 View（持 t()）传入（MVVM 铁律）。
@@ -7,8 +7,12 @@ import { AgentCfgService, NativeDialogs, type AgentAppType } from '@/services';
 // 首次懒加载失败 → 静默置空串 + loadError 置位，由 View 用 t('settings.instructions.loadError')
 // 展示成提示文字（不弹窗打断）；用户主动点「重新加载」失败 → 弹 NativeDialogs.error（strings
 // 由 View 传入），因为这是一次显式操作，用户需要明确知道结果。
-
-export type InstructionApp = AgentAppType;
+//
+// InstructionApp 刻意不直接复用 AgentAppType（Provider 域的 appType 联合类型）——后端
+// ReadInstructionFile/WriteInstructionFile 明确拒绝 grok（全局指令文件位置未经确认，见
+// agentcfg/instructions.go），本页也没有 grok 标签，这里锁定成独立的 claude|codex
+// 字面量联合，防止 Provider 域将来再扩类型时本页被动跟着"长出"一个打不开的 grok 入口。
+export type InstructionApp = 'claude' | 'codex';
 
 interface AppState {
   draft: string;

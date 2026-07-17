@@ -6,13 +6,15 @@ export const providerSettingsZhCN: Messages = {
       tabs: {
         claude: 'Claude Code',
         codex: 'Codex',
+        grok: 'Grok Build',
         other: '其它 CLI',
       },
-      // CLI 版本条（Claude Code / Codex 两标签顶部，借鉴 cc-switch 的本地环境检查）。
+      // CLI 版本条（Claude Code / Codex / Grok Build 三标签顶部，借鉴 cc-switch 的本地环境检查）。
       cliUpdate: {
         name: {
           claude: 'Claude Code CLI',
           codex: 'Codex CLI',
+          grok: 'Grok Build CLI',
         },
         checking: '检测版本中…',
         notInstalled: '未安装',
@@ -27,7 +29,7 @@ export const providerSettingsZhCN: Messages = {
         warnTitle: '升级结果需要确认',
         failTitle: '升级失败',
       },
-      // cc-switch 式全局配置 Provider（Claude Code / Codex 两标签共用）。
+      // cc-switch 式全局配置 Provider（Claude Code / Codex / Grok Build 三标签共用）。
       global: {
         add: '新增',
         importCurrent: '从当前配置导入',

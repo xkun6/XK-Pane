@@ -62,6 +62,16 @@ func (s *Service) codexAuthPath() string {
 	return filepath.Join(s.home, ".codex", "auth.json")
 }
 
+// grokConfigPath 是 Grok Build CLI 全局配置文件路径：<home>/.grok/config.toml。
+func (s *Service) grokConfigPath() string {
+	return filepath.Join(s.home, ".grok", "config.toml")
+}
+
+// grokAuthPath 是 Grok Build CLI 全局登录态文件路径：<home>/.grok/auth.json。
+func (s *Service) grokAuthPath() string {
+	return filepath.Join(s.home, ".grok", "auth.json")
+}
+
 // claudeMcpPath 是 claude CLI 自身维护的主状态文件路径：<home>/.claude.json（注意不是
 // <home>/.claude/settings.json —— 那是 Provider 域管理的全局配置文件）。mcpServers 只是
 // 这份大文件顶层的一个键，文件可能很大且含大量与本包无关的字段（projects/history 等），

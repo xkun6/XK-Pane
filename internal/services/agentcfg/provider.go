@@ -18,6 +18,7 @@ import (
 const (
 	appTypeClaude = "claude"
 	appTypeCodex  = "codex"
+	appTypeGrok   = "grok"
 )
 
 var errNotFound = errors.New("agentcfg: provider does not exist")
@@ -70,8 +71,8 @@ func (s *Service) toDTO(row storage.AgentProvider) (AgentProviderDTO, error) {
 }
 
 func validateAppType(appType string) error {
-	if appType != appTypeClaude && appType != appTypeCodex {
-		return fmt.Errorf("agentcfg: 不支持的 appType %q（仅 claude | codex）", appType)
+	if appType != appTypeClaude && appType != appTypeCodex && appType != appTypeGrok {
+		return fmt.Errorf("agentcfg: 不支持的 appType %q（仅 claude | codex | grok）", appType)
 	}
 	return nil
 }
@@ -86,11 +87,11 @@ func validateSettingsJSON(raw string) error {
 	return nil
 }
 
-// validateProviderSettings 按 appType 分派校验规则：codex 走 validateCodexSettings
-// （额外校验 auth/config 形状与 config 的 TOML 合法性），其余（claude）走
-// validateSettingsJSON（只要求合法 JSON 对象）。
+// validateProviderSettings 按 appType 分派校验规则：codex 与 grok 都走
+// validateCodexSettings（额外校验 auth/config 形状与 config 的 TOML 合法性；grok 与 codex
+// 配置同形故直接复用），其余（claude）走 validateSettingsJSON（只要求合法 JSON 对象）。
 func validateProviderSettings(appType, raw string) error {
-	if appType == appTypeCodex {
+	if appType == appTypeCodex || appType == appTypeGrok {
 		return validateCodexSettings(raw)
 	}
 	return validateSettingsJSON(raw)
@@ -213,6 +214,10 @@ func (s *Service) UpdateAgentProvider(ctx context.Context, id string, in AgentPr
 				if err := s.writeCodexLive(ctx, tx, in.SettingsJSON); err != nil {
 					return err
 				}
+			case appTypeGrok:
+				if err := s.writeGrokLive(in.SettingsJSON); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -262,6 +267,8 @@ func (s *Service) SwitchAgentProvider(ctx context.Context, id string) error {
 		return s.switchClaude(ctx, target)
 	case appTypeCodex:
 		return s.switchCodex(ctx, target)
+	case appTypeGrok:
+		return s.switchGrok(ctx, target)
 	default:
 		return fmt.Errorf("agentcfg: appType %q 尚未支持切换", target.AppType)
 	}
@@ -272,8 +279,12 @@ func (s *Service) ImportCurrentAgentConfig(ctx context.Context, appType string) 
 	if err := validateAppType(appType); err != nil {
 		return nil, err
 	}
-	if appType == appTypeCodex {
+	switch appType {
+	case appTypeCodex:
 		return s.importCodexDefault(ctx, true)
+	case appTypeGrok:
+		return s.importGrokDefault(ctx, true)
+	default:
+		return s.importClaudeDefault(ctx, true)
 	}
-	return s.importClaudeDefault(ctx, true)
 }

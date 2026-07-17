@@ -2,8 +2,10 @@
 //
 // Provider：每个 Provider 存的是「CLI 全局配置文件的完整内容」——claude 对应
 // ~/.claude/settings.json 整份 JSON；codex 对应 {auth: <auth.json 对象|null>, config: "<config.toml
-// 全文>"} 组装后的 JSON。切换（switchTo）会直写对应 CLI 的 live 配置文件，影响该 CLI 之后
-// 启动的所有会话（包括 XK-Pane 之外）。
+// 全文>"} 组装后的 JSON；grok 与 codex 配置同形，对应 ~/.grok/config.toml + auth.json
+// （同一个 auth+config JSON 形状，唯一差异是不做 MCP 投影，config 原文整份读写）。
+// 切换（switchTo）会直写对应 CLI 的 live 配置文件，影响该 CLI 之后启动的所有会话
+// （包括 XK-Pane 之外）。
 //
 // MCP server / Skills：以 XK-Pane 为唯一事实源（SSOT），按每个 CLI 各自的开关投影到
 // ~/.claude.json 的 mcpServers、~/.codex/config.toml 的 [mcp_servers]、~/.claude/skills、
@@ -20,7 +22,7 @@ import type {
   AgentSkillDTO as RawSkillDTO,
 } from '@bindings/xkpane/internal/services/agentcfg/models';
 
-export type AgentAppType = 'claude' | 'codex';
+export type AgentAppType = 'claude' | 'codex' | 'grok';
 
 export interface AgentProvider {
   id: string;

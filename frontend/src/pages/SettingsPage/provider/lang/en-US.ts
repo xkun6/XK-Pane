@@ -6,13 +6,15 @@ export const providerSettingsEnUS: Messages = {
       tabs: {
         claude: 'Claude Code',
         codex: 'Codex',
+        grok: 'Grok Build',
         other: 'Other CLIs',
       },
-      // CLI version bar (top of the Claude Code / Codex tabs, borrowed from cc-switch's local environment check).
+      // CLI version bar (top of the Claude Code / Codex / Grok Build tabs, borrowed from cc-switch's local environment check).
       cliUpdate: {
         name: {
           claude: 'Claude Code CLI',
           codex: 'Codex CLI',
+          grok: 'Grok Build CLI',
         },
         checking: 'Checking version…',
         notInstalled: 'Not installed',
@@ -27,7 +29,7 @@ export const providerSettingsEnUS: Messages = {
         warnTitle: 'Upgrade result needs review',
         failTitle: 'Upgrade failed',
       },
-      // cc-switch style global config Provider (shared by the Claude Code / Codex tabs).
+      // cc-switch style global config Provider (shared by the Claude Code / Codex / Grok Build tabs).
       global: {
         add: 'Add',
         importCurrent: 'Import from current config',
