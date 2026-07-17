@@ -38,3 +38,6 @@ internal/services/bedrock/resources/
 
 # reclaude 兼容指南：面向「想兼容 reclaude 的其他项目」的本地参考文档，不入库
 /RECLAUDE_COMPAT.md
+
+# 第三方工具 Pane（runpane.com）自动注入的使用引导，仅本机保留，不入库
+/AGENTS.md
