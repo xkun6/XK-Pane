@@ -47,6 +47,14 @@ export const filesPageEnUS: Messages = {
       source: 'Source',
       preview: 'Preview',
     },
+    tabs: {
+      ariaLabel: 'Open file tabs',
+      close: 'Close tab',
+      closeDirtyTitle: 'Unsaved changes',
+      closeDirtyMessage: '"{{name}}" has unsaved changes. Closing will discard them.',
+      discard: 'Discard & close',
+      cancel: 'Cancel',
+    },
     menu: {
       newDir: 'New folder…',
       newFile: 'New file…',

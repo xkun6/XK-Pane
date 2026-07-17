@@ -47,6 +47,14 @@ export const filesPageZhCN: Messages = {
       source: '源码',
       preview: '预览',
     },
+    tabs: {
+      ariaLabel: '打开的文件标签',
+      close: '关闭标签',
+      closeDirtyTitle: '未保存的更改',
+      closeDirtyMessage: '「{{name}}」有未保存的更改，关闭将丢失这些更改。',
+      discard: '放弃更改并关闭',
+      cancel: '取消',
+    },
     menu: {
       newDir: '新建文件夹…',
       newFile: '新建文件…',

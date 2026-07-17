@@ -5,6 +5,7 @@ import { useRightPanel, type RightPanelId } from '@/rightpanel';
 import { useTerminal } from '@/terminal';
 import { useRouter } from '@/router';
 import type { FileTreeMutation } from '@/components/FileSystemTree';
+import { disposeAllFileModels, disposeFileModel } from '@/components/CodeEditor';
 import {
   ClipboardService,
   FileService,
@@ -21,11 +22,23 @@ import { isDesktop } from '@/services/transport';
 export type FilesViewMode = 'source' | 'preview';
 export type SearchMode = 'name' | 'content';
 
+// 单个已打开文件的标签页状态（VS Code 式多标签：每个 tab 独立缓冲 + 独立 Monaco model）。
+export interface FileTab {
+  path: string;
+  editValue: string;
+  originalValue: string;
+  isBinary: boolean;
+  imageDataUri: string | null; // 图片 tab：data URI；非图片为 null
+  fileError: string | null;
+  viewMode: FilesViewMode; // markdown 源码/预览切换，每 tab 独立
+  preview: boolean; // VS Code 预览 tab：斜体显示，会被下一次预览打开替换
+}
+
 export interface UseFilesPageResult {
   isDesktop: boolean;
   rootDir: string | null;
   recent: RecentDirectory[];
-  // 编辑器
+  // 编辑器（均从激活 tab 派生；无激活 tab 时给空默认值）
   openFilePath: string | null;
   editValue: string;
   originalValue: string;
@@ -78,13 +91,18 @@ export interface UseFilesPageResult {
   // 右侧 Git / 本地历史抽屉开关（入口在本页头部工具栏，绑定当前目录）
   activePanel: RightPanelId | null;
   togglePanel: (id: RightPanelId) => void;
-  // 文件树写操作通知：当前打开的文件被删除 / 改名时同步清空编辑器。
+  // 文件树写操作通知：当前打开的文件被删除 / 改名 / 移动时同步所有匹配 tab。
   onTreeMutate: (m: FileTreeMutation) => void;
   // Ctrl+P 快速打开浮层（仅文件页内触发，避让终端 Ctrl+P）。
   quickOpenOpen: boolean;
   closeQuickOpen: () => void;
   // 按绝对路径打开文件（QuickOpen 选中），可带 :line 跳转。
   openFileByPath: (path: string, line?: number) => void;
+  // 多文件标签页
+  tabs: FileTab[];
+  activateTab: (path: string) => void;
+  closeTab: (path: string) => Promise<void>;
+  pinTab: (path: string) => void;
 }
 
 const dirOf = (p: string): string => p.replace(/[\\/][^\\/]*$/, '');
@@ -100,15 +118,10 @@ export const useFilesPage = (): UseFilesPageResult => {
   const { navigate, active } = useRouter();
 
   const [recent, setRecent] = useState<RecentDirectory[]>([]);
-  const [openFilePath, setOpenFilePath] = useState<string | null>(null);
-  const [editValue, setEditValueState] = useState('');
-  const [originalValue, setOriginalValue] = useState('');
+  const [tabs, setTabs] = useState<FileTab[]>([]);
+  const [activePath, setActivePath] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loadingFile, setLoadingFile] = useState(false);
-  const [fileError, setFileError] = useState<string | null>(null);
-  const [isBinary, setIsBinary] = useState(false);
-  const [imageDataUri, setImageDataUri] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<FilesViewMode>('source');
   const [treeQuery, setTreeQuery] = useState('');
   const [searchMode, setSearchModeState] = useState<SearchMode>('name');
   const [contentResults, setContentResults] = useState<ContentMatch[]>([]);
@@ -134,13 +147,31 @@ export const useFilesPage = (): UseFilesPageResult => {
   const activeIdRef = useRef(active.id);
   activeIdRef.current = active.id;
 
-  // 用 ref 追踪当前打开文件 / 编辑器内容，使依赖它们的回调保持稳定（不随每次输入重建）。
-  const openFileRef = useRef<string | null>(null);
+  // 用 ref 追踪 tabs / activePath，使依赖它们的回调保持稳定（不随每次输入重建）。
+  const tabsRef = useRef<FileTab[]>(tabs);
+  const activePathRef = useRef<string | null>(null);
+  // 待 dispose 的 Monaco model 路径队列：只在此处 push，统一由下方 effect 消费。
+  const pendingDisposeRef = useRef<string[]>([]);
+
+  const activeTab = tabs.find((tb) => tb.path === activePath) ?? null;
+
+  // 当前编辑器内容的直读 ref（渲染期同步赋值，无一帧延迟），供 compareWithClipboard 等异步回调取用。
+  const editValueRef = useRef('');
+  editValueRef.current = activeTab?.editValue ?? '';
+
   useEffect(() => {
-    openFileRef.current = openFilePath;
-  }, [openFilePath]);
-  const editValueRef = useRef(editValue);
-  editValueRef.current = editValue;
+    activePathRef.current = activePath;
+  }, [activePath]);
+
+  // tabs 提交后：同步 ref + 冲洗待 dispose 队列（此时子组件 CodeEditor 已先一步把 Monaco 编辑器
+  // 切到新 model，dispose 旧 model 不会破坏正在显示的内容）。
+  useEffect(() => {
+    tabsRef.current = tabs;
+    if (pendingDisposeRef.current.length > 0) {
+      for (const p of pendingDisposeRef.current) disposeFileModel(p);
+      pendingDisposeRef.current = [];
+    }
+  }, [tabs]);
 
   const refreshRecent = useCallback(() => {
     if (!isDesktop) return;
@@ -154,18 +185,15 @@ export const useFilesPage = (): UseFilesPageResult => {
     refreshRecent();
   }, [refreshRecent]);
 
-  // 切换根目录时清空编辑器（打开的文件可能不在新根下）。
+  // 切换根目录时关闭全部 tab（打开的文件可能不在新根下）并释放所有本页 model。
   useEffect(() => {
-    setOpenFilePath(null);
-    setEditValueState('');
-    setOriginalValue('');
-    setIsBinary(false);
-    setImageDataUri(null);
+    setTabs([]);
+    setActivePath(null);
+    disposeAllFileModels();
     setDiffMode(false);
     setDiffSource(null);
     setGitDiff(null);
     setDiffError(null);
-    setFileError(null);
     setTreeQuery('');
     setSearchModeState('name');
     setContentResults([]);
@@ -187,66 +215,119 @@ export const useFilesPage = (): UseFilesPageResult => {
     [openInBrowser, refreshRecent],
   );
 
-  const selectFile = useCallback(
-    async (entry: FileEntry, revealTarget?: { line: number; term: string }) => {
-      if (entry.isDir) return;
-      setLoadingFile(true);
-      setFileError(null);
-      setCurrentFile(entry.path);
-      setCurrentDir(dirOf(entry.path));
-      setImageDataUri(null);
+  // 打开/激活一个跳转目标后按需设置 editorReveal（无目标或目标 tab 非文本则清除）。
+  const revealForTab = useCallback((tab: FileTab, revealTarget?: { line: number; term: string }) => {
+    if (revealTarget && !tab.isBinary && !tab.imageDataUri) {
+      revealNonceRef.current += 1;
+      setEditorReveal({ line: revealTarget.line, term: revealTarget.term, nonce: revealNonceRef.current });
+    } else {
+      setEditorReveal(null);
+    }
+  }, []);
+
+  // 打开路径的核心实现：selectFile / openFileByPath / openContentResult 都走它。
+  //   - 已打开：只激活（不重新读盘，保留未保存的编辑）。
+  //   - 未打开：读盘构造新 tab，按 VS Code 预览语义插入（至多一个 preview tab）。
+  const openPath = useCallback(
+    async (path: string, revealTarget?: { line: number; term: string }) => {
+      setCurrentFile(path);
+      setCurrentDir(dirOf(path));
       setDiffMode(false);
       setDiffSource(null);
       setGitDiff(null);
       setDiffError(null);
-      setEditorReveal(null); // 默认清除跳转；命中结果在加载成功后再设
+
+      const existing = tabsRef.current.find((tb) => tb.path === path);
+      if (existing) {
+        setActivePath(path);
+        revealForTab(existing, revealTarget);
+        return;
+      }
+
+      setLoadingFile(true);
+      let newTab: FileTab;
       try {
-        if (isImg(entry.path)) {
+        if (isImg(path)) {
           // 图片：读 data URI 就地预览，不进文本编辑器。
-          const uri = await FileService.readFileBase64(entry.path);
-          setOpenFilePath(entry.path);
-          setIsBinary(true);
-          setImageDataUri(uri);
-          setEditValueState('');
-          setOriginalValue('');
+          const uri = await FileService.readFileBase64(path);
+          newTab = {
+            path,
+            editValue: '',
+            originalValue: '',
+            isBinary: true,
+            imageDataUri: uri,
+            fileError: null,
+            viewMode: 'source',
+            preview: true,
+          };
         } else {
-          const fc = await FileService.readFile(entry.path);
-          setOpenFilePath(entry.path);
-          setIsBinary(fc.isBinary);
-          setEditValueState(fc.content);
-          setOriginalValue(fc.content);
-          // 文本加载成功且来自内容搜索结果：定位行 + 高亮命中。
-          if (revealTarget && !fc.isBinary) {
-            revealNonceRef.current += 1;
-            setEditorReveal({
-              line: revealTarget.line,
-              term: revealTarget.term,
-              nonce: revealNonceRef.current,
-            });
-          }
+          const fc = await FileService.readFile(path);
+          newTab = {
+            path,
+            editValue: fc.content,
+            originalValue: fc.content,
+            isBinary: fc.isBinary,
+            imageDataUri: null,
+            fileError: null,
+            viewMode: 'source',
+            preview: true,
+          };
         }
-        setViewMode('source'); // 打开默认看源码（markdown 可在工具栏切预览）
       } catch (err) {
-        setOpenFilePath(entry.path);
-        setIsBinary(false);
-        setImageDataUri(null);
-        setEditValueState('');
-        setOriginalValue('');
-        setFileError(err instanceof Error ? err.message : String(err));
+        newTab = {
+          path,
+          editValue: '',
+          originalValue: '',
+          isBinary: false,
+          imageDataUri: null,
+          fileError: err instanceof Error ? err.message : String(err),
+          viewMode: 'source',
+          preview: true,
+        };
       } finally {
         setLoadingFile(false);
       }
+
+      // 插入策略（VS Code 预览语义）：已有 preview tab 且不脏 → 原位替换；脏（防御性）→ 固定后追加；
+      // 否则直接追加到末尾。
+      const prevTabs = tabsRef.current;
+      const previewIdx = prevTabs.findIndex((tb) => tb.preview);
+      const prevPreviewTab = previewIdx >= 0 ? prevTabs[previewIdx] : undefined;
+      let nextTabs: FileTab[];
+      if (prevPreviewTab) {
+        if (prevPreviewTab.editValue === prevPreviewTab.originalValue) {
+          pendingDisposeRef.current.push(prevPreviewTab.path);
+          nextTabs = [...prevTabs];
+          nextTabs[previewIdx] = newTab;
+        } else {
+          nextTabs = [...prevTabs];
+          nextTabs[previewIdx] = { ...prevPreviewTab, preview: false };
+          nextTabs.push(newTab);
+        }
+      } else {
+        nextTabs = [...prevTabs, newTab];
+      }
+      setTabs(nextTabs);
+      setActivePath(path);
+      revealForTab(newTab, revealTarget);
     },
-    [setCurrentDir, setCurrentFile],
+    [setCurrentDir, setCurrentFile, revealForTab],
   );
 
-  // 按绝对路径打开文件（QuickOpen 选中）：合成 FileEntry 走 selectFile；带 line 时定位行。
+  const selectFile = useCallback(
+    async (entry: FileEntry, revealTarget?: { line: number; term: string }) => {
+      if (entry.isDir) return;
+      await openPath(entry.path, revealTarget);
+    },
+    [openPath],
+  );
+
+  // 按绝对路径打开文件（QuickOpen 选中）；带 line 时定位行。
   const openFileByPath = useCallback(
     (path: string, line?: number) => {
-      const entry: FileEntry = { name: baseOf(path), path, isDir: false, size: 0, modTime: 0 };
-      void selectFile(entry, line ? { line, term: '' } : undefined);
+      void openPath(path, line ? { line, term: '' } : undefined);
     },
-    [selectFile],
+    [openPath],
   );
 
   const activateDir = useCallback(
@@ -254,6 +335,58 @@ export const useFilesPage = (): UseFilesPageResult => {
       setCurrentDir(path);
     },
     [setCurrentDir],
+  );
+
+  const activateTab = useCallback(
+    (path: string) => {
+      setActivePath(path);
+      setCurrentFile(path);
+      setCurrentDir(dirOf(path));
+      setDiffMode(false);
+      setDiffSource(null);
+      setGitDiff(null);
+      setDiffError(null);
+      setEditorReveal(null);
+    },
+    [setCurrentFile, setCurrentDir],
+  );
+
+  const pinTab = useCallback((path: string) => {
+    setTabs((prev) => prev.map((tb) => (tb.path === path ? { ...tb, preview: false } : tb)));
+  }, []);
+
+  const closeTab = useCallback(
+    async (path: string) => {
+      const tab = tabsRef.current.find((tb) => tb.path === path);
+      if (!tab) return;
+      if (tab.editValue !== tab.originalValue) {
+        const ok = await NativeDialogs.confirm({
+          title: t('files.tabs.closeDirtyTitle'),
+          message: t('files.tabs.closeDirtyMessage', { name: baseOf(path) }),
+          okLabel: t('files.tabs.discard'),
+          cancelLabel: t('files.tabs.cancel'),
+        });
+        if (!ok) return;
+      }
+      const prev = tabsRef.current;
+      const idx = prev.findIndex((tb) => tb.path === path);
+      if (idx < 0) return;
+      pendingDisposeRef.current.push(path);
+      const next = prev.filter((tb) => tb.path !== path);
+      setTabs(next);
+      if (activePathRef.current === path) {
+        const neighbor = next[idx] ?? next[idx - 1] ?? null;
+        if (neighbor) {
+          setActivePath(neighbor.path);
+          setCurrentFile(neighbor.path);
+          setCurrentDir(dirOf(neighbor.path));
+        } else {
+          setActivePath(null);
+          setCurrentFile(null);
+        }
+      }
+    },
+    [t, setCurrentFile, setCurrentDir],
   );
 
   // Ctrl/Cmd+P 在文件页内打开快速检索浮层（仅当前路由为 files 且已打开根目录时；避让终端 Ctrl+P）。
@@ -286,14 +419,23 @@ export const useFilesPage = (): UseFilesPageResult => {
     [launchProject, navigate],
   );
 
-  const setEditValue = useCallback((v: string) => setEditValueState(v), []);
+  // 写入激活 tab 的 editValue；若该 tab 是 preview，同时置 preview=false（编辑即固定）。
+  // 用函数式 setTabs + activePath 的 ref，保持回调引用稳定（不随输入重建，避免打字卡顿）。
+  const setEditValue = useCallback((v: string) => {
+    const path = activePathRef.current;
+    if (!path) return;
+    setTabs((prev) => prev.map((tb) => (tb.path === path ? { ...tb, editValue: v, preview: false } : tb)));
+  }, []);
 
   const save = useCallback(async () => {
-    if (!openFilePath || saving) return;
+    const path = activePathRef.current;
+    const tab = path ? tabsRef.current.find((tb) => tb.path === path) : undefined;
+    if (!path || !tab || saving) return;
+    const snapshot = tab.editValue; // 固定本次保存写盘的内容，避免 await 期间继续输入导致的错配
     setSaving(true);
     try {
-      await FileService.writeFile(openFilePath, editValue);
-      setOriginalValue(editValue);
+      await FileService.writeFile(path, snapshot);
+      setTabs((prev) => prev.map((tb) => (tb.path === path ? { ...tb, originalValue: snapshot } : tb)));
     } catch (err) {
       await NativeDialogs.error(
         t('files.saveErrorTitle'),
@@ -302,7 +444,13 @@ export const useFilesPage = (): UseFilesPageResult => {
     } finally {
       setSaving(false);
     }
-  }, [openFilePath, editValue, saving, t]);
+  }, [saving, t]);
+
+  const setViewMode = useCallback((m: FilesViewMode) => {
+    const path = activePathRef.current;
+    if (!path) return;
+    setTabs((prev) => prev.map((tb) => (tb.path === path ? { ...tb, viewMode: m } : tb)));
+  }, []);
 
   const reveal = useCallback(() => {
     const target = currentFile ?? rootDir;
@@ -340,15 +488,12 @@ export const useFilesPage = (): UseFilesPageResult => {
     }
   }, [rootDir, treeQuery]);
 
-  // 打开一条内容命中（复用 selectFile，构造最小 FileEntry）：带上行号 + 命中词定位高亮。
+  // 打开一条内容命中：带上行号 + 命中词定位高亮。
   const openContentResult = useCallback(
     (m: ContentMatch) => {
-      void selectFile(
-        { name: baseOf(m.path), path: m.path, isDir: false, size: 0, modTime: 0 },
-        { line: m.line, term: contentTerm },
-      );
+      void openPath(m.path, { line: m.line, term: contentTerm });
     },
-    [selectFile, contentTerm],
+    [openPath, contentTerm],
   );
 
   // 内容模式下清空搜索词即清空结果。
@@ -362,7 +507,7 @@ export const useFilesPage = (): UseFilesPageResult => {
   // 切换「查看改动」：开启时拉取该文件 HEAD vs 工作树 diff（读盘内容，未保存的编辑不计入）。
   // 已在 Git diff 态再点 = 关闭；在剪贴板 diff 态点 = 切到 Git diff。
   const toggleDiff = useCallback(async () => {
-    const open = openFileRef.current;
+    const open = activePathRef.current;
     if (!open) return;
     if (diffMode && diffSource === 'git') {
       setDiffMode(false);
@@ -412,34 +557,51 @@ export const useFilesPage = (): UseFilesPageResult => {
     }
   }, [diffMode, diffSource]);
 
-  // 文件树写操作回调：
-  //   - 删除 / 改名当前打开的文件 → 清空编辑器与选中态（路径已不可用）。
-  //   - 移动当前打开的文件 → 内容不变，仅跟随到新路径（保留未保存的编辑）。
+  // 文件树写操作回调（对所有匹配 tab 生效，不只当前激活的）：
+  //   - 删除 / 改名匹配的 tab → 强制关闭（文件已没了，不弹脏确认）。
+  //   - 移动匹配的 tab → 内容不变，仅跟随到新路径（保留未保存的编辑）。
   const onTreeMutate = useCallback(
     (m: FileTreeMutation) => {
-      const open = openFileRef.current;
-      if (!open) return;
-      if (m.kind === 'move' && m.oldPath === open && m.newPath) {
-        setOpenFilePath(m.newPath);
-        setCurrentFile(m.newPath);
-        setCurrentDir(dirOf(m.newPath));
-        // 移动即退出 diff 视图：旧路径的 Git diff 已对不上新路径，按钮也不应残留激活。
-        setDiffMode(false);
-        setDiffSource(null);
-        setGitDiff(null);
+      if (m.kind === 'move' && m.oldPath && m.newPath) {
+        const oldPath = m.oldPath;
+        const newPath = m.newPath;
+        const prev = tabsRef.current;
+        if (!prev.some((tb) => tb.path === oldPath)) return;
+        pendingDisposeRef.current.push(oldPath);
+        setTabs(prev.map((tb) => (tb.path === oldPath ? { ...tb, path: newPath } : tb)));
+        if (activePathRef.current === oldPath) {
+          setActivePath(newPath);
+          setCurrentFile(newPath);
+          setCurrentDir(dirOf(newPath));
+          // 移动即退出 diff 视图：旧路径的 Git diff 已对不上新路径，按钮也不应残留激活。
+          setDiffMode(false);
+          setDiffSource(null);
+          setGitDiff(null);
+        }
         return;
       }
-      if ((m.kind === 'trash' || m.kind === 'rename') && m.oldPath === open) {
-        setOpenFilePath(null);
-        setEditValueState('');
-        setOriginalValue('');
-        setIsBinary(false);
-        setImageDataUri(null);
-        setDiffMode(false);
-        setDiffSource(null);
-        setGitDiff(null);
-        setFileError(null);
-        setCurrentFile(null);
+      if ((m.kind === 'trash' || m.kind === 'rename') && m.oldPath) {
+        const oldPath = m.oldPath;
+        const prev = tabsRef.current;
+        const idx = prev.findIndex((tb) => tb.path === oldPath);
+        if (idx < 0) return;
+        pendingDisposeRef.current.push(oldPath);
+        const next = prev.filter((tb) => tb.path !== oldPath);
+        setTabs(next);
+        if (activePathRef.current === oldPath) {
+          const neighbor = next[idx] ?? next[idx - 1] ?? null;
+          if (neighbor) {
+            setActivePath(neighbor.path);
+            setCurrentFile(neighbor.path);
+            setCurrentDir(dirOf(neighbor.path));
+          } else {
+            setActivePath(null);
+            setCurrentFile(null);
+          }
+          setDiffMode(false);
+          setDiffSource(null);
+          setGitDiff(null);
+        }
       }
     },
     [setCurrentFile, setCurrentDir],
@@ -449,17 +611,17 @@ export const useFilesPage = (): UseFilesPageResult => {
     isDesktop,
     rootDir,
     recent,
-    openFilePath,
-    editValue,
-    originalValue,
-    dirty: editValue !== originalValue,
+    openFilePath: activePath,
+    editValue: activeTab?.editValue ?? '',
+    originalValue: activeTab?.originalValue ?? '',
+    dirty: activeTab ? activeTab.editValue !== activeTab.originalValue : false,
     saving,
     loadingFile,
-    fileError,
-    isBinary,
-    isMarkdown: openFilePath ? isMd(openFilePath) : false,
-    imageDataUri,
-    viewMode,
+    fileError: activeTab?.fileError ?? null,
+    isBinary: activeTab?.isBinary ?? false,
+    isMarkdown: activePath ? isMd(activePath) : false,
+    imageDataUri: activeTab?.imageDataUri ?? null,
+    viewMode: activeTab?.viewMode ?? 'source',
     diffMode,
     diffSource,
     gitDiff,
@@ -494,6 +656,10 @@ export const useFilesPage = (): UseFilesPageResult => {
     quickOpenOpen,
     closeQuickOpen,
     openFileByPath,
+    tabs,
+    activateTab,
+    closeTab,
+    pinTab,
   };
 };
 
