@@ -79,7 +79,8 @@ export const providerSettingsZhCN: Messages = {
             ok: '覆盖',
             cancel: '取消',
           },
-          settingsJson: 'settings.json 配置',
+          settingsJson: '供应商凭据(补丁)',
+          settingsJsonHelper: '只填区分该服务商的部分(如 env 的 base_url / token、model),会深合并到系统配置之上',
           jsonEmptyError: '不能为空，至少填 {}',
           jsonInvalidError: '不是合法的 JSON 对象',
           authJson: 'auth.json（登录态，可选）',
@@ -88,6 +89,15 @@ export const providerSettingsZhCN: Messages = {
           configTomlHelper: 'TOML 格式；保存时由后端校验合法性',
           save: '保存',
           cancel: '取消',
+        },
+        // 系统配置基底（claude/reclaude 两层模型的公共层，跨供应商共享）。
+        baseConfig: {
+          title: '系统配置(公共)',
+          desc: 'hooks、状态栏、主题、权限等跨供应商共享的设置。切换下方供应商只替换凭据,不影响这里。',
+          edit: '编辑',
+          dialogTitle: '编辑 {{app}} 系统配置',
+          dialogHint: '这里是 {{app}} 的公共基底。保存后会与当前供应商的凭据补丁深合并,写入全局配置文件。',
+          jsonLabel: '系统配置 JSON',
         },
       },
       // Reclaude 标签页（与 Claude Code 共用 ~/.claude/settings.json 的专属提示）。

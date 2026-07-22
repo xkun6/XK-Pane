@@ -183,6 +183,14 @@ export const AgentCfgService = {
     return toProvider(dto);
   },
 
+  // —— 系统配置基底(claude/reclaude 两层模型的公共层;codex/grok 不适用) ——
+  async getBaseConfig(appType: AgentAppType): Promise<string> {
+    return (await Binding.GetBaseConfig(appType)) ?? '{}';
+  },
+  async setBaseConfig(appType: AgentAppType, settingsJson: string): Promise<void> {
+    await Binding.SetBaseConfig(appType, settingsJson);
+  },
+
   // —— MCP server（SSOT，按 name 排序） ——
   async listMcp(): Promise<AgentMcpServer[]> {
     const rows = await Binding.ListMcpServers();

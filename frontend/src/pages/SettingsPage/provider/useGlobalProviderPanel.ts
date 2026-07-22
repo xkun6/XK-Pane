@@ -83,6 +83,16 @@ function draftFromProvider(appType: AgentAppType, p: AgentProvider): GlobalProvi
   return { name: p.name, notes: p.notes, claudeJson: '{}', codexAuthJson: authText, codexConfigToml: configText };
 }
 
+// 把系统配置基底原始 JSON pretty-print 便于编辑；解析失败保留原文（脏数据不该拦住用户打开
+// 编辑框），与 draftFromProvider 的 claude 分支同一模式。
+function prettyBaseJson(raw: string): string {
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2);
+  } catch {
+    return raw;
+  }
+}
+
 export interface UseGlobalProviderPanelResult {
   providers: AgentProvider[];
   loading: boolean;
@@ -101,6 +111,15 @@ export interface UseGlobalProviderPanelResult {
   remove: (p: AgentProvider, strings: RemoveStrings) => Promise<void>;
   switchTo: (p: AgentProvider, strings: ErrorStrings) => Promise<void>;
   importCurrent: (strings: ErrorStrings) => Promise<void>;
+  // —— 系统配置基底(仅 claude/reclaude 适用) ——
+  baseJson: string;
+  baseDialogOpen: boolean;
+  baseJsonError: JsonFieldError;
+  isTwoLayer: boolean;
+  openBaseEdit: () => void;
+  cancelBaseEdit: () => void;
+  setBaseJson: (value: string) => void;
+  saveBase: (strings: ErrorStrings) => Promise<void>;
 }
 
 export const useGlobalProviderPanel = (appType: AgentAppType): UseGlobalProviderPanelResult => {
@@ -110,6 +129,11 @@ export const useGlobalProviderPanel = (appType: AgentAppType): UseGlobalProvider
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingIsCurrent, setEditingIsCurrent] = useState(false);
   const [draft, setDraft] = useState<GlobalProviderDraft>(emptyDraft);
+  const [baseJson, setBaseJson] = useState('{}');
+  const [baseDialogOpen, setBaseDialogOpen] = useState(false);
+
+  // claude/reclaude 共享同一套两层模型（系统配置基底 + 供应商凭据补丁）；codex/grok 仍是整份。
+  const isTwoLayer = appType === 'claude' || appType === 'reclaude';
 
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -120,18 +144,26 @@ export const useGlobalProviderPanel = (appType: AgentAppType): UseGlobalProvider
     }
   }, [appType]);
 
+  const loadBase = useCallback(async (): Promise<void> => {
+    if (!isTwoLayer) return;
+    const raw = await AgentCfgService.getBaseConfig(appType);
+    setBaseJson(prettyBaseJson(raw));
+  }, [appType, isTwoLayer]);
+
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+    void loadBase();
+  }, [refresh, loadBase]);
 
   // live 文件外部改动 → 后端已同步 current Provider，刷新列表（编辑中的草稿不碰）
   useEffect(() => {
     return AgentCfgService.onLiveChanged((payload) => {
       if (payload.kind === 'provider' && payload.appType === appType) {
         void refresh();
+        void loadBase();
       }
     });
-  }, [appType, refresh]);
+  }, [appType, refresh, loadBase]);
 
   const openAdd = useCallback(() => {
     setEditingId(null);
@@ -247,6 +279,26 @@ export const useGlobalProviderPanel = (appType: AgentAppType): UseGlobalProvider
     [appType, refresh],
   );
 
+  const openBaseEdit = useCallback(() => {
+    void loadBase();
+    setBaseDialogOpen(true);
+  }, [loadBase]);
+
+  const cancelBaseEdit = useCallback(() => setBaseDialogOpen(false), []);
+
+  const saveBase = useCallback(
+    async (strings: ErrorStrings): Promise<void> => {
+      try {
+        await AgentCfgService.setBaseConfig(appType, baseJson.trim());
+        setBaseDialogOpen(false);
+        await refresh();
+      } catch (e) {
+        await NativeDialogs.error(strings.errorTitle, messageOf(e));
+      }
+    },
+    [appType, baseJson, refresh],
+  );
+
   return {
     providers,
     loading,
@@ -265,5 +317,13 @@ export const useGlobalProviderPanel = (appType: AgentAppType): UseGlobalProvider
     remove,
     switchTo,
     importCurrent,
+    baseJson,
+    baseDialogOpen,
+    baseJsonError: requiredJsonObjectError(baseJson),
+    isTwoLayer,
+    openBaseEdit,
+    cancelBaseEdit,
+    setBaseJson,
+    saveBase,
   };
 };

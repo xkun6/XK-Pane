@@ -5,11 +5,13 @@ import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import SwapHorizRoundedIcon from '@mui/icons-material/SwapHorizRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
+import TuneRoundedIcon from '@mui/icons-material/TuneRounded';
 import { useT } from '@/i18n';
 import type { AgentAppType, AgentProvider } from '@/services';
 import { extractBaseUrlHint } from './agentProviderDisplay';
 import { globalProviderPanelStyles } from './GlobalProviderPanel.styles';
 import { GlobalProviderFormDialog } from './GlobalProviderFormDialog';
+import { SystemConfigDialog } from './SystemConfigDialog';
 import { CliVersionBar } from './CliVersionBar';
 import { useGlobalProviderPanel, type ClaudeTemplateId } from './useGlobalProviderPanel';
 
@@ -57,6 +59,25 @@ export const GlobalProviderPanel = ({ appType }: GlobalProviderPanelProps) => {
   return (
     <Box sx={styles.root}>
       <CliVersionBar appType={appType} />
+
+      {vm.isTwoLayer && (
+        <Box sx={styles.baseCard}>
+          <Box sx={styles.baseCardMain}>
+            <Typography sx={styles.baseCardTitle}>{t('settings.provider.global.baseConfig.title')}</Typography>
+            <Typography sx={styles.baseCardDesc}>{t('settings.provider.global.baseConfig.desc')}</Typography>
+          </Box>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<TuneRoundedIcon />}
+            onClick={vm.openBaseEdit}
+            sx={styles.toolbarBtn}
+          >
+            {t('settings.provider.global.baseConfig.edit')}
+          </Button>
+        </Box>
+      )}
+
       <Box sx={styles.toolbar}>
         <Button
           size="small"
@@ -167,6 +188,16 @@ export const GlobalProviderPanel = ({ appType }: GlobalProviderPanelProps) => {
         onApplyTemplate={handleApplyTemplate}
         onCancel={vm.cancel}
         onSubmit={handleSubmit}
+      />
+
+      <SystemConfigDialog
+        appType={appType}
+        open={vm.baseDialogOpen}
+        value={vm.baseJson}
+        error={vm.baseJsonError}
+        onChange={vm.setBaseJson}
+        onCancel={vm.cancelBaseEdit}
+        onSave={() => void vm.saveBase({ errorTitle })}
       />
     </Box>
   );

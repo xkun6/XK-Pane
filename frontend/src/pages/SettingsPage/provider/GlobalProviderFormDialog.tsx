@@ -127,7 +127,7 @@ export const GlobalProviderFormDialog = ({
               onChange={(v) => onFieldChange('claudeJson', v)}
               height={320}
               error={claudeJsonError !== ''}
-              helperText={jsonErrorHelper(claudeJsonError)}
+              helperText={jsonErrorHelper(claudeJsonError) ?? t('settings.provider.global.form.settingsJsonHelper')}
             />
           </>
         ) : (

@@ -79,7 +79,8 @@ export const providerSettingsEnUS: Messages = {
             ok: 'Overwrite',
             cancel: 'Cancel',
           },
-          settingsJson: 'settings.json config',
+          settingsJson: 'Provider credentials (patch)',
+          settingsJsonHelper: 'Only fill in what differs for this provider (e.g. env base_url / token, model) — it is deep-merged on top of the system config',
           jsonEmptyError: 'Required — at least {}',
           jsonInvalidError: 'Not a valid JSON object',
           authJson: 'auth.json (login state, optional)',
@@ -88,6 +89,15 @@ export const providerSettingsEnUS: Messages = {
           configTomlHelper: 'TOML format; validity is checked by the backend on save.',
           save: 'Save',
           cancel: 'Cancel',
+        },
+        // System config base layer (shared layer of the claude/reclaude two-layer model, shared across providers).
+        baseConfig: {
+          title: 'System config (shared)',
+          desc: 'Settings shared across providers — hooks, status line, theme, permissions, etc. Switching providers below only swaps credentials and does not affect this.',
+          edit: 'Edit',
+          dialogTitle: 'Edit {{app}} system config',
+          dialogHint: 'This is the shared base config for {{app}}. On save it is deep-merged with the current provider\'s credential patch and written to the global config file.',
+          jsonLabel: 'System config JSON',
         },
       },
       // Reclaude tab (dedicated hint — shares ~/.claude/settings.json with Claude Code).

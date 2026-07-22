@@ -21,6 +21,10 @@ interface GlobalProviderPanelSx {
   bottomHint: S;
   formField: S;
   currentEditWarning: S;
+  baseCard: S;
+  baseCardMain: S;
+  baseCardTitle: S;
+  baseCardDesc: S;
 }
 
 export const globalProviderPanelStyles = (theme: Theme): GlobalProviderPanelSx => {
@@ -97,5 +101,18 @@ export const globalProviderPanelStyles = (theme: Theme): GlobalProviderPanelSx =
       backgroundColor: fp.bg.elevated,
       border: `1px solid ${fp.divider}`,
     },
+    baseCard: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 1.5,
+      px: 2,
+      py: 1.5,
+      borderRadius: 1,
+      border: `1px solid ${fp.divider}`,
+      backgroundColor: fp.bg.elevated,
+    },
+    baseCardMain: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0.25 },
+    baseCardTitle: { fontSize: 14, fontWeight: 600, color: fp.text.primary },
+    baseCardDesc: { fontSize: 12, color: fp.text.muted, lineHeight: 1.5 },
   };
 };
