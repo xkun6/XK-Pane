@@ -62,7 +62,7 @@ function messageOf(e: unknown): string {
 // 方便编辑；codex 侧拆 auth/config 两块。任一侧解析失败都退回空白草稿而不是抛错——脏数据
 // 不该拦住用户打开编辑框。
 function draftFromProvider(appType: AgentAppType, p: AgentProvider): GlobalProviderDraft {
-  if (appType === 'claude') {
+  if (appType === 'claude' || appType === 'reclaude') {
     let pretty = p.settingsJson;
     try {
       pretty = JSON.stringify(JSON.parse(p.settingsJson), null, 2);
@@ -177,7 +177,7 @@ export const useGlobalProviderPanel = (appType: AgentAppType): UseGlobalProvider
   const submit = useCallback(
     async (strings: ErrorStrings): Promise<void> => {
       const settingsJson =
-        appType === 'claude'
+        appType === 'claude' || appType === 'reclaude'
           ? draft.claudeJson.trim()
           : JSON.stringify({
               auth: draft.codexAuthJson.trim() === '' ? null : (JSON.parse(draft.codexAuthJson) as unknown),

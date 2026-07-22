@@ -1,8 +1,8 @@
 // CliUpdateService：cliupdate.Service（CLI 工具版本检测与一键升级）的前端封装。
 //
-// 用于 Provider 设置页 Claude / Codex / Grok Build 标签顶部的版本条：check 拿本地版本 +
+// 用于 Provider 设置页 Claude / Reclaude / Codex / Grok Build 标签顶部的版本条：check 拿本地版本 +
 // npm 最新版，upgrade 触发一键升级（claude/grok 优先官方自升级命令、失败回退 npm 重装；
-// codex 直接 npm——上游 `codex update` 有报成功但未实际更新的假成功问题）。
+// codex 直接 npm——上游 `codex update` 有报成功但未实际更新的假成功问题；reclaude 与 claude 同包）。
 import { Service as Binding } from '@bindings/xkpane/internal/services/cliupdate';
 import type {
   ToolStatusDTO as RawToolStatusDTO,
@@ -46,15 +46,15 @@ function toUpgradeResult(dto: RawUpgradeCliResultDTO): CliUpgradeResult {
 }
 
 export const CliUpdateService = {
-  // 检测 tool（claude | codex | grok）的本地版本与 npm 最新版本。
-  async check(tool: 'claude' | 'codex' | 'grok'): Promise<CliToolStatus> {
+  // 检测 tool（claude | reclaude | codex | grok）的本地版本与 npm 最新版本。
+  async check(tool: 'claude' | 'reclaude' | 'codex' | 'grok'): Promise<CliToolStatus> {
     const dto = await Binding.CheckCliTool(tool);
     if (!dto) throw new Error('cliupdate: CheckCliTool 返回空');
     return toStatus(dto);
   },
 
   // 一键升级 tool。
-  async upgrade(tool: 'claude' | 'codex' | 'grok'): Promise<CliUpgradeResult> {
+  async upgrade(tool: 'claude' | 'reclaude' | 'codex' | 'grok'): Promise<CliUpgradeResult> {
     const dto = await Binding.UpgradeCliTool(tool);
     if (!dto) throw new Error('cliupdate: UpgradeCliTool 返回空');
     return toUpgradeResult(dto);

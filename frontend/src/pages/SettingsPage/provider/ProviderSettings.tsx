@@ -5,9 +5,10 @@ import { useProviderSettings, type ProviderTabId } from './useProviderSettings';
 import { GlobalProviderPanel } from './GlobalProviderPanel';
 import { OtherCliProviders } from './OtherCliProviders';
 
-// Provider 设置子页（走已验证的设置框架）：四标签——
-//   Claude Code / Codex / Grok Build：cc-switch 式全局配置 Provider（整份 CLI 配置文件
-//     切换），由 GlobalProviderPanel 按 appType 参数化复用；
+// Provider 设置子页（走已验证的设置框架）：五标签——
+//   Claude Code / Reclaude / Codex / Grok Build：cc-switch 式全局配置 Provider（整份 CLI 配置文件
+//     切换），由 GlobalProviderPanel 按 appType 参数化复用；其中 Reclaude 与 Claude Code
+//     同形共用 ~/.claude/settings.json，由 XK 启动会话时按所选工具切换写入；
 //   其它 CLI：按会话注入类型的 typed 表单 CRUD（gemini/kimi/glm/cursor/opencode）。
 export const ProviderSettings = () => {
   const theme = useTheme();
@@ -19,12 +20,14 @@ export const ProviderSettings = () => {
     <Box sx={styles.root}>
       <Tabs value={vm.tab} onChange={(_, v: ProviderTabId) => vm.setTab(v)} sx={styles.tabs}>
         <Tab value="claude" label={t('settings.provider.tabs.claude')} sx={styles.tab} />
+        <Tab value="reclaude" label={t('settings.provider.tabs.reclaude')} sx={styles.tab} />
         <Tab value="codex" label={t('settings.provider.tabs.codex')} sx={styles.tab} />
         <Tab value="grok" label={t('settings.provider.tabs.grok')} sx={styles.tab} />
         <Tab value="other" label={t('settings.provider.tabs.other')} sx={styles.tab} />
       </Tabs>
       <Box sx={styles.body}>
         {vm.tab === 'claude' && <GlobalProviderPanel appType="claude" />}
+        {vm.tab === 'reclaude' && <GlobalProviderPanel appType="reclaude" />}
         {vm.tab === 'codex' && <GlobalProviderPanel appType="codex" />}
         {vm.tab === 'grok' && <GlobalProviderPanel appType="grok" />}
         {vm.tab === 'other' && <OtherCliProviders />}

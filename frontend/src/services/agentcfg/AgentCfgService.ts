@@ -24,7 +24,7 @@ import type {
 import { AppEvents } from '@/shared/events';
 import { eventTransport, isDesktop } from '@/services/transport';
 
-export type AgentAppType = 'claude' | 'codex' | 'grok';
+export type AgentAppType = 'claude' | 'reclaude' | 'codex' | 'grok';
 
 export interface AgentProvider {
   id: string;

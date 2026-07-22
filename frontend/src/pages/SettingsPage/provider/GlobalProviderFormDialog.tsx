@@ -64,7 +64,8 @@ export const GlobalProviderFormDialog = ({
   };
 
   const canSave =
-    draft.name.trim() !== '' && (appType === 'claude' ? claudeJsonError === '' : codexAuthJsonError === '');
+    draft.name.trim() !== '' &&
+    (appType === 'claude' || appType === 'reclaude' ? claudeJsonError === '' : codexAuthJsonError === '');
 
   return (
     <Dialog open={open} onClose={onCancel} maxWidth="md" fullWidth>
@@ -99,7 +100,7 @@ export const GlobalProviderFormDialog = ({
           </Typography>
         )}
 
-        {appType === 'claude' ? (
+        {appType === 'claude' || appType === 'reclaude' ? (
           <>
             <TextField
               select
