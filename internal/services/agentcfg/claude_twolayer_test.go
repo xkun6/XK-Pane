@@ -3,6 +3,7 @@ package agentcfg
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"testing"
 )
 
@@ -173,5 +174,67 @@ func TestManualImportComputesDiffAgainstBaseConfig(t *testing.T) {
 	}
 	if !jsonEqual(base, baseAfter) {
 		t.Fatalf("手动导入不应改动系统配置基底:\n before = %+v\n after  = %+v", base, baseAfter)
+	}
+}
+
+// TestSetBaseConfigReprojectsLiveForClaude SetBaseConfig(claude, ...) 应立即重投影当前
+// live:deepMerge(新基底, 当前供应商补丁) 写回 settings.json;GetBaseConfig 读回应与写入一致。
+func TestSetBaseConfigReprojectsLiveForClaude(t *testing.T) {
+	svc := newTestService(t)
+	mustStartup(t, svc) // 首启:默认供应商补丁为空("{}"),便于只观察基底如何投影到 live
+
+	ctx := context.Background()
+	if err := svc.SetBaseConfig(ctx, appTypeClaude, `{"hooks":{"k":"v"}}`); err != nil {
+		t.Fatalf("SetBaseConfig: %v", err)
+	}
+
+	liveMap := readJSONFile(t, svc.claudeSettingsPath())
+	hooks, _ := liveMap["hooks"].(map[string]any)
+	if hooks["k"] != "v" {
+		t.Fatalf("SetBaseConfig 后 live 应含新基底 hooks.k: %+v", liveMap)
+	}
+
+	got, err := svc.GetBaseConfig(ctx, appTypeClaude)
+	if err != nil {
+		t.Fatalf("GetBaseConfig: %v", err)
+	}
+	var gotMap map[string]any
+	if err := json.Unmarshal([]byte(got), &gotMap); err != nil {
+		t.Fatalf("unmarshal GetBaseConfig 结果: %v", err)
+	}
+	if !jsonEqual(gotMap, mustJSONMap(t, `{"hooks":{"k":"v"}}`)) {
+		t.Fatalf("GetBaseConfig 应读回刚写入的基底:\n got  = %+v\n want = {\"hooks\":{\"k\":\"v\"}}", gotMap)
+	}
+}
+
+// TestSetBaseConfigReclaudeDoesNotWriteLive SetBaseConfig(reclaude, ...) 只写 DB,reclaude
+// 是 DB 权威、配置在启动会话时才落地(与 switchReclaude 一致),不应触碰共享 live 文件。
+func TestSetBaseConfigReclaudeDoesNotWriteLive(t *testing.T) {
+	svc := newTestService(t)
+	mustStartup(t, svc) // 建立 reclaude 的 current Provider,验证即便有 current 也不写 live
+
+	if _, err := os.Stat(svc.claudeSettingsPath()); !os.IsNotExist(err) {
+		t.Fatalf("调用前 live 文件不应存在(测试前提),Stat err = %v", err)
+	}
+
+	ctx := context.Background()
+	if err := svc.SetBaseConfig(ctx, appTypeReclaude, `{"model":"x"}`); err != nil {
+		t.Fatalf("SetBaseConfig: %v", err)
+	}
+
+	if _, err := os.Stat(svc.claudeSettingsPath()); !os.IsNotExist(err) {
+		t.Fatalf("SetBaseConfig(reclaude) 不应写共享 live 文件,Stat err = %v", err)
+	}
+
+	got, err := svc.GetBaseConfig(ctx, appTypeReclaude)
+	if err != nil {
+		t.Fatalf("GetBaseConfig: %v", err)
+	}
+	var gotMap map[string]any
+	if err := json.Unmarshal([]byte(got), &gotMap); err != nil {
+		t.Fatalf("unmarshal GetBaseConfig 结果: %v", err)
+	}
+	if gotMap["model"] != "x" {
+		t.Fatalf("GetBaseConfig(reclaude) 应读回刚写入的基底: %+v", gotMap)
 	}
 }

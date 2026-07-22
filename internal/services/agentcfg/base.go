@@ -1,6 +1,7 @@
 package agentcfg
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -57,4 +58,73 @@ func (s *Service) writeBaseConfig(db *gorm.DB, appType string, m map[string]any)
 		return err
 	}
 	return db.Model(&storage.AgentBaseConfig{}).Where("app_type = ?", appType).Update("settings_enc", enc).Error
+}
+
+// GetBaseConfig 返回指定 appType 的系统配置基底明文 JSON(claude|reclaude);无基底行返回 "{}"。
+// 仅桌面本地 IPC(Wails binding 进程内调用),绝不可挂到 internal/webapi 任何路由。
+func (s *Service) GetBaseConfig(ctx context.Context, appType string) (string, error) {
+	if appType != appTypeClaude && appType != appTypeReclaude {
+		return "", fmt.Errorf("agentcfg: GetBaseConfig 仅支持 claude|reclaude,got %q", appType)
+	}
+	base, err := s.readBaseConfig(s.db().WithContext(ctx), appType)
+	if err != nil {
+		return "", err
+	}
+	data, err := json.Marshal(base)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// SetBaseConfig 更新指定 appType 的系统配置基底。校验为合法 JSON 对象后加密 upsert;
+// claude 且存在 current Provider → 事务内重投影 live(deepMerge(新基底, 当前补丁))、
+// 事务外 setClaudeSettingsOwner(claude);reclaude → 只写 DB(配置在启动会话时才落地,与
+// switchReclaude 一致)。语义与 UpdateAgentProvider 的 claude 分支一致:用户在 claude 侧
+// 主动保存即意图应用到 claude,故写 live 并夺回 owner,不额外看当前 owner。
+func (s *Service) SetBaseConfig(ctx context.Context, appType, settingsJSON string) error {
+	if appType != appTypeClaude && appType != appTypeReclaude {
+		return fmt.Errorf("agentcfg: SetBaseConfig 仅支持 claude|reclaude,got %q", appType)
+	}
+	var m map[string]any
+	if err := json.Unmarshal([]byte(settingsJSON), &m); err != nil {
+		return fmt.Errorf("agentcfg: 系统配置不是合法 JSON 对象: %w", err)
+	}
+	if appType == appTypeReclaude {
+		return s.writeBaseConfig(s.db().WithContext(ctx), appTypeReclaude, m)
+	}
+	var wroteLive bool
+	err := s.db().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := s.writeBaseConfig(tx, appTypeClaude, m); err != nil {
+			return err
+		}
+		var cur storage.AgentProvider
+		qerr := tx.Where("app_type = ? AND is_current = ?", appTypeClaude, true).First(&cur).Error
+		if errors.Is(qerr, gorm.ErrRecordNotFound) {
+			return nil // 无 current → 不写 live
+		}
+		if qerr != nil {
+			return qerr
+		}
+		patch, err := cryptox.DecryptString(cur.SettingsEnc)
+		if err != nil {
+			return err
+		}
+		merged, err := s.mergedLive(tx, appTypeClaude, patch)
+		if err != nil {
+			return err
+		}
+		if err := s.writeClaudeLive(merged); err != nil {
+			return err
+		}
+		wroteLive = true
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if wroteLive {
+		return s.setClaudeSettingsOwner(ctx, appTypeClaude)
+	}
+	return nil
 }
