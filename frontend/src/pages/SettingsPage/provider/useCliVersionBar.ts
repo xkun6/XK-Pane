@@ -12,12 +12,21 @@ export interface UpgradeStrings {
   failTitle: string;
 }
 
+export interface InstallStrings {
+  doneTitle: string;
+  doneMessage: (version: string) => string;
+  warnTitle: string;
+  failTitle: string;
+}
+
 export interface UseCliVersionBarResult {
   status: CliToolStatus | null; // null = 尚未取到
   checking: boolean;
   upgrading: boolean;
+  installing: boolean;
   refresh: () => Promise<void>;
   upgrade: (strings: UpgradeStrings) => Promise<void>;
+  install: (strings: InstallStrings) => Promise<void>;
 }
 
 function messageOf(e: unknown): string {
@@ -29,6 +38,7 @@ export const useCliVersionBar = (appType: AgentAppType): UseCliVersionBarResult 
   const [status, setStatus] = useState<CliToolStatus | null>(null);
   const [checking, setChecking] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
+  const [installing, setInstalling] = useState(false);
 
   const refresh = useCallback(async (): Promise<void> => {
     setChecking(true);
@@ -72,5 +82,31 @@ export const useCliVersionBar = (appType: AgentAppType): UseCliVersionBarResult 
     [appType, refresh],
   );
 
-  return { status, checking, upgrading, refresh, upgrade };
+  const install = useCallback(
+    async (strings: InstallStrings): Promise<void> => {
+      setInstalling(true);
+      try {
+        const result = await CliUpdateService.install(appType);
+        // 与 upgrade 同款：先复位按钮态、后台复检，再弹结果（弹窗 promise 不参与状态复位）。
+        setInstalling(false);
+        void refresh();
+        if (result.ok && result.message === '') {
+          await NativeDialogs.info(strings.doneTitle, strings.doneMessage(result.newVersion));
+        } else if (result.ok) {
+          await NativeDialogs.warning(strings.warnTitle, result.message);
+        } else {
+          await NativeDialogs.error(strings.failTitle, result.message);
+        }
+      } catch (e) {
+        setInstalling(false);
+        void refresh();
+        await NativeDialogs.error(strings.failTitle, messageOf(e));
+      } finally {
+        setInstalling(false);
+      }
+    },
+    [appType, refresh],
+  );
+
+  return { status, checking, upgrading, installing, refresh, upgrade, install };
 };

@@ -41,6 +41,7 @@ var toolDefs = map[string]toolDef{
 type ToolStatusDTO struct {
 	Tool            string `json:"tool"`
 	Installed       bool   `json:"installed"`
+	Installable     bool   `json:"installable"` // 未安装时能否经 npm 一键安装（有 npmPackage 即可）
 	CurrentVersion  string `json:"currentVersion"`
 	LatestVersion   string `json:"latestVersion"`
 	UpdateAvailable bool   `json:"updateAvailable"`
@@ -53,6 +54,14 @@ type UpgradeCliResultDTO struct {
 	Ok         bool   `json:"ok"`
 	NewVersion string `json:"newVersion"`
 	Message    string `json:"message"` // 失败时=输出尾部若干行；假成功时=中文警告
+}
+
+// InstallCliResultDTO 是前端可见的一键安装结果。
+type InstallCliResultDTO struct {
+	Tool       string `json:"tool"`
+	Ok         bool   `json:"ok"`
+	NewVersion string `json:"newVersion"`
+	Message    string `json:"message"` // 失败=输出尾部若干行；成功但未检出版本=中文提示
 }
 
 // Service 是 cliupdate 的 Wails 门面。
@@ -144,7 +153,7 @@ func (s *Service) CheckCliTool(ctx context.Context, tool string) (*ToolStatusDTO
 		return nil, fmt.Errorf("cliupdate: 不支持的工具 %q", tool)
 	}
 
-	dto := &ToolStatusDTO{Tool: tool}
+	dto := &ToolStatusDTO{Tool: tool, Installable: def.npmPackage != ""}
 
 	verOut, verErr := s.runShell(ctx, 20*time.Second, versionCmdFor(tool, def))
 	if verErr == nil {
@@ -214,6 +223,44 @@ func (s *Service) UpgradeCliTool(ctx context.Context, tool string) (*UpgradeCliR
 		s.log.Warn("cli upgrade false success", "tool", tool, "current", newVersion, "latest", latest)
 	} else {
 		s.log.Info("cli upgrade done", "tool", tool, "newVersion", newVersion)
+	}
+
+	return result, nil
+}
+
+// InstallCliTool 全局安装未检测到的 CLI 工具（npm i -g <package>@latest）。
+// 仅支持带 npmPackage 的工具（claude / codex / grok）；reclaude 是自管理工具、无 npm 包，
+// 无法一键安装，返回 error。
+func (s *Service) InstallCliTool(ctx context.Context, tool string) (*InstallCliResultDTO, error) {
+	def, ok := toolDefs[tool]
+	if !ok {
+		return nil, fmt.Errorf("cliupdate: 不支持的工具 %q", tool)
+	}
+	if def.npmPackage == "" {
+		return nil, fmt.Errorf("cliupdate: %q 不支持一键安装", tool)
+	}
+
+	s.log.Info("cli install start", "tool", tool)
+
+	result := &InstallCliResultDTO{Tool: tool}
+	const installTimeout = 10 * time.Minute
+
+	out, err := s.runShell(ctx, installTimeout, "npm i -g "+def.npmPackage+"@latest")
+	if err != nil {
+		result.Message = lastLines(out, 8)
+		s.log.Warn("cli install failed", "tool", tool, "message", result.Message)
+		return result, nil
+	}
+
+	result.Ok = true
+	verOut, _ := s.runShell(ctx, 20*time.Second, versionCmdFor(tool, def))
+	result.NewVersion = extractVersion(verOut)
+	if result.NewVersion == "" {
+		// npm 报成功但取不到版本 → 大概率 PATH 未刷新，提示用户重启
+		result.Message = "安装命令执行成功，但暂未检测到版本，可能需要重启 XK-Pane 或终端以刷新 PATH"
+		s.log.Warn("cli install no version detected", "tool", tool)
+	} else {
+		s.log.Info("cli install done", "tool", tool, "newVersion", result.NewVersion)
 	}
 
 	return result, nil

@@ -140,6 +140,7 @@ export {
   CliUpdateService,
   type CliToolStatus,
   type CliUpgradeResult,
+  type CliInstallResult,
 } from './cliupdate/CliUpdateService';
 export {
   TranscriptService,

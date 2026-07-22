@@ -1,6 +1,7 @@
 import { Box, Button, Chip, CircularProgress, IconButton, Tooltip, Typography, useTheme } from '@mui/material';
 import SystemUpdateAltRoundedIcon from '@mui/icons-material/SystemUpdateAltRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
+import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import { useT } from '@/i18n';
 import type { AgentAppType } from '@/services';
 import { cliVersionBarStyles } from './CliVersionBar.styles';
@@ -25,6 +26,15 @@ export const CliVersionBar = ({ appType }: CliVersionBarProps) => {
       doneMessage: (version: string) => t('settings.provider.cliUpdate.doneMessage', { version }),
       warnTitle: t('settings.provider.cliUpdate.warnTitle'),
       failTitle: t('settings.provider.cliUpdate.failTitle'),
+    });
+  };
+
+  const handleInstall = (): void => {
+    void vm.install({
+      doneTitle: t('settings.provider.cliUpdate.installDoneTitle'),
+      doneMessage: (version: string) => t('settings.provider.cliUpdate.installDoneMessage', { version }),
+      warnTitle: t('settings.provider.cliUpdate.installWarnTitle'),
+      failTitle: t('settings.provider.cliUpdate.installFailTitle'),
     });
   };
 
@@ -86,7 +96,7 @@ export const CliVersionBar = ({ appType }: CliVersionBarProps) => {
             <IconButton
               size="small"
               aria-label={t('settings.provider.cliUpdate.refresh')}
-              disabled={vm.checking || vm.upgrading}
+              disabled={vm.checking || vm.upgrading || vm.installing}
               onClick={() => void vm.refresh()}
             >
               <RefreshRoundedIcon fontSize="small" />
@@ -103,6 +113,20 @@ export const CliVersionBar = ({ appType }: CliVersionBarProps) => {
             sx={styles.upgradeBtn}
           >
             {t('settings.provider.cliUpdate.upgrade')}
+          </Button>
+        )}
+        {status && !status.installed && status.installable && (
+          <Button
+            size="small"
+            variant="contained"
+            disabled={vm.installing}
+            startIcon={
+              vm.installing ? <CircularProgress size={14} color="inherit" /> : <DownloadRoundedIcon fontSize="small" />
+            }
+            onClick={handleInstall}
+            sx={styles.upgradeBtn}
+          >
+            {t('settings.provider.cliUpdate.install')}
           </Button>
         )}
       </Box>

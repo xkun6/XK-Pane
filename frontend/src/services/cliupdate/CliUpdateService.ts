@@ -7,11 +7,13 @@ import { Service as Binding } from '@bindings/xkpane/internal/services/cliupdate
 import type {
   ToolStatusDTO as RawToolStatusDTO,
   UpgradeCliResultDTO as RawUpgradeCliResultDTO,
+  InstallCliResultDTO as RawInstallCliResultDTO,
 } from '@bindings/xkpane/internal/services/cliupdate/models';
 
 export interface CliToolStatus {
   tool: string;
   installed: boolean;
+  installable: boolean;
   currentVersion: string;
   latestVersion: string;
   updateAvailable: boolean;
@@ -29,6 +31,7 @@ function toStatus(dto: RawToolStatusDTO): CliToolStatus {
   return {
     tool: dto.tool ?? '',
     installed: dto.installed ?? false,
+    installable: dto.installable ?? false,
     currentVersion: dto.currentVersion ?? '',
     latestVersion: dto.latestVersion ?? '',
     updateAvailable: dto.updateAvailable ?? false,
@@ -37,6 +40,22 @@ function toStatus(dto: RawToolStatusDTO): CliToolStatus {
 }
 
 function toUpgradeResult(dto: RawUpgradeCliResultDTO): CliUpgradeResult {
+  return {
+    tool: dto.tool ?? '',
+    ok: dto.ok ?? false,
+    newVersion: dto.newVersion ?? '',
+    message: dto.message ?? '',
+  };
+}
+
+export interface CliInstallResult {
+  tool: string;
+  ok: boolean;
+  newVersion: string;
+  message: string;
+}
+
+function toInstallResult(dto: RawInstallCliResultDTO): CliInstallResult {
   return {
     tool: dto.tool ?? '',
     ok: dto.ok ?? false,
@@ -58,5 +77,12 @@ export const CliUpdateService = {
     const dto = await Binding.UpgradeCliTool(tool);
     if (!dto) throw new Error('cliupdate: UpgradeCliTool 返回空');
     return toUpgradeResult(dto);
+  },
+
+  // 一键安装未检测到的 tool（仅 claude/codex/grok 有 npm 包，reclaude 会被后端拒绝）。
+  async install(tool: 'claude' | 'reclaude' | 'codex' | 'grok'): Promise<CliInstallResult> {
+    const dto = await Binding.InstallCliTool(tool);
+    if (!dto) throw new Error('cliupdate: InstallCliTool 返回空');
+    return toInstallResult(dto);
   },
 } as const;

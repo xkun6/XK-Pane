@@ -30,6 +30,11 @@ export const providerSettingsEnUS: Messages = {
         doneMessage: 'Upgraded to v{{version}}',
         warnTitle: 'Upgrade result needs review',
         failTitle: 'Upgrade failed',
+        install: 'Install',
+        installDoneTitle: 'Install complete',
+        installDoneMessage: 'Installed v{{version}}',
+        installWarnTitle: 'Install result needs review',
+        installFailTitle: 'Install failed',
       },
       // cc-switch style global config Provider (shared by the Claude Code / Codex / Grok Build tabs).
       global: {

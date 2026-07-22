@@ -30,6 +30,11 @@ export const providerSettingsZhCN: Messages = {
         doneMessage: '已升级到 v{{version}}',
         warnTitle: '升级结果需要确认',
         failTitle: '升级失败',
+        install: '安装',
+        installDoneTitle: '安装完成',
+        installDoneMessage: '已安装 v{{version}}',
+        installWarnTitle: '安装结果需要确认',
+        installFailTitle: '安装失败',
       },
       // cc-switch 式全局配置 Provider（Claude Code / Codex / Grok Build 三标签共用）。
       global: {
