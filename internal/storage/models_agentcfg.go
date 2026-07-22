@@ -20,6 +20,7 @@ func init() {
 		ModelDescriptor{Model: &AgentMcpServer{}, TableName: "agent_mcp_servers", LabelKey: "agentMcpServers", Clearable: false},
 		ModelDescriptor{Model: &AgentSkill{}, TableName: "agent_skills", LabelKey: "agentSkills", Clearable: false},
 		ModelDescriptor{Model: &AgentCfgKV{}, TableName: "agent_cfg_kv", LabelKey: "agentCfgKV", Clearable: false},
+		ModelDescriptor{Model: &AgentBaseConfig{}, TableName: "agent_base_configs", LabelKey: "agentBaseConfigs", Clearable: false},
 	)
 }
 
@@ -77,8 +78,19 @@ type AgentCfgKV struct {
 	Value string `gorm:"type:text" json:"value"`
 }
 
+// AgentBaseConfig 是 claude/reclaude 两层合并模型的「系统配置基底」(公共基底)。
+// 按 appType 各一行(claude | reclaude 独立)。SettingsEnc 是基底 JSON 对象的 cryptox 密文
+// (hooks 的 command 可能内嵌敏感串,按铁律加密;不复用明文的 AgentCfgKV)。codex/grok 无基底行。
+type AgentBaseConfig struct {
+	AppType     string    `gorm:"primaryKey;size:16" json:"appType"` // claude | reclaude
+	SettingsEnc string    `gorm:"type:text;column:settings_enc" json:"-"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
 // 显式 TableName：避免依赖 GORM 复数化推断，表名与 ModelDescriptor 严格一致。
-func (AgentProvider) TableName() string  { return "agent_providers" }
-func (AgentMcpServer) TableName() string { return "agent_mcp_servers" }
-func (AgentSkill) TableName() string     { return "agent_skills" }
-func (AgentCfgKV) TableName() string     { return "agent_cfg_kv" }
+func (AgentProvider) TableName() string   { return "agent_providers" }
+func (AgentMcpServer) TableName() string  { return "agent_mcp_servers" }
+func (AgentSkill) TableName() string      { return "agent_skills" }
+func (AgentCfgKV) TableName() string      { return "agent_cfg_kv" }
+func (AgentBaseConfig) TableName() string { return "agent_base_configs" }
