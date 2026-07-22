@@ -44,6 +44,3 @@ internal/services/bedrock/resources/
 
 # XK-Pane 临时/生成文件（不应提交）
 .grok/
-internal/services/agentcfg/sync.go
-internal/services/agentcfg/sync_test.go
-internal/services/cliadapters/grok_test.go
