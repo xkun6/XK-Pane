@@ -219,7 +219,11 @@ func (s *Service) UpdateAgentProvider(ctx context.Context, id string, in AgentPr
 		if row.IsCurrent {
 			switch row.AppType {
 			case appTypeClaude:
-				if err := s.writeClaudeLive(in.SettingsJSON); err != nil {
+				merged, mErr := s.mergedLive(tx, appTypeClaude, in.SettingsJSON)
+				if mErr != nil {
+					return mErr
+				}
+				if err := s.writeClaudeLive(merged); err != nil {
 					return err
 				}
 				wroteClaudeLive = true

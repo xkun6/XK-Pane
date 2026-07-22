@@ -16,6 +16,47 @@ import (
 	"gorm.io/gorm"
 )
 
+// claudeCredLeafPaths 是 claude 供应商「凭据」叶子路径兜底集(用 leafPathSep 连接)。
+// 反向同步/回填拆分时,这些路径连同当前补丁已声明的路径一起归属供应商补丁,
+// 防止用户手加的 token/base_url 漏进公共基底。
+var claudeCredLeafPaths = []string{
+	"env" + leafPathSep + "ANTHROPIC_AUTH_TOKEN",
+	"env" + leafPathSep + "ANTHROPIC_API_KEY",
+	"env" + leafPathSep + "ANTHROPIC_BASE_URL",
+	"model",
+}
+
+// credPathSet 组装「归属供应商补丁」的叶子路径集 = 旧补丁已声明的所有叶子路径
+// ∪ (claude 凭据兜底路径 ∩ live 中确实存在的路径)。
+func credPathSet(live, oldPatch map[string]any) map[string]struct{} {
+	set := flattenLeafPaths(oldPatch)
+	liveLeaves := flattenLeafPaths(live)
+	for _, p := range claudeCredLeafPaths {
+		if _, ok := liveLeaves[p]; ok {
+			set[p] = struct{}{}
+		}
+	}
+	return set
+}
+
+// mergedLive 读 appType 系统配置基底(用给定 db/tx,复用 s.db() 或事务 tx 避免单连接死锁)
+// 与传入的供应商凭据补丁 JSON,返回深合并后的规范化 JSON 文本(交给 writeClaudeLive 再规范化)。
+func (s *Service) mergedLive(db *gorm.DB, appType, patchJSON string) (string, error) {
+	var patch map[string]any
+	if err := json.Unmarshal([]byte(patchJSON), &patch); err != nil {
+		return "", fmt.Errorf("agentcfg: 补丁不是合法 JSON 对象: %w", err)
+	}
+	base, err := s.readBaseConfig(db, appType)
+	if err != nil {
+		return "", err
+	}
+	data, err := json.Marshal(deepMergeJSON(base, patch))
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
 // readClaudeLive 读并解析 Claude 全局配置文件。文件不存在返回可用 errors.Is(err,
 // os.ErrNotExist) 区分的错误；JSON 解析失败返回错误。
 func (s *Service) readClaudeLive() (map[string]any, []byte, error) {
@@ -115,7 +156,11 @@ func (s *Service) switchClaude(ctx context.Context, target storage.AgentProvider
 			return err
 		}
 
-		return s.writeClaudeLive(targetPlain)
+		merged, err := s.mergedLive(tx, appTypeClaude, targetPlain)
+		if err != nil {
+			return err
+		}
+		return s.writeClaudeLive(merged)
 	})
 	if err != nil {
 		return err
@@ -138,21 +183,29 @@ func (s *Service) switchReclaude(ctx context.Context, target storage.AgentProvid
 	})
 }
 
-// backfillCurrent 把 live 文件当前内容（规范化后）加密写回旧 current 行，并清掉它的
-// IsCurrent 标志。live 不可读 / 不是合法 JSON 时跳过内容回填（避免用垃圾覆盖旧配置），
-// 但仍清掉 IsCurrent —— 否则切换后会出现两行同时 IsCurrent=true。
+// backfillCurrent 把 live 当前内容按「叶子路径归属」拆回旧 current 行的凭据补丁与系统配置
+// 基底,并清掉它的 IsCurrent 标志。凭据路径(旧补丁已声明的 ∪ 凭据兜底集∩live)→ 回灌补丁;
+// 其余 → 回灌基底。保证 deepMerge(基底', 补丁') 重建 live。live 不可读则只清 IsCurrent。
 func (s *Service) backfillCurrent(tx *gorm.DB, current storage.AgentProvider) error {
 	updates := map[string]any{"is_current": false}
 	if liveMap, _, err := s.readClaudeLive(); err == nil {
-		normalized, marshalErr := json.Marshal(liveMap)
-		if marshalErr != nil {
-			return marshalErr
+		oldPatch := map[string]any{}
+		if oldPlain, decErr := cryptox.DecryptString(current.SettingsEnc); decErr == nil {
+			_ = json.Unmarshal([]byte(oldPlain), &oldPatch)
 		}
-		enc, encErr := cryptox.EncryptString(string(normalized))
+		patchPart, basePart := splitByPaths(liveMap, credPathSet(liveMap, oldPatch))
+		patchData, mErr := json.Marshal(patchPart)
+		if mErr != nil {
+			return mErr
+		}
+		enc, encErr := cryptox.EncryptString(string(patchData))
 		if encErr != nil {
 			return encErr
 		}
 		updates["settings_enc"] = enc
+		if err := s.writeBaseConfig(tx, appTypeClaude, basePart); err != nil {
+			return err
+		}
 	}
 	return tx.Model(&storage.AgentProvider{}).Where("id = ?", current.ID).Updates(updates).Error
 }
@@ -295,7 +348,11 @@ func (s *Service) ApplyForLaunch(ctx context.Context, appType string) error {
 	if err != nil {
 		return fmt.Errorf("agentcfg: 解密 %s 当前配置失败: %w", appType, err)
 	}
-	if err := s.writeClaudeLive(plain); err != nil {
+	merged, err := s.mergedLive(s.db(), appType, plain)
+	if err != nil {
+		return err
+	}
+	if err := s.writeClaudeLive(merged); err != nil {
 		return err
 	}
 	return s.setClaudeSettingsOwner(ctx, appType)
