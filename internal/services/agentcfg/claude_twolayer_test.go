@@ -2,6 +2,7 @@ package agentcfg
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 )
 
@@ -116,5 +117,61 @@ func TestApplyForLaunchMergesWithBaseConfig(t *testing.T) {
 	env, _ := liveMap["env"].(map[string]any)
 	if env["ANTHROPIC_AUTH_TOKEN"] != "t" {
 		t.Fatalf("live 应含补丁 env.ANTHROPIC_AUTH_TOKEN: %+v", liveMap)
+	}
+}
+
+// TestManualImportComputesDiffAgainstBaseConfig 手动重新导入(已有同类 provider)时不应碰
+// 基底,新行的补丁应只含「live 相对现有基底」的差异,而非把基底内容也重复存一份。
+func TestManualImportComputesDiffAgainstBaseConfig(t *testing.T) {
+	svc := newTestService(t)
+	settingsPath := svc.claudeSettingsPath()
+	writeJSONFile(t, settingsPath, map[string]any{
+		"model": "opus",
+		"env":   map[string]any{"ANTHROPIC_AUTH_TOKEN": "tkn-old"},
+	})
+	mustStartup(t, svc) // 首启:基底 = live 整体,默认供应商补丁为空
+	ctx := context.Background()
+
+	base, err := svc.readBaseConfig(svc.db(), appTypeClaude)
+	if err != nil {
+		t.Fatalf("readBaseConfig: %v", err)
+	}
+
+	// 模拟用户手动改了 live(在基底之上新增一个 base_url),随后手动触发重新导入。
+	newLive := deepMergeJSON(base, map[string]any{
+		"env": map[string]any{"ANTHROPIC_BASE_URL": "https://x"},
+	})
+	writeJSONFile(t, settingsPath, newLive)
+
+	dto, err := svc.ImportCurrentAgentConfig(ctx, appTypeClaude)
+	if err != nil {
+		t.Fatalf("ImportCurrentAgentConfig: %v", err)
+	}
+	if dto.IsCurrent {
+		t.Fatal("手动导入的新行不应自动成为 current")
+	}
+
+	var patch map[string]any
+	if err := json.Unmarshal([]byte(dto.SettingsJSON), &patch); err != nil {
+		t.Fatalf("unmarshal 补丁: %v", err)
+	}
+	patchEnv, _ := patch["env"].(map[string]any)
+	if patchEnv["ANTHROPIC_BASE_URL"] != "https://x" {
+		t.Fatalf("手动导入补丁应含相对基底新增的 ANTHROPIC_BASE_URL: %+v", patch)
+	}
+	if _, dup := patch["model"]; dup {
+		t.Fatalf("手动导入补丁不应重复基底已有的 model: %+v", patch)
+	}
+	if _, dup := patchEnv["ANTHROPIC_AUTH_TOKEN"]; dup {
+		t.Fatalf("手动导入补丁不应重复基底已有的 ANTHROPIC_AUTH_TOKEN: %+v", patch)
+	}
+
+	// 基底本身不应被手动导入改动。
+	baseAfter, err := svc.readBaseConfig(svc.db(), appTypeClaude)
+	if err != nil {
+		t.Fatalf("readBaseConfig(after): %v", err)
+	}
+	if !jsonEqual(base, baseAfter) {
+		t.Fatalf("手动导入不应改动系统配置基底:\n before = %+v\n after  = %+v", base, baseAfter)
 	}
 }

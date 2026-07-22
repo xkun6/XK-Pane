@@ -73,13 +73,17 @@ func TestStartupImportsFromLiveSettings(t *testing.T) {
 	if !list[0].IsCurrent {
 		t.Error("首次导入应为 IsCurrent")
 	}
-	var got map[string]any
-	if err := json.Unmarshal([]byte(list[0].SettingsJSON), &got); err != nil {
-		t.Fatalf("unmarshal SettingsJSON: %v", err)
+	// U5 两层模型:首启把 live 整体存为系统配置基底,默认供应商补丁为空。
+	if strings.TrimSpace(list[0].SettingsJSON) != "{}" {
+		t.Fatalf("首启默认供应商补丁应为空,got %q", list[0].SettingsJSON)
 	}
-	env, _ := got["env"].(map[string]any)
+	base, err := svc.readBaseConfig(svc.db(), appTypeClaude)
+	if err != nil {
+		t.Fatalf("readBaseConfig: %v", err)
+	}
+	env, _ := base["env"].(map[string]any)
 	if env["ANTHROPIC_AUTH_TOKEN"] != "sk-test-token-abc" {
-		t.Fatalf("导入内容与 live 文件不一致: %+v", got)
+		t.Fatalf("系统配置基底应含 live 的 token: %+v", base)
 	}
 }
 

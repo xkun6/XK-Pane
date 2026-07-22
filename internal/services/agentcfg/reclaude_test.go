@@ -2,7 +2,7 @@ package agentcfg
 
 import (
 	"context"
-	"encoding/json"
+	"strings"
 	"testing"
 
 	"xkpane/internal/storage"
@@ -181,12 +181,16 @@ func TestSyncCurrentFromLiveSkipsClaudeWhenOwnerIsReclaude(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListAgentProviders(claude): %v", err)
 	}
-	var got map[string]any
-	if err := json.Unmarshal([]byte(list[0].SettingsJSON), &got); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+	// U5 两层模型:首启内容落在系统配置基底,claude Provider 补丁仍是空对象。
+	if strings.TrimSpace(list[0].SettingsJSON) != "{}" {
+		t.Fatalf("owner=reclaude 期间不应改动 claude Provider 补丁: %q", list[0].SettingsJSON)
 	}
-	if env, _ := got["env"].(map[string]any); env["ANTHROPIC_BASE_URL"] != "https://original.example.com" {
-		t.Fatalf("claude Provider 内容被串味污染: %+v", got)
+	base, err := svc.readBaseConfig(svc.db(), appTypeClaude)
+	if err != nil {
+		t.Fatalf("readBaseConfig: %v", err)
+	}
+	if env, _ := base["env"].(map[string]any); env["ANTHROPIC_BASE_URL"] != "https://original.example.com" {
+		t.Fatalf("claude 系统配置基底被串味污染: %+v", base)
 	}
 
 	// owner 改回 claude 后应恢复正常捕获
@@ -253,12 +257,16 @@ func TestSwitchClaudeSkipsBackfillWhenOwnerIsReclaude(t *testing.T) {
 	if err != nil {
 		t.Fatalf("解密旧行: %v", err)
 	}
-	var oldMap map[string]any
-	if err := json.Unmarshal([]byte(plain), &oldMap); err != nil {
-		t.Fatalf("unmarshal 旧行内容: %v", err)
+	// U5 两层模型:owner!=claude 时 switchClaude 跳过回填,旧行补丁应仍是首启时的空对象。
+	if strings.TrimSpace(plain) != "{}" {
+		t.Fatalf("旧行补丁不应被 reclaude 占用期的 live 内容回填: %s", plain)
 	}
-	if env, _ := oldMap["env"].(map[string]any); env["ANTHROPIC_BASE_URL"] != "https://claude-original.example.com" {
-		t.Fatalf("旧行内容被 reclaude 占用期的 live 内容串味污染: %+v", oldMap)
+	base, err := svc.readBaseConfig(svc.db(), appTypeClaude)
+	if err != nil {
+		t.Fatalf("readBaseConfig: %v", err)
+	}
+	if env, _ := base["env"].(map[string]any); env["ANTHROPIC_BASE_URL"] != "https://claude-original.example.com" {
+		t.Fatalf("claude 系统配置基底被 reclaude 占用期的 live 内容串味污染: %+v", base)
 	}
 
 	// switchClaude 结束后 owner 应被重新标记为 claude

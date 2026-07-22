@@ -210,34 +210,55 @@ func (s *Service) backfillCurrent(tx *gorm.DB, current storage.AgentProvider) er
 	return tx.Model(&storage.AgentProvider{}).Where("id = ?", current.ID).Updates(updates).Error
 }
 
-// importClaudeDefault 是 Startup 与 ImportCurrentAgentConfig 共用的导入逻辑。
-// live 可读且合法 → 用其内容；不可读/不存在 → 用 "{}"。均命名「默认配置」、
-// Category=imported、IsCurrent=true —— 除非 manual=true 且已存在同 appType 行
-// （手动「从当前 live 导入」不抢当前），此时命名「导入配置 <时间>」且 IsCurrent=false。
-func (s *Service) importClaudeDefault(ctx context.Context, manual bool) (*AgentProviderDTO, error) {
-	settingsJSON := "{}"
-	if liveMap, _, err := s.readClaudeLive(); err == nil {
-		normalized, marshalErr := json.Marshal(liveMap)
-		if marshalErr != nil {
-			return nil, marshalErr
-		}
-		settingsJSON = string(normalized)
+// importDefaultTwoLayer 是 claude/reclaude 两层模型下的导入逻辑(替代原先各存整份的实现)。
+// 首启(无基底行)时以 live 整体作为系统配置基底,「默认配置」补丁为空 →
+// deepMerge(基底=live, {})==live,与今日整份行为逐字节等价;手动导入(manual 且已有同类
+// provider)不碰基底,补丁 = live 相对现有基底的深 diff。reclaude 无独立 live,liveMap 取自
+// 共享的 ~/.claude/settings.json(readClaudeLive)。
+func (s *Service) importDefaultTwoLayer(ctx context.Context, appType string, manual bool) (*AgentProviderDTO, error) {
+	liveMap := map[string]any{}
+	if m, _, err := s.readClaudeLive(); err == nil {
+		liveMap = m
 	}
 
-	enc, err := cryptox.EncryptString(settingsJSON)
-	if err != nil {
+	var baseCount int64
+	if err := s.db().WithContext(ctx).Model(&storage.AgentBaseConfig{}).
+		Where("app_type = ?", appType).Count(&baseCount).Error; err != nil {
 		return nil, err
+	}
+	if baseCount == 0 {
+		if err := s.writeBaseConfig(s.db().WithContext(ctx), appType, liveMap); err != nil {
+			return nil, err
+		}
 	}
 
 	var existing int64
 	if err := s.db().WithContext(ctx).Model(&storage.AgentProvider{}).
-		Where("app_type = ?", appTypeClaude).Count(&existing).Error; err != nil {
+		Where("app_type = ?", appType).Count(&existing).Error; err != nil {
+		return nil, err
+	}
+
+	patchJSON := "{}"
+	if manual && existing > 0 {
+		base, err := s.readBaseConfig(s.db().WithContext(ctx), appType)
+		if err != nil {
+			return nil, err
+		}
+		data, err := json.Marshal(deepDiffJSON(liveMap, base))
+		if err != nil {
+			return nil, err
+		}
+		patchJSON = string(data)
+	}
+
+	enc, err := cryptox.EncryptString(patchJSON)
+	if err != nil {
 		return nil, err
 	}
 
 	row := storage.AgentProvider{
 		ID:          uuid.NewString(),
-		AppType:     appTypeClaude,
+		AppType:     appType,
 		SettingsEnc: enc,
 		Category:    "imported",
 	}
@@ -259,53 +280,12 @@ func (s *Service) importClaudeDefault(ctx context.Context, manual bool) (*AgentP
 	return &dto, nil
 }
 
-// importReclaudeDefault 是 reclaude 版的 importClaudeDefault：reclaude 没有独立 live 文件，
-// 默认配置拷自 claude 的 live（readClaudeLive），读不到则用 "{}"。命名/Category/IsCurrent
-// 逻辑与 importClaudeDefault 完全一致（manual&&existing>0 时命名「导入配置 <时间>」且
-// IsCurrent=false，否则「默认配置」且 IsCurrent=true）。
+func (s *Service) importClaudeDefault(ctx context.Context, manual bool) (*AgentProviderDTO, error) {
+	return s.importDefaultTwoLayer(ctx, appTypeClaude, manual)
+}
+
 func (s *Service) importReclaudeDefault(ctx context.Context, manual bool) (*AgentProviderDTO, error) {
-	settingsJSON := "{}"
-	if liveMap, _, err := s.readClaudeLive(); err == nil {
-		normalized, marshalErr := json.Marshal(liveMap)
-		if marshalErr != nil {
-			return nil, marshalErr
-		}
-		settingsJSON = string(normalized)
-	}
-
-	enc, err := cryptox.EncryptString(settingsJSON)
-	if err != nil {
-		return nil, err
-	}
-
-	var existing int64
-	if err := s.db().WithContext(ctx).Model(&storage.AgentProvider{}).
-		Where("app_type = ?", appTypeReclaude).Count(&existing).Error; err != nil {
-		return nil, err
-	}
-
-	row := storage.AgentProvider{
-		ID:          uuid.NewString(),
-		AppType:     appTypeReclaude,
-		SettingsEnc: enc,
-		Category:    "imported",
-	}
-	if manual && existing > 0 {
-		row.Name = fmt.Sprintf("导入配置 %s", time.Now().Format("2006-01-02 15:04:05"))
-		row.IsCurrent = false
-	} else {
-		row.Name = "默认配置"
-		row.IsCurrent = true
-	}
-
-	if err := s.db().WithContext(ctx).Create(&row).Error; err != nil {
-		return nil, err
-	}
-	dto, err := s.toDTO(row)
-	if err != nil {
-		return nil, err
-	}
-	return &dto, nil
+	return s.importDefaultTwoLayer(ctx, appTypeReclaude, manual)
 }
 
 // claudeSettingsOwnerKey 是 AgentCfgKV 里记录「~/.claude/settings.json 当前归属谁」的键，

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -77,10 +78,17 @@ func TestSyncCurrentFromLiveSkipsMissingLive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	var got map[string]any
-	_ = json.Unmarshal([]byte(list[0].SettingsJSON), &got)
-	if got["keep"] != true {
-		t.Fatalf("current 被错误清空: %+v", got)
+	// U5 两层模型:首启内容落在系统配置基底,claude Provider 补丁仍是空对象,校验点改为
+	// 基底而非补丁(补丁本就不含 keep)。
+	if strings.TrimSpace(list[0].SettingsJSON) != "{}" {
+		t.Fatalf("live 缺失不应改动 claude Provider 补丁: %q", list[0].SettingsJSON)
+	}
+	base, err := svc.readBaseConfig(svc.db(), appTypeClaude)
+	if err != nil {
+		t.Fatalf("readBaseConfig: %v", err)
+	}
+	if base["keep"] != true {
+		t.Fatalf("current 被错误清空: %+v", base)
 	}
 }
 
