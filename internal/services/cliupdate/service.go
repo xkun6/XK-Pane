@@ -2,6 +2,8 @@
 //
 // 命令全部在后端拼装，不信任前端传入的任何命令字符串——前端只传 tool 名，本包按白名单
 // （toolDefs）校验后再拼出实际要执行的命令行。
+//
+// reclaude 是自管理工具：版本查询走 `reclaude version`、升级走 `reclaude update`，不走 npm。
 package cliupdate
 
 import (
@@ -24,11 +26,13 @@ type toolDef struct {
 	selfUpdate  string // 官方自升级命令；空 = 不支持。
 	// codex 刻意不用 `codex update`——上游有「报成功但未实际更新」的假成功问题，
 	// 走 npm 重装更可靠（借鉴 cc-switch 的结论）。
+	versionCmd string // 取当前版本的命令；空 = 默认 "<tool> --version"。
+	latestCmd  string // 取/检查最新版本的命令；空 = 走 npm view <npmPackage>。
 }
 
 var toolDefs = map[string]toolDef{
 	"claude":   {displayName: "Claude Code", npmPackage: "@anthropic-ai/claude-code", selfUpdate: "claude update"},
-	"reclaude": {displayName: "Reclaude", npmPackage: "@anthropic-ai/claude-code"},
+	"reclaude": {displayName: "Reclaude", versionCmd: "reclaude version", latestCmd: "reclaude update --check", selfUpdate: "reclaude update"},
 	"codex":    {displayName: "Codex", npmPackage: "@openai/codex"},
 	"grok":     {displayName: "Grok Build", npmPackage: "@xai-official/grok", selfUpdate: "grok update"},
 }
@@ -102,7 +106,37 @@ func (s *Service) runShell(ctx context.Context, timeout time.Duration, cmdline s
 	return out, waitErr
 }
 
-// CheckCliTool 检测本地 tool 的当前版本与 npm 上的最新版本。检测是尽力而为——除白名单
+// versionCmdFor 返回取当前版本的命令：优先用 def.versionCmd，否则回退 "<tool> --version"。
+func versionCmdFor(tool string, def toolDef) string {
+	if def.versionCmd != "" {
+		return def.versionCmd
+	}
+	return tool + " --version"
+}
+
+// latestVersion 取最新版本号：优先跑 def.latestCmd（自管理工具），否则走 npm view <npmPackage>；
+// 两者都不可用则返回 ""。尽力而为，不返回 error。
+func (s *Service) latestVersion(ctx context.Context, def toolDef) string {
+	if def.latestCmd != "" {
+		out, err := s.runShell(ctx, 30*time.Second, def.latestCmd)
+		if err != nil {
+			return ""
+		}
+		return extractVersion(out)
+	}
+	if def.npmPackage != "" {
+		// 用 npm view 而非直连 registry.npmjs.org，是有意为之：它遵守用户 .npmrc 的 registry
+		// 镜像配置（中国网络环境更可靠），不要改成 httpx 直连。
+		out, err := s.runShell(ctx, 30*time.Second, "npm view "+def.npmPackage+" version")
+		if err != nil {
+			return ""
+		}
+		return extractVersion(out)
+	}
+	return ""
+}
+
+// CheckCliTool 检测本地 tool 的当前版本与最新版本。检测是尽力而为——除白名单
 // 校验外，任何一步失败都不返回 error，降级进 Detail。
 func (s *Service) CheckCliTool(ctx context.Context, tool string) (*ToolStatusDTO, error) {
 	def, ok := toolDefs[tool]
@@ -112,7 +146,7 @@ func (s *Service) CheckCliTool(ctx context.Context, tool string) (*ToolStatusDTO
 
 	dto := &ToolStatusDTO{Tool: tool}
 
-	verOut, verErr := s.runShell(ctx, 20*time.Second, tool+" --version")
+	verOut, verErr := s.runShell(ctx, 20*time.Second, versionCmdFor(tool, def))
 	if verErr == nil {
 		if v := extractVersion(verOut); v != "" {
 			dto.Installed = true
@@ -120,14 +154,13 @@ func (s *Service) CheckCliTool(ctx context.Context, tool string) (*ToolStatusDTO
 		}
 	}
 
-	// 用 npm view 而非直连 registry.npmjs.org，是有意为之：它遵守用户 .npmrc 的 registry
-	// 镜像配置（中国网络环境更可靠），不要改成 httpx 直连。
-	latestOut, latestErr := s.runShell(ctx, 30*time.Second, "npm view "+def.npmPackage+" version")
-	if latestErr == nil {
-		dto.LatestVersion = extractVersion(latestOut)
-	}
+	dto.LatestVersion = s.latestVersion(ctx, def)
 	if dto.LatestVersion == "" {
-		dto.Detail = "npm 不可用或查询超时，无法获取最新版本"
+		if def.latestCmd != "" {
+			dto.Detail = "无法解析最新版本，可直接点升级由 " + def.selfUpdate + " 自检"
+		} else {
+			dto.Detail = "npm 不可用或查询超时，无法获取最新版本"
+		}
 	}
 
 	dto.UpdateAvailable = dto.Installed && dto.LatestVersion != "" && compareSemver(dto.LatestVersion, dto.CurrentVersion) > 0
@@ -144,10 +177,7 @@ func (s *Service) UpgradeCliTool(ctx context.Context, tool string) (*UpgradeCliR
 
 	s.log.Info("cli upgrade start", "tool", tool)
 
-	latest := ""
-	if latestOut, err := s.runShell(ctx, 30*time.Second, "npm view "+def.npmPackage+" version"); err == nil {
-		latest = extractVersion(latestOut)
-	}
+	latest := s.latestVersion(ctx, def)
 
 	result := &UpgradeCliResultDTO{Tool: tool}
 	const upgradeTimeout = 10 * time.Minute
@@ -159,7 +189,7 @@ func (s *Service) UpgradeCliTool(ctx context.Context, tool string) (*UpgradeCliR
 		lastOutput = out
 		succeeded = err == nil
 	}
-	if !succeeded {
+	if !succeeded && def.npmPackage != "" {
 		out, err := s.runShell(ctx, upgradeTimeout, "npm i -g "+def.npmPackage+"@latest")
 		lastOutput = out
 		succeeded = err == nil
@@ -171,7 +201,7 @@ func (s *Service) UpgradeCliTool(ctx context.Context, tool string) (*UpgradeCliR
 		return result, nil
 	}
 
-	verOut, _ := s.runShell(ctx, 20*time.Second, tool+" --version")
+	verOut, _ := s.runShell(ctx, 20*time.Second, versionCmdFor(tool, def))
 	newVersion := extractVersion(verOut)
 	result.Ok = true
 	result.NewVersion = newVersion
