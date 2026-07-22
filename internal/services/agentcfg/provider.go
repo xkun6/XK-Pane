@@ -106,7 +106,14 @@ func categoryOrDefault(c string) string {
 
 // ListAgentProviders 按 appType 列出全部 Provider（含解密后的明文配置），按 SortOrder,
 // CreatedAt 排序。空 → 非 nil 空切片。
+//
+// 列表前会把「当前 Provider」与磁盘 live 全局配置对齐（打开设置页 / 刷新时调用），
+// 这样用户在软件外改过 settings.json 等也能在需要时读到最新，而不必在冷启动时同步。
 func (s *Service) ListAgentProviders(ctx context.Context, appType string) ([]AgentProviderDTO, error) {
+	if _, err := s.syncCurrentFromLive(ctx, appType); err != nil {
+		s.log.Warn("sync current from live before list failed", "appType", appType, "err", err)
+		// 同步失败不阻断列表：仍返回 DB 内已有快照
+	}
 	var rows []storage.AgentProvider
 	if err := s.db().WithContext(ctx).Where("app_type = ?", appType).
 		Order("sort_order, created_at").Find(&rows).Error; err != nil {

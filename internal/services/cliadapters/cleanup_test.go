@@ -22,7 +22,7 @@ func TestCleanupSessionMCPConfigRemovesOnlyOwnFile(t *testing.T) {
 		}
 	}
 
-	CleanupSessionMCPConfig(proj, "sid-mine")
+	CleanupSessionMCPConfig(proj, "sid-mine", "claude")
 
 	if _, err := os.Stat(mine); !os.IsNotExist(err) {
 		t.Errorf("本会话 %s 应被删除, stat err = %v", filepath.Base(mine), err)
@@ -35,7 +35,9 @@ func TestCleanupSessionMCPConfigRemovesOnlyOwnFile(t *testing.T) {
 // 守门：文件不存在（codex/none、或 orchestrator 未就绪没写过）/ 空入参时静默 no-op，不报错不 panic。
 func TestCleanupSessionMCPConfigNoopWhenAbsent(t *testing.T) {
 	proj := t.TempDir() // 连 .claude 都没建
-	CleanupSessionMCPConfig(proj, "sid-x")
-	CleanupSessionMCPConfig(proj, "")
-	CleanupSessionMCPConfig("", "sid-x")
+	CleanupSessionMCPConfig(proj, "sid-x", "claude")
+	CleanupSessionMCPConfig(proj, "", "claude")
+	CleanupSessionMCPConfig("", "sid-x", "claude")
+	CleanupSessionMCPConfig(proj, "sid-x", "grok")
+	CleanupSessionMCPConfig(proj, "sid-x", "codex")
 }

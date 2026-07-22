@@ -44,6 +44,11 @@ const (
 	// FileChanged 文件浏览器根目录内发生外部增删改（后端 filewatch → 前端文件树自动刷新受影响目录）。
 	// payload 见 FileChangedPayload；桌面专属（本地文件系统），不进 Web 镜像白名单。
 	FileChanged = "file:changed"
+
+	// AgentCfgLiveChanged 全局配置 live 文件变更（settings.json / config.toml / CLAUDE.md 等）。
+	// 经 agentcfg 文件监听 → 前端 Provider / 全局指令页自动刷新。payload 为 AgentCfgLiveChangedPayload。
+	// 桌面专用；Web 网关不转发。
+	AgentCfgLiveChanged = "agentcfg:live-changed"
 )
 
 // TerminalOutputPayload 是 TerminalOutput 事件载荷。
@@ -175,6 +180,14 @@ type FileChangedPayload struct {
 
 // Register 在 application 初始化前注册所有强类型事件，
 // Wails 的 binding 生成器会据此为前端生成类型化 API。
+
+// AgentCfgLiveChangedPayload 是 AgentCfgLiveChanged 事件载荷。
+// Kind: "provider" | "instruction"；AppType: "claude" | "codex" | "grok"。
+type AgentCfgLiveChangedPayload struct {
+	Kind    string `json:"kind"`
+	AppType string `json:"appType"`
+}
+
 func Register() {
 	application.RegisterEvent[TerminalOutputPayload](TerminalOutput)
 	application.RegisterEvent[TerminalStatusPayload](TerminalStatus)
@@ -188,4 +201,5 @@ func Register() {
 	application.RegisterEvent[BedrockDocSyncProgressPayload](BedrockDocSyncProgress)
 	application.RegisterEvent[ScreenshotSavedPayload](ScreenshotSaved)
 	application.RegisterEvent[FileChangedPayload](FileChanged)
+	application.RegisterEvent[AgentCfgLiveChangedPayload](AgentCfgLiveChanged)
 }

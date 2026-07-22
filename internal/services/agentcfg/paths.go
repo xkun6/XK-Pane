@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 
 	"xkpane/internal/storage"
 	"xkpane/internal/utils/logx"
@@ -25,6 +27,12 @@ type Service struct {
 	dataDir string // 应用数据目录根（与 storage.json 同一目录，不受用户自定义数据库路径
 	// 影响）；agent-skills SSOT 建在其下（见 skills.go）；测试可注入 t.TempDir()
 	log *slog.Logger
+
+	// live 同步：外部改 settings.json / CLAUDE.md 等时回写 current Provider 并广播事件
+	emitMu        sync.RWMutex
+	emit          func(name string, payload any)
+	suppressMu    sync.Mutex
+	suppressUntil time.Time
 }
 
 // New 创建 Service。home 取 os.UserHomeDir()；dataDir 取 storage.UserDataDir()（与

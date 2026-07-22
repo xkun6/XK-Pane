@@ -21,6 +21,8 @@ import type {
   AgentMcpServerDTO as RawMcpDTO,
   AgentSkillDTO as RawSkillDTO,
 } from '@bindings/xkpane/internal/services/agentcfg/models';
+import { AppEvents } from '@/shared/events';
+import { eventTransport, isDesktop } from '@/services/transport';
 
 export type AgentAppType = 'claude' | 'codex' | 'grok';
 
@@ -135,6 +137,13 @@ function toSkill(s: RawSkillDTO): AgentSkill {
   };
 }
 
+
+// agentcfg:live-changed 事件载荷（对齐 internal/events.AgentCfgLiveChangedPayload）。
+export interface AgentCfgLiveChangedPayload {
+  kind: 'provider' | 'instruction' | string;
+  appType: AgentAppType | string;
+}
+
 export const AgentCfgService = {
   // 按 appType 列出全部 Provider（含解密后的明文配置），按 sortOrder/createdAt 排序。
   async list(appType: AgentAppType): Promise<AgentProvider[]> {
@@ -235,5 +244,11 @@ export const AgentCfgService = {
   },
   async writeInstructionFile(appType: AgentAppType, content: string): Promise<void> {
     await Binding.WriteInstructionFile(appType, content);
+  },
+
+  // 订阅全局配置 live 变更（settings.json / CLAUDE.md 等）。桌面专用；viewer 返回 no-op。
+  onLiveChanged(handler: (payload: AgentCfgLiveChangedPayload) => void): () => void {
+    if (!isDesktop) return () => {};
+    return eventTransport.on<AgentCfgLiveChangedPayload>(AppEvents.AgentCfgLiveChanged, handler);
   },
 } as const;

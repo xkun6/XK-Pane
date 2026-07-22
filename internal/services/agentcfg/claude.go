@@ -46,6 +46,7 @@ func (s *Service) writeClaudeLive(settingsJSON string) error {
 		return err
 	}
 	path := s.claudeSettingsPath()
+	s.noteOwnWrite()
 	if err := backupLiveOnce(path); err != nil {
 		return fmt.Errorf("agentcfg: 备份 live 配置失败: %w", err)
 	}

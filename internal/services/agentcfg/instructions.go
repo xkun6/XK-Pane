@@ -60,6 +60,7 @@ func (s *Service) WriteInstructionFile(appType string, content string) error {
 		return errors.New("agentcfg: grok 暂不支持全局指令编辑")
 	}
 	path := s.instructionFilePath(appType)
+	s.noteOwnWrite()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("agentcfg: 创建 %s 失败: %w", filepath.Dir(path), err)
 	}

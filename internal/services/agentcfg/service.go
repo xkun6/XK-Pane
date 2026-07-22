@@ -4,7 +4,9 @@
 //
 // 第一单元做了 Claude 部分：三张表骨架 + Claude 的导入/切换/回填全流程。
 // 第二单元补齐 Codex 部分（auth.json + config.toml 双文件，见 codex.go）。
-// 后续单元补齐 Grok Build 部分（配置模型与 codex 同构，见 grok.go，但不做 MCP 投影）。
+// Grok Build 配置模型与 codex 同构（见 grok.go）；panes MCP 不写 ~/.grok，由
+// cliadapters 在启动会话时注入项目级 .grok/config.toml（对齐 Claude --mcp-config /
+// Codex -c 的会话级注入，而非 agentcfg live 投影）。
 package agentcfg
 
 import (
@@ -19,6 +21,9 @@ import (
 // Provider（首次使用本功能 / 升级前的老用户），分别从当前 live 配置导入一份，保证
 // 「切换回填」永远有目标行可用。任何错误只记日志、不阻断应用启动——cc-switch 域是
 // 新增能力，不应拖垮已有功能；三个 appType 相互独立，一个导入失败不影响其它。
+//
+// 启动后只拉起 live 文件监听；与磁盘的全量对齐改在打开设置（List）时按需做，
+// 既保证需要时读到最新，又不拖慢冷启动。
 func (s *Service) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	var claudeCount int64
 	if err := s.db().WithContext(ctx).Model(&storage.AgentProvider{}).
@@ -73,5 +78,10 @@ func (s *Service) ServiceStartup(ctx context.Context, options application.Servic
 	if err := s.migrateLegacyProviders(ctx); err != nil {
 		s.log.Warn("migrate legacy providers failed", "err", err)
 	}
+
+	// 运行期监听全局配置目录；外部改动（含 CLAUDE.md / AGENTS.md）→ 同步 DB + 广播事件。
+	// 启动时不做全量 live 同步（打开设置/List 时再按需对齐，见 ListAgentProviders），
+	// 避免拖慢冷启动；用 ServiceStartup 的 ctx：应用退出时取消 watcher。
+	s.startLiveWatcher(ctx)
 	return nil
 }

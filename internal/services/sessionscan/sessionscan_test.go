@@ -124,7 +124,7 @@ func TestCandidatePaths(t *testing.T) {
 	}
 }
 
-// 非 claude/codex 引擎或裸 shell：DetectResumeSession 不扫盘、直接空。
+// 非 claude/codex/grok 引擎或裸 shell：DetectResumeSession 不扫盘、直接空。
 func TestDetectResumeSessionUnsupportedTool(t *testing.T) {
 	s := New()
 	if got := s.DetectResumeSession("/p", "", "none", "", 0); got != "" {
@@ -132,6 +132,83 @@ func TestDetectResumeSessionUnsupportedTool(t *testing.T) {
 	}
 	if got := s.DetectResumeSession("/p", "", "gemini", "pin", 0); got != "" {
 		t.Errorf("DetectResumeSession(gemini) = %q, want empty", got)
+	}
+}
+
+func TestEncodeGrokCwd(t *testing.T) {
+	// 与磁盘真相对齐：J:\Program\Agent\XK-Pane → J%3A%5CProgram%5CAgent%5CXK-Pane
+	cases := map[string]string{
+		`J:\Program\Agent\XK-Pane`: "J%3A%5CProgram%5CAgent%5CXK-Pane",
+		`/home/user/proj`:          "%2Fhome%2Fuser%2Fproj",
+		`C:\a b\c`:                 "C%3A%5Ca%20b%5Cc",
+	}
+	for in, want := range cases {
+		if got := encodeGrokCwd(in); got != want {
+			t.Errorf("encodeGrokCwd(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestUrlPathUnescape(t *testing.T) {
+	got, err := urlPathUnescape("J%3A%5CProgram%5CAgent%5CXK-Pane")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != `J:\Program\Agent\XK-Pane` {
+		t.Errorf("unescape = %q", got)
+	}
+}
+
+func TestScanGrokGroupDirAndDescription(t *testing.T) {
+	root := t.TempDir()
+	sid := "019f826e-f60a-7f03-a382-4d785bee848d"
+	sessionDir := filepath.Join(root, sid)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	summary := `{
+  "info": {"id": "` + sid + `", "cwd": "J:\\Program\\Agent\\XK-Pane"},
+  "session_summary": "fallback summary",
+  "generated_title": "现在历史记录的 sessions 漏了 grok",
+  "updated_at": "2026-07-21T02:10:41.075170200Z",
+  "last_active_at": "2026-07-21T02:10:41.075170200Z"
+}`
+	if err := os.WriteFile(filepath.Join(sessionDir, "summary.json"), []byte(summary), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// chat_history 备用（本测有 generated_title，不会走到这里；另测 extract）
+	chat := `{"type":"system","content":"sys"}
+{"type":"user","content":[{"type":"text","text":"<user_query>真实用户意图</user_query>"}]}
+`
+	if err := os.WriteFile(filepath.Join(sessionDir, "chat_history.jsonl"), []byte(chat), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out := scanGrokGroupDir(root, `J:\Program\Agent\XK-Pane`)
+	if len(out) != 1 {
+		t.Fatalf("len = %d, want 1", len(out))
+	}
+	s := out[0]
+	if s.ID != sid || s.Source != "grok" {
+		t.Errorf("id/source = %q/%q", s.ID, s.Source)
+	}
+	if s.Description != "现在历史记录的 sessions 漏了 grok" {
+		t.Errorf("desc = %q", s.Description)
+	}
+	if s.ModifiedAt <= 0 {
+		t.Errorf("modifiedAt not set")
+	}
+}
+
+func TestExtractGrokDescription_UserQuery(t *testing.T) {
+	p := writeFile(t,
+		`{"type":"system","content":"sys"}`,
+		`{"type":"user","content":[{"type":"text","text":"<user_info>\nOS\n</user_info>"}]}`,
+		`{"type":"user","synthetic_reason":"system_reminder","content":[{"type":"text","text":"<system-reminder>x</system-reminder>"}]}`,
+		`{"type":"user","content":[{"type":"text","text":"<user_query> 修复 grok 会话列表 </user_query>"}]}`,
+	)
+	if got := extractGrokDescription(p); got != "修复 grok 会话列表" {
+		t.Errorf("got %q", got)
 	}
 }
 

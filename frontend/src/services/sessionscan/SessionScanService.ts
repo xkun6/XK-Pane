@@ -1,14 +1,15 @@
-// SessionScanService：按需扫盘列举本机可恢复的 CLI 会话（claude + codex）。
+// SessionScanService：按需扫盘列举本机可恢复的 CLI 会话（claude + codex + grok）。
 //
-// 后端 internal/services/sessionscan 纯文件系统扫描（~/.claude/projects + ~/.codex/sessions），
-// 解析 session id / cwd / 首条用户 prompt（截断）。供 WorkspaceTree 项目节点的会话子列表消费。
+// 后端 internal/services/sessionscan 纯文件系统扫描
+// （~/.claude/projects + ~/.codex/sessions + ~/.grok/sessions），
+// 解析 session id / cwd / 首条用户 prompt 或标题（截断）。供 WorkspaceTree 项目节点的会话子列表消费。
 import { Service as Binding } from '@bindings/xkpane/internal/services/sessionscan';
 import { httpClient, isDesktop } from '@/services/transport';
 
 // 对齐后端 sessionscan.ResumeSession。
 export interface ResumeSession {
   id: string;
-  source: 'claude' | 'codex' | (string & {});
+  source: 'claude' | 'codex' | 'grok' | (string & {});
   projectPath: string;
   modifiedAt: number; // unix 秒
   filePath: string;
@@ -26,7 +27,7 @@ interface RawResumeSession {
 }
 
 export const SessionScanService = {
-  // 列举指定项目路径下 claude + codex 的历史会话，按 mtime 倒序。limit<=0 不限。
+  // 列举指定项目路径下 claude + codex + grok 的历史会话，按 mtime 倒序。limit<=0 不限。
   // 桌面走 bindings 直接扫盘；Web（viewer）走网关 GET /api/sessions/scan（网关在 PC 上扫盘后回传）。
   async listProjectSessions(projectPath: string, limit = 0): Promise<ResumeSession[]> {
     const rows = ((isDesktop

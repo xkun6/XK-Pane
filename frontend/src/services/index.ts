@@ -78,6 +78,7 @@ export {
   type AgentMcpServer,
   type AgentMcpServerInput,
   type AgentSkill,
+  type AgentCfgLiveChangedPayload,
 } from './agentcfg/AgentCfgService';
 export {
   SshMachineService,

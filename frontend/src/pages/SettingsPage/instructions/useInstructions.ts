@@ -102,6 +102,20 @@ export const useInstructions = (): UseInstructionsResult => {
     void loadApp(tab);
   }, [tab, loadApp]);
 
+  // 外部改 CLAUDE.md / AGENTS.md → 若当前 tab 无未保存草稿则静默重载
+  useEffect(() => {
+    return AgentCfgService.onLiveChanged((payload) => {
+      if (payload.kind !== 'instruction') return;
+      if (payload.appType !== 'claude' && payload.appType !== 'codex') return;
+      const app = payload.appType as InstructionApp;
+      if (!loadStartedRef.current.has(app)) return;
+      const cur = statesRef.current[app];
+      if (cur.draft !== cur.saved) return; // 有未保存草稿：不覆盖
+      void loadApp(app);
+    });
+  }, [loadApp]);
+
+
   const setContent = useCallback((v: string) => {
     setStates((prev) => ({ ...prev, [tab]: { ...prev[tab], draft: v } }));
   }, [tab]);

@@ -9,7 +9,8 @@
 //     可执行解析 + Windows npm shim / Detect（LookPath + 版本探测）。
 //   - P6b 落地：claude/reclaude 的 generate_mcp_config（orchestrator 就绪时写
 //     <proj>/.claude/mcp-<sid>.json，合并 ~/.claude.json 用户全局 mcpServers + panes 端点）；
-//     codex pushMcpOverrides 转真（SkipMCP 由 terminal 据 orchestrator 就绪翻转）。
+//     codex pushMcpOverrides 转真（SkipMCP 由 terminal 据 orchestrator 就绪翻转）；
+//     grok 写 <proj>/.grok/config.toml 的 [mcp_servers.panes]（项目级会话注入，不写 ~/.grok）。
 //   - 仍延后：codex disable_unlisted_mcp 的 ~/.codex/config.toml 解析（默认关）；shared MCP
 //     （npx mcp-proxy 桥，SharedMCPURLs 恒空）；项目 hooks 机制（依赖 cc-panes-cli-hook 二进制，P6d）。
 //
@@ -266,17 +267,28 @@ func mcpConfigFileName(sessionID string) string {
 	return fmt.Sprintf("mcp-%s.json", sessionID)
 }
 
-// CleanupSessionMCPConfig 在会话退出时删除其 per-session MCP 配置（claude/reclaude 写在
-// <proj>/.claude/mcp-<sid>.json）。这是主清理路径：配置只在子进程【启动时】被 --mcp-config 读一次，
-// 进程退出后即无用，故退出即删、不留垃圾。文件不存在（codex/none、或 orchestrator 未就绪没写过）
-// 时静默 no-op；sid 唯一保证只会删到本会话自己那份。
-func CleanupSessionMCPConfig(projectPath, sessionID string) {
-	if projectPath == "" || sessionID == "" {
+// CleanupSessionMCPConfig 在会话退出时清理该会话的 per-launch MCP 注入：
+//   - claude/reclaude：删除 <proj>/.claude/mcp-<sid>.json（启动时 --mcp-config 只读一次）；
+//   - grok：从 <proj>/.grok/config.toml 摘掉 [mcp_servers.panes]（项目级会话注入，不写 ~/.grok）。
+//
+// toolID 用于只清本工具写过的产物，避免 claude 会话退出误摘 grok 的 panes。
+// 配置只在子进程启动时生效，退出后无用，故退出即清、不留垃圾。文件/键不存在
+// （codex/none、或 orchestrator 未就绪没写过）时静默 no-op。
+func CleanupSessionMCPConfig(projectPath, sessionID, toolID string) {
+	if projectPath == "" {
 		return
 	}
-	path := filepath.Join(projectPath, ".claude", mcpConfigFileName(sessionID))
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		logx.For("cliadapters").Warn("mcp config: cleanup on exit", "path", path, "err", err)
+	// toolID==""：app 退出兜底时会话元数据可能不完整，两侧都尝试（幂等 no-op）
+	if toolID == "" || toolID == "claude" || toolID == "reclaude" {
+		if sessionID != "" {
+			path := filepath.Join(projectPath, ".claude", mcpConfigFileName(sessionID))
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				logx.For("cliadapters").Warn("mcp config: cleanup on exit", "path", path, "err", err)
+			}
+		}
+	}
+	if toolID == "" || toolID == "grok" {
+		cleanupGrokProjectPanesMCP(projectPath)
 	}
 }
 

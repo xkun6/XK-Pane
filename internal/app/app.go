@@ -127,6 +127,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	lhWatcher := lhwatcher.New(lhSvc)
 	// 文件浏览器的通用磁盘变更监听（单活动根，发 file:changed 让文件树自动刷新；与 lhwatcher 独立）。
 	fileWatchSvc := filewatch.New()
+	agentcfgSvc := agentcfg.New(holder) // cc-switch 式全局配置 Provider；启动同步 live + 运行期监听
 	// 桌面通知（P6d-4）：Wails 通知 service 单例（须注册进 Services 跑 Windows ServiceStartup，
 	// 注册 toast GUID/激活器）+ XK notification 服务（读 app_settings 开关 + 去重 + 聚焦判定）。
 	wailsNotifier := notifications.New()
@@ -206,7 +207,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 			application.NewService(todoSvc), // 待办 CRUD（结合 ccpane；orchestrator 复用同实例）
 			application.NewService(tbSvc),   // 编排任务绑定 CRUD（结合 ccpane；orchestrator 复用同实例）
 			application.NewService(provider.New(holder)),
-			application.NewService(agentcfg.New(holder)),   // cc-switch 式全局配置 Provider（整份 CLI 配置文件切换）
+			application.NewService(agentcfgSvc),            // cc-switch 式全局配置 Provider（整份 CLI 配置文件切换）
 			application.NewService(cliupdate.New()),        // CLI 工具版本检测与一键升级（Provider 页 Claude/Codex 标签）
 			application.NewService(sshmachine.New(holder)), // SSH 机器管理（CRUD + cryptox 密码 + 连通测试），同 provider 档
 			application.NewService(gitSvc),
@@ -262,6 +263,7 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	lhWatcher.AttachApp(app)                 // watcher 经此向前端 Emit localhistory:changed（live 刷新）
 	// 文件树 watcher 向桌面前端发 file:changed（桌面专属，不进 Web 镜像，故用 app.Event.Emit 而非 mirrorEmit）。
 	fileWatchSvc.SetEmitter(func(name string, payload any) { app.Event.Emit(name, payload) })
+	agentcfgSvc.SetEmitter(func(name string, payload any) { app.Event.Emit(name, payload) }) // live 配置/指令文件变更 → 设置页自动刷新
 	// Local History 启停补启接线（决策 D4-4）：
 	//   - SaveConfig(enabled=true) 即时启 / (false) 即时停该项目 watcher；
 	//   - 启动项目（terminal.CreateSession）时若已启用本地历史则补启 watcher。

@@ -124,6 +124,15 @@ export const useGlobalProviderPanel = (appType: AgentAppType): UseGlobalProvider
     void refresh();
   }, [refresh]);
 
+  // live 文件外部改动 → 后端已同步 current Provider，刷新列表（编辑中的草稿不碰）
+  useEffect(() => {
+    return AgentCfgService.onLiveChanged((payload) => {
+      if (payload.kind === 'provider' && payload.appType === appType) {
+        void refresh();
+      }
+    });
+  }, [appType, refresh]);
+
   const openAdd = useCallback(() => {
     setEditingId(null);
     setEditingIsCurrent(false);

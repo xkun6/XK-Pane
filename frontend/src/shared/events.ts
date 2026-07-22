@@ -26,4 +26,6 @@ export const AppEvents = {
   ScreenshotSaved: 'screenshot:saved',
   // 文件浏览器根目录内发生外部增删改（后端 filewatch → 前端文件树自动刷新受影响目录）。桌面专属。
   FileChanged: 'file:changed',
+  // 全局配置 live 文件变更（settings.json / CLAUDE.md 等）→ Provider / 指令页自动刷新
+  AgentCfgLiveChanged: 'agentcfg:live-changed',
 } as const;

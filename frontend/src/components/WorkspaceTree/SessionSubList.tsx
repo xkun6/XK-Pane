@@ -2,6 +2,7 @@ import { useState, type MouseEvent } from 'react';
 import { Box, Divider, ListItemText, Menu, MenuItem } from '@mui/material';
 import SmartToyRoundedIcon from '@mui/icons-material/SmartToyRounded';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
+import BoltRoundedIcon from '@mui/icons-material/BoltRounded';
 import { useT } from '@/i18n';
 import type { ResumeSession } from '@/services';
 import type { WorkspaceTreeSx } from './WorkspaceTree.styles';
@@ -24,8 +25,8 @@ function relTime(modifiedAt: number, t: (k: string, p?: Record<string, string>) 
 }
 
 // 工作空间项目节点下的会话子列表（按需扫盘）：左键恢复 / 右键菜单（恢复·以 reclaude 恢复·复制 id）。
-// 移植 cc-pane SessionSubList 的 local 子集；引擎用 MUI 图标区分（claude=机器人 / codex=星耀），
-// 不用 cc-pane 的品牌 SVG（Icon 铁律：禁内联 SVG / 第三方）。
+// 移植 cc-pane SessionSubList 的 local 子集；引擎用 MUI 图标区分
+// （claude=机器人 / codex=星耀 / grok=闪电），不用 cc-pane 的品牌 SVG（Icon 铁律：禁内联 SVG / 第三方）。
 export const SessionSubList = ({ target, styles }: SessionSubListProps) => {
   const t = useT();
   const vm = useSessionSubList(target);
@@ -65,6 +66,8 @@ export const SessionSubList = ({ target, styles }: SessionSubListProps) => {
         >
           {s.source === 'claude' ? (
             <SmartToyRoundedIcon sx={{ ...styles.sessionGlyph, fontSize: 14 }} />
+          ) : s.source === 'grok' ? (
+            <BoltRoundedIcon sx={{ ...styles.sessionGlyph, fontSize: 14 }} />
           ) : (
             <AutoAwesomeRoundedIcon sx={{ ...styles.sessionGlyph, fontSize: 14 }} />
           )}

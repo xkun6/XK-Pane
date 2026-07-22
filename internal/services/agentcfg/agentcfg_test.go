@@ -44,7 +44,10 @@ func writeJSONFile(t *testing.T, path string, v any) {
 
 func mustStartup(t *testing.T, svc *Service) {
 	t.Helper()
-	if err := svc.ServiceStartup(context.Background(), application.ServiceOptions{}); err != nil {
+	// 可取消 ctx：测试结束时停掉 ServiceStartup 拉起的 live watcher，避免 DB 关闭后仍回写。
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	if err := svc.ServiceStartup(ctx, application.ServiceOptions{}); err != nil {
 		t.Fatalf("ServiceStartup: %v", err)
 	}
 }

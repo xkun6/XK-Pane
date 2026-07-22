@@ -17,6 +17,7 @@ const EXPECTED_BACKEND_EVENT_NAMES = {
   NavigateSettings: 'app:navigate-settings',
   ScreenshotSaved: 'screenshot:saved',
   FileChanged: 'file:changed',
+  AgentCfgLiveChanged: 'agentcfg:live-changed',
 } as const;
 
 describe('AppEvents ↔ internal/events/events.go', () => {

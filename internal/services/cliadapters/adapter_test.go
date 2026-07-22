@@ -52,7 +52,7 @@ func TestDefaultRegistersClaudeReclaudeCodexGrok(t *testing.T) {
 }
 
 // 守门：保留的适配器关键元信息/能力正确（reclaude 版本子命令=version；codex 可执行=codex；
-// claude/reclaude/codex 均支持多目录 --add-dir/cwd 能力）。
+// claude/reclaude/codex 均支持多目录 --add-dir/cwd 能力；grok SupportsMCP）。
 func TestAdapterMetadataAndCapabilities(t *testing.T) {
 	r := Default()
 
@@ -77,5 +77,16 @@ func TestAdapterMetadataAndCapabilities(t *testing.T) {
 		if !a.Capabilities().SupportsWorkspace {
 			t.Errorf("%s should support workspace", id)
 		}
+	}
+
+	grok, ok := r.Get("grok")
+	if !ok {
+		t.Fatal("grok not registered")
+	}
+	if !grok.Capabilities().SupportsMCP {
+		t.Error("grok should support MCP (project-scoped panes inject)")
+	}
+	if !grok.Capabilities().SupportsResume {
+		t.Error("grok should support resume")
 	}
 }

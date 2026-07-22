@@ -428,20 +428,21 @@ func (s *Service) List(_ context.Context) ([]SessionInfo, error) {
 	return out, nil
 }
 
-// CleanupMCPConfigs 删除所有【当前活跃】会话的 per-session MCP 配置（<cwd>/.claude/mcp-<sid>.json）。
+// CleanupMCPConfigs 删除所有【当前活跃】会话的 per-launch MCP 注入（claude 的
+// <cwd>/.claude/mcp-<sid>.json；grok 的 <cwd>/.grok/config.toml 中 panes 键）。
 // app 退出时兜底调用：正常退出的会话已在各自 waitLoop 清掉，此处补删退出那刻仍活着、来不及走
 // waitLoop 的会话残留。先在锁内快照再放锁做文件删除（避免持锁碰盘）；与单会话清理重复调用幂等
 // （文件不存在 no-op）。崩溃孤儿仍由 cliadapters.cleanupStaleMCPConfigs 的龄期兜底回收。
 func (s *Service) CleanupMCPConfigs() {
 	s.mu.Lock()
-	type sessRef struct{ cwd, id string }
+	type sessRef struct{ cwd, id, tool string }
 	refs := make([]sessRef, 0, len(s.sessions))
 	for _, sess := range s.sessions {
-		refs = append(refs, sessRef{cwd: sess.cwd, id: sess.id})
+		refs = append(refs, sessRef{cwd: sess.cwd, id: sess.id, tool: sess.cliTool})
 	}
 	s.mu.Unlock()
 	for _, r := range refs {
-		cliadapters.CleanupSessionMCPConfig(r.cwd, r.id)
+		cliadapters.CleanupSessionMCPConfig(r.cwd, r.id, r.tool)
 	}
 }
 
@@ -608,7 +609,8 @@ func (s *Service) resolveLaunch(ctx context.Context, id string, spec CreateSpec)
 
 	// orchestrator 就绪（port/token 非空）才注入 panes MCP（翻转 SkipMCP）。未就绪 fail-open 裸跑，
 	// 避免 adapter 生成依赖未落地端口的配置。claude/reclaude 写 <proj>/.claude/mcp-<sid>.json；
-	// codex 经 -c mcp_servers.panes.url + bearer_token_env_var=XKPANE_API_TOKEN（env 由 buildEnv 注入）。
+	// codex 经 -c mcp_servers.panes.url + bearer_token_env_var=XKPANE_API_TOKEN（env 由 buildEnv 注入）；
+	// grok 写 <proj>/.grok/config.toml 的 [mcp_servers.panes]（项目级，不写 ~/.grok）。
 	orchPort, orchToken := s.orchestratorEndpoint()
 	cctx := &cliadapters.Context{
 		SessionID:         id,
@@ -742,9 +744,9 @@ func (s *Service) waitLoop(sess *session) {
 
 	s.remove(sess.id)
 	s.retireBuffer(sess) // 输出缓冲转 dead-buffers，供退出后 deadRetention 内回看
-	// per-session MCP 配置（claude/reclaude 的 <cwd>/.claude/mcp-<sid>.json）退出即删：
-	// 只在子进程启动时被读一次，退出后无用。非 claude/reclaude 或没写过时 no-op。
-	cliadapters.CleanupSessionMCPConfig(sess.cwd, sess.id)
+	// per-launch MCP 注入退出即清：claude/reclaude 的 mcp-<sid>.json；grok 项目级 panes。
+	// 只在子进程启动时生效，退出后无用。非对应工具或没写过时 no-op。
+	cliadapters.CleanupSessionMCPConfig(sess.cwd, sess.id, sess.cliTool)
 
 	s.logger.Info("session exited", "session", sess.id, "exitCode", exitCode)
 	s.emitEvent(events.TerminalExit, events.TerminalExitPayload{

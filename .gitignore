@@ -41,3 +41,9 @@ internal/services/bedrock/resources/
 
 # 第三方工具 Pane（runpane.com）自动注入的使用引导，仅本机保留，不入库
 /AGENTS.md
+
+# XK-Pane 临时/生成文件（不应提交）
+.grok/
+internal/services/agentcfg/sync.go
+internal/services/agentcfg/sync_test.go
+internal/services/cliadapters/grok_test.go
