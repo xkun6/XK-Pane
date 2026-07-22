@@ -19,6 +19,7 @@ func init() {
 		ModelDescriptor{Model: &AgentProvider{}, TableName: "agent_providers", LabelKey: "agentProviders", Clearable: false},
 		ModelDescriptor{Model: &AgentMcpServer{}, TableName: "agent_mcp_servers", LabelKey: "agentMcpServers", Clearable: false},
 		ModelDescriptor{Model: &AgentSkill{}, TableName: "agent_skills", LabelKey: "agentSkills", Clearable: false},
+		ModelDescriptor{Model: &AgentCfgKV{}, TableName: "agent_cfg_kv", LabelKey: "agentCfgKV", Clearable: false},
 	)
 }
 
@@ -69,7 +70,15 @@ type AgentSkill struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+// AgentCfgKV 是 agentcfg 域的内部小状态 KV（当前仅存 claude/reclaude 共用的
+// ~/.claude/settings.json 的「文件归属」标记，键 claude_settings_owner）。
+type AgentCfgKV struct {
+	Key   string `gorm:"primaryKey;size:64" json:"key"`
+	Value string `gorm:"type:text" json:"value"`
+}
+
 // 显式 TableName：避免依赖 GORM 复数化推断，表名与 ModelDescriptor 严格一致。
 func (AgentProvider) TableName() string  { return "agent_providers" }
 func (AgentMcpServer) TableName() string { return "agent_mcp_servers" }
 func (AgentSkill) TableName() string     { return "agent_skills" }
+func (AgentCfgKV) TableName() string     { return "agent_cfg_kv" }

@@ -77,6 +77,11 @@ type Service struct {
 	// 供 lhwatcher 在「启动项目」时补启自动捕获（决策 D4-4）；nil = 无（裸单测 / app 未接线）。
 	sessionStartHook func(projectPath string)
 
+	// applyClaudeSettings 在启动 claude/reclaude 会话前，把该 appType 的当前 Provider 配置
+	// 写入共享的 ~/.claude/settings.json（reclaude 运行时会自改此文件，故只能启动前直写，
+	// 不能走会话级注入）。由 SetClaudeSettingsApplier 注入；nil = 不武装（裸单测 / app 未接线）。
+	applyClaudeSettings func(ctx context.Context, appType string) error
+
 	// emit 把事件推给前端；nil 时丢弃（unit test 或 app 未就绪）。
 	// 用字段而非直接持 *application.App，便于测试注入捕获回调。
 	emitMu sync.RWMutex
@@ -118,6 +123,13 @@ func (s *Service) SetSSHPasswordResolver(r SSHPasswordResolver) {
 // SetSessionStartHook 注入「会话启动 → 补启 Local History watcher」回调（app 装配阶段调）。
 func (s *Service) SetSessionStartHook(h func(projectPath string)) {
 	s.sessionStartHook = h
+}
+
+// SetClaudeSettingsApplier 注入「启动 claude/reclaude 会话前应用对应 Provider 配置到
+// ~/.claude/settings.json」的钩子（app 装配阶段调，agentcfg.ApplyForLaunch）。
+// 绝不暴露给前端。
+func (s *Service) SetClaudeSettingsApplier(fn func(ctx context.Context, appType string) error) {
+	s.applyClaudeSettings = fn
 }
 
 // SetOrchestrator 注入本地 orchestrator 的 MCP 端点 port/token（app 装配阶段调，orchestrator 启动后）。
@@ -600,6 +612,15 @@ func (s *Service) resolveLaunch(ctx context.Context, id string, spec CreateSpec)
 	if toolID == "" || toolID == "none" {
 		c, a := defaultShell()
 		return c, a, providerEnv, nil, nil, nil
+	}
+
+	// 启动 claude/reclaude 会话前，把该 appType 的当前 Provider 配置写入共享的
+	// ~/.claude/settings.json（见 agentcfg.ApplyForLaunch）；写失败视为启动失败（宁可
+	// 报错也不让会话跑在错误 provider 上）。无当前 Provider 时 ApplyForLaunch 内部 no-op。
+	if (toolID == "claude" || toolID == "reclaude") && s.applyClaudeSettings != nil {
+		if aerr := s.applyClaudeSettings(ctx, toolID); aerr != nil {
+			return "", nil, nil, nil, nil, fmt.Errorf("terminal: apply %s settings: %w", toolID, aerr)
+		}
 	}
 
 	adapter, ok := s.registry.Get(toolID)

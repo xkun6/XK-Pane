@@ -33,6 +33,10 @@ type Service struct {
 	emit          func(name string, payload any)
 	suppressMu    sync.Mutex
 	suppressUntil time.Time
+
+	// applyMu 串行化 ApplyForLaunch，避免 claude/reclaude 两次启动交叉写共享的
+	// ~/.claude/settings.json。
+	applyMu sync.Mutex
 }
 
 // New 创建 Service。home 取 os.UserHomeDir()；dataDir 取 storage.UserDataDir()（与

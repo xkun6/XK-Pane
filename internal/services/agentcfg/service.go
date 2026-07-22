@@ -55,6 +55,16 @@ func (s *Service) ServiceStartup(ctx context.Context, options application.Servic
 		}
 	}
 
+	var reclaudeCount int64
+	if err := s.db().WithContext(ctx).Model(&storage.AgentProvider{}).
+		Where("app_type = ?", appTypeReclaude).Count(&reclaudeCount).Error; err != nil {
+		s.log.Warn("count reclaude providers failed", "err", err)
+	} else if reclaudeCount == 0 {
+		if _, err := s.importReclaudeDefault(ctx, false); err != nil {
+			s.log.Warn("import default reclaude provider failed", "err", err)
+		}
+	}
+
 	var mcpCount int64
 	if err := s.db().WithContext(ctx).Model(&storage.AgentMcpServer{}).Count(&mcpCount).Error; err != nil {
 		s.log.Warn("count agent mcp servers failed", "err", err)

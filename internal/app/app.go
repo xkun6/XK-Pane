@@ -289,6 +289,11 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	termSvc.SetProviderResolver(func(ctx context.Context, providerID string) (map[string]string, *cliadapters.Provider, error) {
 		return provider.ResolveLaunchEnv(ctx, holder.Current().GORM, providerID)
 	})
+	// 注入「启动 claude/reclaude 会话前把对应 appType 的当前 Provider 配置写入共享的
+	// ~/.claude/settings.json」钩子（agentcfg.ApplyForLaunch，见 owner 归属标记机制）。
+	termSvc.SetClaudeSettingsApplier(func(ctx context.Context, appType string) error {
+		return agentcfgSvc.ApplyForLaunch(ctx, appType)
+	})
 	// 注入 SSH 密码解析器：ssh+password 会话据 machineID 解密机器存储的明文登录密码，供 readLoop
 	// 自动应答密码 prompt。闭包从 holder 取活跃 DB（切库后仍正确）。sshmachine.ResolveForSSH 非绑定
 	// （不暴露明文给前端）。返回机器不存在/无密码 → ""（不武装，回退手动输入）。

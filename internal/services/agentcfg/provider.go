@@ -16,9 +16,10 @@ import (
 )
 
 const (
-	appTypeClaude = "claude"
-	appTypeCodex  = "codex"
-	appTypeGrok   = "grok"
+	appTypeClaude   = "claude"
+	appTypeReclaude = "reclaude"
+	appTypeCodex    = "codex"
+	appTypeGrok     = "grok"
 )
 
 var errNotFound = errors.New("agentcfg: provider does not exist")
@@ -71,8 +72,8 @@ func (s *Service) toDTO(row storage.AgentProvider) (AgentProviderDTO, error) {
 }
 
 func validateAppType(appType string) error {
-	if appType != appTypeClaude && appType != appTypeCodex && appType != appTypeGrok {
-		return fmt.Errorf("agentcfg: 不支持的 appType %q（仅 claude | codex | grok）", appType)
+	if appType != appTypeClaude && appType != appTypeReclaude && appType != appTypeCodex && appType != appTypeGrok {
+		return fmt.Errorf("agentcfg: 不支持的 appType %q（仅 claude | reclaude | codex | grok）", appType)
 	}
 	return nil
 }
@@ -109,10 +110,13 @@ func categoryOrDefault(c string) string {
 //
 // 列表前会把「当前 Provider」与磁盘 live 全局配置对齐（打开设置页 / 刷新时调用），
 // 这样用户在软件外改过 settings.json 等也能在需要时读到最新，而不必在冷启动时同步。
+// reclaude 没有独立 live 文件（DB 权威，配置只在启动时落地到共享的 claude 文件），跳过同步。
 func (s *Service) ListAgentProviders(ctx context.Context, appType string) ([]AgentProviderDTO, error) {
-	if _, err := s.syncCurrentFromLive(ctx, appType); err != nil {
-		s.log.Warn("sync current from live before list failed", "appType", appType, "err", err)
-		// 同步失败不阻断列表：仍返回 DB 内已有快照
+	if appType != appTypeReclaude {
+		if _, err := s.syncCurrentFromLive(ctx, appType); err != nil {
+			s.log.Warn("sync current from live before list failed", "appType", appType, "err", err)
+			// 同步失败不阻断列表：仍返回 DB 内已有快照
+		}
 	}
 	var rows []storage.AgentProvider
 	if err := s.db().WithContext(ctx).Where("app_type = ?", appType).
@@ -189,6 +193,7 @@ func (s *Service) UpdateAgentProvider(ctx context.Context, id string, in AgentPr
 	}
 
 	var result storage.AgentProvider
+	var wroteClaudeLive bool
 	err = s.db().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var row storage.AgentProvider
 		if err := tx.First(&row, "id = ?", id).Error; err != nil {
@@ -217,6 +222,9 @@ func (s *Service) UpdateAgentProvider(ctx context.Context, id string, in AgentPr
 				if err := s.writeClaudeLive(in.SettingsJSON); err != nil {
 					return err
 				}
+				wroteClaudeLive = true
+			case appTypeReclaude:
+				// reclaude 是 DB 权威，编辑不立即写 live，配置在启动 reclaude 时才落地。
 			case appTypeCodex:
 				if err := s.writeCodexLive(ctx, tx, in.SettingsJSON); err != nil {
 					return err
@@ -231,6 +239,12 @@ func (s *Service) UpdateAgentProvider(ctx context.Context, id string, in AgentPr
 	})
 	if err != nil {
 		return nil, err
+	}
+	if wroteClaudeLive {
+		// setClaudeSettingsOwner 必须在事务外调用：SQLite 写锁下事务内另开连接写会超时。
+		if err := s.setClaudeSettingsOwner(ctx, appTypeClaude); err != nil {
+			return nil, err
+		}
 	}
 	dto, err := s.toDTO(result)
 	if err != nil {
@@ -272,6 +286,8 @@ func (s *Service) SwitchAgentProvider(ctx context.Context, id string) error {
 	switch target.AppType {
 	case appTypeClaude:
 		return s.switchClaude(ctx, target)
+	case appTypeReclaude:
+		return s.switchReclaude(ctx, target)
 	case appTypeCodex:
 		return s.switchCodex(ctx, target)
 	case appTypeGrok:
@@ -291,6 +307,8 @@ func (s *Service) ImportCurrentAgentConfig(ctx context.Context, appType string) 
 		return s.importCodexDefault(ctx, true)
 	case appTypeGrok:
 		return s.importGrokDefault(ctx, true)
+	case appTypeReclaude:
+		return s.importReclaudeDefault(ctx, true)
 	default:
 		return s.importClaudeDefault(ctx, true)
 	}
