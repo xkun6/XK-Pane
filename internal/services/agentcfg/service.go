@@ -89,6 +89,11 @@ func (s *Service) ServiceStartup(ctx context.Context, options application.Servic
 		s.log.Warn("migrate legacy providers failed", "err", err)
 	}
 
+	// 两层模型一次性迁移:老用户「每 Provider 存整份」→ 拆成系统配置基底 + 凭据补丁(幂等)。
+	if err := s.migrateClaudeTwoLayer(ctx); err != nil {
+		s.log.Warn("migrate claude two-layer failed", "err", err)
+	}
+
 	// 运行期监听全局配置目录；外部改动（含 CLAUDE.md / AGENTS.md）→ 同步 DB + 广播事件。
 	// 启动时不做全量 live 同步（打开设置/List 时再按需对齐，见 ListAgentProviders），
 	// 避免拖慢冷启动；用 ServiceStartup 的 ctx：应用退出时取消 watcher。
