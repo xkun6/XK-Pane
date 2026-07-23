@@ -19,7 +19,7 @@ export const settingsPageZhCN: Messages = {
         description: '切换界面语言',
       },
       provider: {
-        label: '接入 Provider',
+        label: '供应商',
         description: '管理 CLI 启动用的 API 凭据与端点',
       },
       mcp: {
