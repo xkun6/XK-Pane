@@ -461,9 +461,7 @@ func (s *Service) Launch(id string) (storage.MCRunSessionInfo, error) {
 		if !parsePack(bridgeDst, bridgeMap) {
 			s.log.Warn("桥模组解压后仍未识别 manifest.json，启动可能失败")
 		}
-		for k, v := range bridgeMap {
-			packMap[k] = append(packMap[k], v...)
-		}
+		mergeBridgeFirst(packMap, bridgeMap)
 	}
 
 	// 6. 存档目录
@@ -664,6 +662,26 @@ func (s *Service) CleanupAll() {
 }
 
 // ─────────────────────── helpers ───────────────────────
+
+// mergeBridgeFirst 把桥模组的包信息插到 packMap 各 PackType 列表的**最前面**。
+//
+// 为什么必须最前：world_*_packs.json 的条目顺序 = 引擎的 pack 应用与 python mod import 顺序
+// （游戏日志里的 `Pack Stack - [00]/[01]` 就是此序）。任何业务 mod 在 import 期抛异常，都会
+// 冒出引擎的 LoadServerAddonScripts / LoadClientAddonScripts 并中断整条 addon 加载链 ——
+// 排在它之后的包全都不再被 import。桥模组若排在业务包之后，就会恰好在“业务 mod 刚写崩”
+// 这个最需要调试桥的时刻失效（表现为桥一直停在“等待中”，且原因极难定位）。放到最前则
+// 桥先完成 IPC 连接，业务 mod 崩了也照样能读日志 / 执行代码 / 热重载。
+//
+// 对资源优先级无影响：Bedrock 中列表靠后的包覆盖靠前的，而桥模组只有 python 脚本、不含
+// 任何资源或实体定义，既无可被覆盖之物，也不会再覆盖业务包（语义上反而更正确）。
+func mergeBridgeFirst(dst, bridge map[PackType][]PackInfo) {
+	for k, v := range bridge {
+		merged := make([]PackInfo, 0, len(v)+len(dst[k]))
+		merged = append(merged, v...)      // 桥模组在前
+		merged = append(merged, dst[k]...) // 业务包在后
+		dst[k] = merged
+	}
+}
 
 func pathExists(p string) bool {
 	_, err := os.Lstat(p)

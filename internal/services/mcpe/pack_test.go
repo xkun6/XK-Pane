@@ -130,3 +130,48 @@ func TestParsePackDepthOneHitSkipsDescent(t *testing.T) {
 		t.Fatalf("uuid=%q want outer-uuid", m[PackBehavior][0].UUID)
 	}
 }
+
+// 守门测试：桥模组必须排在各类型列表最前，即 world_*_packs.json 里 Pack Stack [00]。
+// 若退回 append（桥在业务包之后），业务 mod 一旦 import 崩溃就会中断 addon 加载链，
+// 桥模组不再被 import —— 调试桥恰在最需要它的时刻失效。
+func TestMergeBridgeFirstPutsBridgeAhead(t *testing.T) {
+	packMap := map[PackType][]PackInfo{
+		PackBehavior: {{UUID: "biz-beh", Version: "0.0.1"}},
+		PackResource: {{UUID: "biz-res", Version: "0.0.1"}},
+	}
+	bridge := map[PackType][]PackInfo{
+		PackBehavior: {{UUID: "183b0dc7", Version: "1.0.0"}},
+	}
+	mergeBridgeFirst(packMap, bridge)
+
+	beh := packMap[PackBehavior]
+	if len(beh) != 2 {
+		t.Fatalf("behavior 应有 2 项，实际 %d", len(beh))
+	}
+	if beh[0].UUID != "183b0dc7" {
+		t.Errorf("桥模组应排首位，实际首位=%q", beh[0].UUID)
+	}
+	if beh[1].UUID != "biz-beh" {
+		t.Errorf("业务包应排其后，实际=%q", beh[1].UUID)
+	}
+	// 桥模组没有资源包条目 → 资源列表不得被改动。
+	if got := packMap[PackResource]; len(got) != 1 || got[0].UUID != "biz-res" {
+		t.Errorf("资源包列表不应被改动，实际=%+v", got)
+	}
+}
+
+// 不得复用/污染入参 bridge 的底层数组（append 到 v 上会踩坏调用方切片）。
+func TestMergeBridgeFirstDoesNotAliasInput(t *testing.T) {
+	bridge := map[PackType][]PackInfo{
+		PackBehavior: make([]PackInfo, 1, 8), // cap 充裕，append 会原地写
+	}
+	bridge[PackBehavior][0] = PackInfo{UUID: "183b0dc7"}
+	packMap := map[PackType][]PackInfo{
+		PackBehavior: {{UUID: "biz-beh"}},
+	}
+	mergeBridgeFirst(packMap, bridge)
+
+	if len(bridge[PackBehavior]) != 1 || bridge[PackBehavior][0].UUID != "183b0dc7" {
+		t.Errorf("入参 bridge 被修改: %+v", bridge[PackBehavior])
+	}
+}
