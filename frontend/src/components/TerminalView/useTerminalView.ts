@@ -4,10 +4,10 @@
 // 订阅 onOutput→write、onExit→提示）基础上，补齐 cc-pane 列为「不可省」的 TUI 兼容层
 // （让 Claude/Codex 这类 agent CLI 握手正确、不渲染错乱）：
 //   - CPR 光标查询应答（CSI 6 n / CSI ? 6 n）
-//   - Primary DA 应答（CSI c）—— codex 启动握手必需
 //   - OSC 4/10/11 颜色查询应答
-//   - Kitty 键盘协议 / 窗口尺寸查询 / 颜色方案查询：改用 xterm 内建实现（见下方 vtExtensions
-//     与 windowOptions），不再手写应答
+//   - Primary / Secondary DA（CSI c / CSI > c）、Kitty 键盘协议、窗口尺寸查询、颜色方案查询：
+//     一律改用 xterm 内建实现（见下方 vtExtensions / windowOptions 与 disposables 里的说明），
+//     不再手写。viewer 侧只注册「纯抑制」handler 做多端去重
 //   - 写入流控（Windows 高吞吐防卡）
 //   - agent CLI 输出剥离 alternate-buffer 切屏序列（输出留 normal buffer，滚轮滚历史）
 //   - Ctrl/Cmd+V 粘贴（拦掉 xterm 默认 ^V，交浏览器原生 paste 写一份）/ 有选区时 Ctrl/Cmd+C 复制（无选区透传 SIGINT）
@@ -34,7 +34,6 @@ import {
 } from '@/terminal/layoutScheduler';
 import { recordTerminalSize } from '@/terminal/terminalSize';
 import { buildCursorPositionReport } from './compat/terminalCpr';
-import { buildPrimaryDeviceAttributesReport } from './compat/terminalCapabilityReports';
 import { buildOscColorReply } from './compat/terminalOscColor';
 import { buildTerminalPalette, type TerminalThemePalette } from './compat/terminalTheme';
 import {
@@ -306,9 +305,20 @@ export function useTerminalView({
           ),
         ),
       ),
-      term.parser.registerCsiHandler({ final: 'c' }, (params) =>
-        reply(buildPrimaryDeviceAttributesReport(params, undefined)),
-      ),
+      // Primary / Secondary DA（CSI c / CSI > c）：改用 xterm 内建应答（InputHandler
+      // sendDeviceAttributesPrimary/Secondary）。内建对 Primary 回的正是 ESC[?1;2c —— 与原先手写的
+      // 逐字节一致（前提 termName 命中 'xterm'，那是 OptionsService 默认值且我们没覆盖），故 codex
+      // 握手行为不变；参数 >0 时内建同样静默不应答，与手写的放行结果也一致。
+      //
+      // viewer 侧必须注册纯抑制 handler：内建应答经 triggerDataEvent → onData → 我们的 write 发出，
+      // **绕过** 上面 reply() 的「仅 owner 回写」门，双端在场时 CLI 会收到双份 DA 而错乱。Secondary
+      // DA 我们从来没手写过，也就是说 viewer 一直在替 owner 多应答一份 —— 这里一并堵上（既有漏洞）。
+      ...(lifecycleRole === 'owner'
+        ? []
+        : [
+            term.parser.registerCsiHandler({ final: 'c' }, () => true),
+            term.parser.registerCsiHandler({ prefix: '>', final: 'c' }, () => true),
+          ]),
       term.parser.registerOscHandler(4, (data) => oscReply(4, data)),
       term.parser.registerOscHandler(10, (data) => oscReply(10, data)),
       term.parser.registerOscHandler(11, (data) => oscReply(11, data)),
