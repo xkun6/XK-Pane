@@ -4,8 +4,10 @@
 // 订阅 onOutput→write、onExit→提示）基础上，补齐 cc-pane 列为「不可省」的 TUI 兼容层
 // （让 Claude/Codex 这类 agent CLI 握手正确、不渲染错乱）：
 //   - CPR 光标查询应答（CSI 6 n / CSI ? 6 n）
-//   - Primary DA 应答（CSI c）+ Kitty 键盘协议应答（CSI ? u）—— codex 启动握手必需
+//   - Primary DA 应答（CSI c）—— codex 启动握手必需
 //   - OSC 4/10/11 颜色查询应答
+//   - Kitty 键盘协议 / 窗口尺寸查询 / 颜色方案查询：改用 xterm 内建实现（见下方 vtExtensions
+//     与 windowOptions），不再手写应答
 //   - 写入流控（Windows 高吞吐防卡）
 //   - agent CLI 输出剥离 alternate-buffer 切屏序列（输出留 normal buffer，滚轮滚历史）
 //   - Ctrl/Cmd+V 粘贴（拦掉 xterm 默认 ^V，交浏览器原生 paste 写一份）/ 有选区时 Ctrl/Cmd+C 复制（无选区透传 SIGINT）
@@ -30,10 +32,7 @@ import {
 } from '@/terminal/layoutScheduler';
 import { recordTerminalSize } from '@/terminal/terminalSize';
 import { buildCursorPositionReport } from './compat/terminalCpr';
-import {
-  buildPrimaryDeviceAttributesReport,
-  buildKittyKeyboardProtocolReport,
-} from './compat/terminalCapabilityReports';
+import { buildPrimaryDeviceAttributesReport } from './compat/terminalCapabilityReports';
 import { buildOscColorReply } from './compat/terminalOscColor';
 import { buildTerminalPalette, type TerminalThemePalette } from './compat/terminalTheme';
 import {
@@ -154,6 +153,46 @@ export function useTerminalView({
       fontFamily: TERMINAL_FONT_FAMILY,
       scrollback: TERMINAL_SCROLLBACK,
       theme: xtermTheme,
+      // ── 以下为与 VS Code 对齐的 xterm 内建能力（VS Code 只设 options、不手写任何终端应答，
+      // 见其 xtermTerminal.ts 的 new xtermCtor({...})）──
+      //
+      // ★ 自动应答类开关一律只在 owner 打开：xterm 的内建应答经 coreService.triggerDataEvent →
+      // onData → 我们的 write 发出（CoreService.ts），**绕过**下方 reply() 的「仅 owner 回写」门。
+      // 桌面 + Web 镜像同时在场时两端都会应答，CLI 收到双份就会错乱 —— 正是那条多端去重铁律要防的。
+      vtExtensions: {
+        // Kitty 键盘协议（CSI =|?|>|< u）：xterm 内建实现协议本体（含增强键盘上报），取代我们原先
+        // 手写的「回一句 CSI ?0u 声明不支持」。协议查询是自动应答 → owner only。
+        kittyKeyboard: lifecycleRole === 'owner',
+        // 颜色方案查询 / 通知（CSI ? 996 n + DECSET 2031）：内部按 `?? true` 读取，即**默认开启**，
+        // 是升级到 6.1 beta 才引入的新自动应答（6.0.0 没有）。必须显式传 false 才关得掉，故一并
+        // 收进 owner 门，否则 viewer 也会应答明暗查询。
+        colorSchemeQuery: lifecycleRole === 'owner',
+        // win32-input-mode（DECSET 9001）：conpty 下让程序拿到完整 Windows 键盘信息。它没有自动
+        // 应答，是由程序主动启用、两端各自独立生效的键入编码模式，故只按平台判断、无需 owner 门。
+        win32InputMode: isWindows,
+      },
+      // 窗口 / cell 像素尺寸查询应答（CSI 14t / 16t / 18t）。同为自动应答 → owner only；viewer 传
+      // 空对象而非 undefined —— OptionsService 会把显式 undefined 写进 rawOptions，而 InputHandler
+      // 直接读 `rawOptions.windowOptions.setWinLines`，传 undefined 会运行时崩。
+      windowOptions:
+        lifecycleRole === 'owner'
+          ? { getWinSizePixels: true, getCellSizePixels: true, getWinSizeChars: true }
+          : {},
+      // 字形超出 cell 时缩放（CJK / Powerline / Nerd font 不再互相压字）。注意 typings 明确写了它
+      // 对 DOM 渲染器无效 —— 下方 WebGL 加载失败或上下文丢失回退 DOM 时，本项会静默失效。
+      rescaleOverlappingGlyphs: true,
+      // ED2 清屏把内容推入 scrollback 而不是只清 viewport（PuTTY / VS Code 的行为），清屏后仍能
+      // 滚回去看之前的输出。
+      scrollOnEraseInDisplay: true,
+      // 对比度不足时动态调整前景色。⚠ 这一项会改变现有观感，需手测确认：亮底下 reclaude 的
+      // truecolor + dim 文字发虚是已知痛点，它走 truecolor、绕过 terminalTheme.ts 的 ANSI16_LIGHT
+      // 色表，改色表治不了；本项按实际渲染出的颜色兜底，是目前唯一可能覆盖到它的手段。若手测觉得
+      // 配色被改坏，调低数值或直接去掉即可（与 ANSI16_LIGHT 的 ≥4.5:1 设计是互补而非重复：那个管
+      // 调色板取值，这个管最终渲染色）。
+      minimumContrastRatio: 4.5,
+      // 刻意不开 rightClickSelectsWord（VS Code 按用户配置开）：xterm 的 rightClickHandler 会把选区
+      // 整段塞进隐藏 textarea（Clipboard.ts），而那个 textarea 正是 IME 的组合缓冲 —— 开了会加重中文
+      // 输入重复一段文字的老毛病。这是有意取舍，不是漏配。
     });
     // unicode11：用 Unicode 11 宽度表算 CJK / emoji 的列宽（xterm 默认旧表会把全角字符当半角 →
     // 中文光标 / 字符水平错位）。必须在 open 前 load 并激活。
@@ -200,7 +239,7 @@ export function useTerminalView({
 
     // ── TUI 兼容层：注册 CSI/OSC 应答处理器，回应经 PTY 写回 ──
     // reply: 有应答则写回 PTY 并返回 true（抑制 xterm 默认处理，避免重复应答）；否则放行。
-    // 多端去重（P7 M6）：仅 owner（桌面）回写 TUI 自动应答（CPR/DA/OSC/Kitty）。viewer（Web）
+    // 多端去重（P7 M6）：仅 owner（桌面）回写 TUI 自动应答（CPR/DA/OSC）。viewer（Web）
     // 仍返回 true 抑制本端默认处理，但**不**回写 —— 否则桌面 + 手机同时应答，CLI 收到双份应答会乱。
     // viewer 的普通键入（onData / 虚拟键栏）不受影响，照常写回。
     const reply = (payload: string | null): boolean => {
@@ -238,9 +277,6 @@ export function useTerminalView({
       ),
       term.parser.registerCsiHandler({ final: 'c' }, (params) =>
         reply(buildPrimaryDeviceAttributesReport(params, undefined)),
-      ),
-      term.parser.registerCsiHandler({ prefix: '?', final: 'u' }, (params) =>
-        reply(buildKittyKeyboardProtocolReport(params, '?')),
       ),
       term.parser.registerOscHandler(4, (data) => oscReply(4, data)),
       term.parser.registerOscHandler(10, (data) => oscReply(10, data)),
