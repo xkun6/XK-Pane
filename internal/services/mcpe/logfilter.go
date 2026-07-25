@@ -94,12 +94,56 @@ func parseStdoutLine(raw string) (ParsedLog, bool) {
 		return ParsedLog{Display: body, Severity: detectSeverity(line), Category: tag}, true
 	}
 
-	// 规则 5：兜底 — [Python] 前缀的任何内容
+	// 规则 5：Python 回溯 / 未捕获异常
+	if isPythonTraceback(body) {
+		return ParsedLog{Display: body, Severity: sevError}, true
+	}
+
+	// 规则 6：兜底 — [Python] 前缀的任何内容
 	if hadPython {
 		return ParsedLog{Display: body, Severity: detectSeverity(line)}, true
 	}
 
 	return ParsedLog{}, false
+}
+
+// isPythonTraceback 判断是否 Python 回溯 / 未捕获异常行。
+//
+// 为什么必须放行：mod 的 modMain 在 import 期抛异常时（语法错、ImportError、顶层代码报错），
+// 引擎把 traceback 裸打到 stdout —— 既没有 Python 时间戳头，也没有 [Tag] 前缀，更没有
+// [Python] 前缀，因此原先被白名单整条丢弃。后果是 mod（含调试桥模组）加载失败时面板上
+// 毫无线索，只能看到桥“等待中”，根因完全不可观测。
+//
+// 只认三种强特征行，避免把 C++ 引擎噪音一并放进来：
+//   - "Traceback (most recent call last)" 起始行
+//   - 缩进的 `File "..."` 定位行
+//   - 形如 `ImportError: ...` / `mod.xxx.SomeException: ...` 的异常类型行
+//
+// traceback 中间的源码上下文行仍会被丢弃，但异常类型 + 出错文件/行号已足够定位。
+func isPythonTraceback(body string) bool {
+	t := trimStart(body)
+	if strings.HasPrefix(t, "Traceback (most recent call last)") {
+		return true
+	}
+	if strings.HasPrefix(t, `File "`) {
+		return true
+	}
+	// 异常类型行：冒号前是合法标识符（可含点号的限定名）且以 Error / Exception 结尾。
+	i := strings.IndexByte(t, ':')
+	if i <= 0 {
+		return false
+	}
+	name := t[:i]
+	if !strings.HasSuffix(name, "Error") && !strings.HasSuffix(name, "Exception") {
+		return false
+	}
+	for j := 0; j < len(name); j++ {
+		c := name[j]
+		if !(c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_' || c == '.') {
+			return false
+		}
+	}
+	return true
 }
 
 // leadingModTag 提取行首 [<Tag>] 中的 <Tag>，要求首字符 ASCII 大写 + 其余 ASCII 字母数字下划线 + 不在引擎黑名单。

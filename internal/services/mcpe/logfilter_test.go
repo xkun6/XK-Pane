@@ -190,3 +190,34 @@ func TestSeverityRecognizesLowercaseContentLogTags(t *testing.T) {
 		t.Error("info")
 	}
 }
+
+// mod 的 modMain import 失败时，引擎把裸 traceback 打到 stdout（无时间戳头 / 无 [Tag] /
+// 无 [Python] 前缀）。这是桥模组加载失败的唯一线索，必须放行，否则面板只显示桥“等待中”。
+func TestStdoutKeepsPythonTraceback(t *testing.T) {
+	for _, raw := range []string{
+		"Traceback (most recent call last):",
+		`  File "C:/Users/x/behavior_packs/183b0dc7/debug_env_scripts/modMain.py", line 2, in <module>`,
+		"ImportError: No module named QuModLibs.QuMod",
+		"SyntaxError: invalid syntax",
+		"AttributeError: 'NoneType' object has no attribute 'foo'",
+		"mod.common.SomeException: bad thing",
+	} {
+		r := mustParse(t, raw)
+		if r.Severity != sevError {
+			t.Errorf("severity=%q want error, raw=%q", r.Severity, raw)
+		}
+	}
+}
+
+// 负面用例：放行 traceback 不得把普通文本/引擎噪音一起放进来。
+func TestStdoutTracebackRuleDoesNotOverMatch(t *testing.T) {
+	for _, raw := range []string{
+		"NOT_A_TRACEBACK just text",
+		"http://example.com/a.png",
+		"Loading file netease_items_beh/ct_gun.json...",
+		"some prose: with a colon",
+		"has Error but no colon here",
+	} {
+		mustDrop(t, raw)
+	}
+}
