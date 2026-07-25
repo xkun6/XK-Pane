@@ -20,6 +20,7 @@ import { useEffect, useRef } from 'react';
 import { useTheme, type Theme } from '@mui/material';
 import { ClipboardAddon } from '@xterm/addon-clipboard';
 import { FitAddon } from '@xterm/addon-fit';
+import { ImageAddon } from '@xterm/addon-image';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { Terminal, type ITheme } from '@xterm/xterm';
@@ -234,6 +235,19 @@ export function useTerminalView({
       term.loadAddon(webgl);
     } catch {
       webgl = null;
+    }
+
+    // 内联图片协议（SIXEL / iTerm IIP / Kitty graphics）：load 即生效，图片直接渲染进终端，
+    // 不需要任何 UI 接线。必须在 open 之后 load（需要渲染层就绪）。
+    // 收益如实说：已知 claude / codex 都不发这些序列，所以短期内大概率看不到变化 —— 属于能力就位
+    // （别的 CLI、或用 img2sixel 之类手动输出时才用得上）。
+    // ★ enableSizeReports 必须显式关掉：它默认 true，会在 addon 加载时自行把 windowOptions 的
+    // getWinSizePixels / getCellSizePixels / getWinSizeChars 三项打开 —— 那会绕过上面按
+    // lifecycleRole 做的 owner 门控，让 viewer 也应答尺寸查询（双份应答）。这三项统一由上面的
+    // Terminal options 管，addon 不许碰。
+    // storageLimit 默认 128MB 且是**每个终端实例**一份，多面板会累加，故收到 32MB。
+    if (lifecycleRole === 'owner') {
+      term.loadAddon(new ImageAddon({ enableSizeReports: false, storageLimit: 32 }));
     }
 
     termRef.current = term;

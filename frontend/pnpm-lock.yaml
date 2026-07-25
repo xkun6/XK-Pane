@@ -42,11 +42,14 @@ importers:
         specifier: latest
         version: 3.0.0-alpha.79
       '@xterm/addon-clipboard':
-        specifier: 0.3.0-beta.291
+        specifier: ^0.3.0-beta.291
         version: 0.3.0-beta.291(@xterm/xterm@6.1.0-beta.291)
       '@xterm/addon-fit':
         specifier: ^0.12.0-beta.291
         version: 0.12.0-beta.291(@xterm/xterm@6.1.0-beta.291)
+      '@xterm/addon-image':
+        specifier: 0.10.0-beta.291
+        version: 0.10.0-beta.291(@xterm/xterm@6.1.0-beta.291)
       '@xterm/addon-unicode11':
         specifier: ^0.10.0-beta.291
         version: 0.10.0-beta.291(@xterm/xterm@6.1.0-beta.291)
@@ -700,6 +703,11 @@ packages:
 
   '@xterm/addon-fit@0.12.0-beta.291':
     resolution: {integrity: sha512-bxJ4g8YKPily7Lc8NpkYBm6QmSyNhzGo1g5uXJl1g1zSHeM0GV1/Q5BQB/Y/C340+jcNb6CsFGj/VDgsXGLzIA==}
+    peerDependencies:
+      '@xterm/xterm': ^6.1.0-beta.291
+
+  '@xterm/addon-image@0.10.0-beta.291':
+    resolution: {integrity: sha512-yfRk0qFkmQiS6Y6id27hzg99d9WC3f1wRNrCojcqFd0WFt3Yq5+bD2QoimSBZ8Alz2kof8BknUk9pMrPXtm5Dw==}
     peerDependencies:
       '@xterm/xterm': ^6.1.0-beta.291
 
@@ -2237,6 +2245,10 @@ snapshots:
       '@xterm/xterm': 6.1.0-beta.291
 
   '@xterm/addon-fit@0.12.0-beta.291(@xterm/xterm@6.1.0-beta.291)':
+    dependencies:
+      '@xterm/xterm': 6.1.0-beta.291
+
+  '@xterm/addon-image@0.10.0-beta.291(@xterm/xterm@6.1.0-beta.291)':
     dependencies:
       '@xterm/xterm': 6.1.0-beta.291
 

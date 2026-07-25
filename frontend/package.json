@@ -26,6 +26,7 @@
     "@wailsio/runtime": "latest",
     "@xterm/addon-clipboard": "^0.3.0-beta.291",
     "@xterm/addon-fit": "^0.12.0-beta.291",
+    "@xterm/addon-image": "^0.10.0-beta.291",
     "@xterm/addon-unicode11": "^0.10.0-beta.291",
     "@xterm/addon-webgl": "^0.20.0-beta.290",
     "@xterm/xterm": "^6.1.0-beta.291",
