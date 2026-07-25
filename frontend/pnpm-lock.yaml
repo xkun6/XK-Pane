@@ -41,6 +41,9 @@ importers:
       '@wailsio/runtime':
         specifier: latest
         version: 3.0.0-alpha.79
+      '@xterm/addon-clipboard':
+        specifier: 0.3.0-beta.291
+        version: 0.3.0-beta.291(@xterm/xterm@6.1.0-beta.291)
       '@xterm/addon-fit':
         specifier: ^0.12.0-beta.291
         version: 0.12.0-beta.291(@xterm/xterm@6.1.0-beta.291)
@@ -689,6 +692,11 @@ packages:
 
   '@wailsio/runtime@3.0.0-alpha.79':
     resolution: {integrity: sha512-NITzxKmJsMEruc39L166lbPJVECxzcbdqpHVqOOF7Cu/7Zqk/e3B/gNpkUjhNyo5rVb3V1wpS8oEgLUmpu1cwA==}
+
+  '@xterm/addon-clipboard@0.3.0-beta.291':
+    resolution: {integrity: sha512-irZC3LcAT6S5NPRT2KFCqwxKR5Lm9CnTNV+8VZAJfaLpXzLeyy9oNdhJlKacSZ+3ihm7dgdYh3wy47Y9lNErEA==}
+    peerDependencies:
+      '@xterm/xterm': ^6.1.0-beta.291
 
   '@xterm/addon-fit@0.12.0-beta.291':
     resolution: {integrity: sha512-bxJ4g8YKPily7Lc8NpkYBm6QmSyNhzGo1g5uXJl1g1zSHeM0GV1/Q5BQB/Y/C340+jcNb6CsFGj/VDgsXGLzIA==}
@@ -2223,6 +2231,10 @@ snapshots:
       tinyrainbow: 3.1.0
 
   '@wailsio/runtime@3.0.0-alpha.79': {}
+
+  '@xterm/addon-clipboard@0.3.0-beta.291(@xterm/xterm@6.1.0-beta.291)':
+    dependencies:
+      '@xterm/xterm': 6.1.0-beta.291
 
   '@xterm/addon-fit@0.12.0-beta.291(@xterm/xterm@6.1.0-beta.291)':
     dependencies:

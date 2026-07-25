@@ -18,6 +18,7 @@
 //   与后端通信，绝不直接 import @bindings（xterm 为第三方库，允许直接 import）。
 import { useEffect, useRef } from 'react';
 import { useTheme, type Theme } from '@mui/material';
+import { ClipboardAddon } from '@xterm/addon-clipboard';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
@@ -40,7 +41,7 @@ import {
   stripAlternateBufferSequences,
 } from './compat/terminalBufferMode';
 import { formatPastedPaths } from './compat/terminalClipboardPaste';
-import { parseOsc52ClipboardText } from './compat/terminalClipboardWrite';
+import { createTerminalClipboardProvider } from './compat/terminalClipboardProvider';
 import { isTerminalCopyShortcut, isTerminalPasteShortcut } from './compat/terminalKeyboard';
 import {
   createTerminalWriteFlowControl,
@@ -202,6 +203,22 @@ export function useTerminalView({
 
     const fit = new FitAddon();
     term.loadAddon(fit);
+
+    // OSC 52 剪贴板（终端内程序请求写系统剪贴板，如 claude 的复制提示）：用官方 addon 的解析 +
+    // UTF-8 安全 base64，写入注入成 Wails 原生通道（WebView 的 navigator.clipboard 受手势限制，
+    // 见 terminalClipboardProvider.ts）。取代原先手写的 registerOscHandler(52)。
+    // ★ 只在 owner load：addon 处理读请求时会用 terminal.input() 回写应答 → 经 onData 发出，
+    // 双端都 load 会让 CLI 收到双份应答（同 vtExtensions 那批自动应答的道理）。viewer 不 load
+    // 即不处理 OSC 52，与改动前「viewer 不写剪贴板」的行为一致。
+    if (lifecycleRole === 'owner') {
+      term.loadAddon(
+        new ClipboardAddon(
+          undefined,
+          createTerminalClipboardProvider((text) => ClipboardService.writeText(text)),
+        ),
+      );
+    }
+
     term.open(host);
 
     // WebGL 渲染器：整屏 GPU canvas 取代 DOM 逐行 div —— 消除移动 WebView 上行间合成接缝（横线），
@@ -281,12 +298,6 @@ export function useTerminalView({
       term.parser.registerOscHandler(4, (data) => oscReply(4, data)),
       term.parser.registerOscHandler(10, (data) => oscReply(10, data)),
       term.parser.registerOscHandler(11, (data) => oscReply(11, data)),
-      term.parser.registerOscHandler(52, (data) => {
-        const text = parseOsc52ClipboardText(data);
-        if (text === null) return false;
-        if (lifecycleRole === 'owner') void ClipboardService.writeText(text).catch(() => {});
-        return true;
-      }),
     ];
 
     // 写入流控：Windows 上启用 watermark（高吞吐输出防卡 webview 主线程）。
