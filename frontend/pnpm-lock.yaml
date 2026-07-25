@@ -42,17 +42,17 @@ importers:
         specifier: latest
         version: 3.0.0-alpha.79
       '@xterm/addon-fit':
-        specifier: ^0.11.0
-        version: 0.11.0
+        specifier: ^0.12.0-beta.291
+        version: 0.12.0-beta.291(@xterm/xterm@6.1.0-beta.291)
       '@xterm/addon-unicode11':
-        specifier: ^0.9.0
-        version: 0.9.0
+        specifier: ^0.10.0-beta.291
+        version: 0.10.0-beta.291(@xterm/xterm@6.1.0-beta.291)
       '@xterm/addon-webgl':
-        specifier: ^0.19.0
-        version: 0.19.0
+        specifier: ^0.20.0-beta.290
+        version: 0.20.0-beta.290(@xterm/xterm@6.1.0-beta.291)
       '@xterm/xterm':
-        specifier: ^6.0.0
-        version: 6.0.0
+        specifier: ^6.1.0-beta.291
+        version: 6.1.0-beta.291
       monaco-editor:
         specifier: ^0.55.1
         version: 0.55.1
@@ -690,17 +690,23 @@ packages:
   '@wailsio/runtime@3.0.0-alpha.79':
     resolution: {integrity: sha512-NITzxKmJsMEruc39L166lbPJVECxzcbdqpHVqOOF7Cu/7Zqk/e3B/gNpkUjhNyo5rVb3V1wpS8oEgLUmpu1cwA==}
 
-  '@xterm/addon-fit@0.11.0':
-    resolution: {integrity: sha512-jYcgT6xtVYhnhgxh3QgYDnnNMYTcf8ElbxxFzX0IZo+vabQqSPAjC3c1wJrKB5E19VwQei89QCiZZP86DCPF7g==}
+  '@xterm/addon-fit@0.12.0-beta.291':
+    resolution: {integrity: sha512-bxJ4g8YKPily7Lc8NpkYBm6QmSyNhzGo1g5uXJl1g1zSHeM0GV1/Q5BQB/Y/C340+jcNb6CsFGj/VDgsXGLzIA==}
+    peerDependencies:
+      '@xterm/xterm': ^6.1.0-beta.291
 
-  '@xterm/addon-unicode11@0.9.0':
-    resolution: {integrity: sha512-FxDnYcyuXhNl+XSqGZL/t0U9eiNb/q3EWT5rYkQT/zuig8Gz/VagnQANKHdDWFM2lTMk9ly0EFQxxxtZUoRetw==}
+  '@xterm/addon-unicode11@0.10.0-beta.291':
+    resolution: {integrity: sha512-+XCKf3blKyXG1DiioLpkBrmLNXwDTIn/7Of5HajPNxNOWgdMR0bH1oN/3yGHgiwl8pw5X/wpk/C6wTZY53l++g==}
+    peerDependencies:
+      '@xterm/xterm': ^6.1.0-beta.291
 
-  '@xterm/addon-webgl@0.19.0':
-    resolution: {integrity: sha512-b3fMOsyLVuCeNJWxolACEUED0vm7qC0cy4wRvf3oURSzDTYVQiGPhTnhWZwIHdvC48Y+oLhvYXnY4XDXPoJo6A==}
+  '@xterm/addon-webgl@0.20.0-beta.290':
+    resolution: {integrity: sha512-vHQCXsBp3rDermQSBCtN75U26DmoWI6SbCQ0oRjkuJR4r1B6SIyJBXuWPhHAXkCs86+iaStuafAdQDNO73cGWA==}
+    peerDependencies:
+      '@xterm/xterm': ^6.1.0-beta.291
 
-  '@xterm/xterm@6.0.0':
-    resolution: {integrity: sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg==}
+  '@xterm/xterm@6.1.0-beta.291':
+    resolution: {integrity: sha512-Q6IjxogKIu7fBkXHcn4vQhfHvtwhIv/NN8LR0knCAxPA06/jXuHwreqX9Y/4zvzj7m8u6OBndOJDCUAxLmRfQQ==}
 
   agent-base@7.1.4:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
@@ -2218,13 +2224,19 @@ snapshots:
 
   '@wailsio/runtime@3.0.0-alpha.79': {}
 
-  '@xterm/addon-fit@0.11.0': {}
+  '@xterm/addon-fit@0.12.0-beta.291(@xterm/xterm@6.1.0-beta.291)':
+    dependencies:
+      '@xterm/xterm': 6.1.0-beta.291
 
-  '@xterm/addon-unicode11@0.9.0': {}
+  '@xterm/addon-unicode11@0.10.0-beta.291(@xterm/xterm@6.1.0-beta.291)':
+    dependencies:
+      '@xterm/xterm': 6.1.0-beta.291
 
-  '@xterm/addon-webgl@0.19.0': {}
+  '@xterm/addon-webgl@0.20.0-beta.290(@xterm/xterm@6.1.0-beta.291)':
+    dependencies:
+      '@xterm/xterm': 6.1.0-beta.291
 
-  '@xterm/xterm@6.0.0': {}
+  '@xterm/xterm@6.1.0-beta.291': {}
 
   agent-base@7.1.4: {}
 
