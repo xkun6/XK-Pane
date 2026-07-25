@@ -42,6 +42,7 @@ import {
 } from './compat/terminalBufferMode';
 import { formatPastedPaths } from './compat/terminalClipboardPaste';
 import { parseOsc52ClipboardText } from './compat/terminalClipboardWrite';
+import { attachImeBufferReset } from './compat/terminalImeBuffer';
 import { isTerminalCopyShortcut, isTerminalPasteShortcut } from './compat/terminalKeyboard';
 import {
   createTerminalWriteFlowControl,
@@ -278,6 +279,11 @@ export function useTerminalView({
       return true;
     });
 
+    // 中文 / 日文 IME：xterm 的隐藏 textarea 只在 Enter / Ctrl+C 时清空，逐次上屏会一直累积，而
+    // CompositionHelper 按下标 substring 出要发送的内容 —— 下标错开就会把已发过的旧内容整段重发
+    // （= 偶尔打中文重复一段文字）。每轮组合结束后复位该缓冲；时序铁律见 terminalImeBuffer.ts。
+    const detachImeBufferReset = term.textarea ? attachImeBufferReset(term.textarea) : null;
+
     const scheduler = createTerminalLayoutScheduler({
       getTerminal: () => termRef.current,
       getFitAddon: () => fitRef.current,
@@ -375,6 +381,7 @@ export function useTerminalView({
     return () => {
       onData.dispose();
       for (const d of disposables) d.dispose();
+      detachImeBufferReset?.();
       host.removeEventListener('paste', onHostPaste, true);
       host.removeEventListener('pointerup', focusOnTap);
       observer.disconnect();
