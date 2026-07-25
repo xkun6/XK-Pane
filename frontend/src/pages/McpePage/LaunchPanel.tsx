@@ -262,6 +262,10 @@ export const LaunchPanel = ({ pkg, runtime }: { pkg: MCPackage; runtime?: MCRunR
                         cursor: 'pointer',
                         font: 'inherit',
                         verticalAlign: 'baseline',
+                        // <button> 内文本默认不参与选区，会把整行选择打断 —— 而 Python
+                        // traceback 每行的 File "xxx.py" 恰好整段落在这个链接里，导致报错
+                        // 复制不出来。显式放开选择（不影响 onClick 复制路径）。
+                        userSelect: 'text',
                         '&:hover': { color: theme.palette.foundation.accent },
                       }}
                       onClick={() => seg.link && handleLink(seg.link.path)}
