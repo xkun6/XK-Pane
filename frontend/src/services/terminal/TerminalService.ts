@@ -189,8 +189,10 @@ export const TerminalService = {
     });
   },
 
-  // attach 重放快照（P7 M4）。浏览器走 GET /api/sessions/replay；桌面暂返回空
-  // （桌面 attach 重放 = 后续；其 SessionReplay binding 待 regen，M4 无桌面消费方）。
+  // attach 重放快照（P7 M4）。浏览器走 GET /api/sessions/replay；桌面走 SessionReplay binding。
+  // 后端返回元组 [RawReplay, ok]，ok=false = 未知/已退出会话 → 按空重放处理（无历史画面，只接后续
+  // live）。桌面这条原先写死返回空、注释标着「binding 待 regen」，但该 binding 其实早已生成好，
+  // 只是前端一直没接上。
   async replay(sessionId: string): Promise<RawReplay> {
     if (!isDesktop) {
       const res = await httpClient.get<{ data?: string; lastSeq?: number }>(
@@ -198,7 +200,9 @@ export const TerminalService = {
       );
       return { data: res.data ?? '', lastSeq: Number(res.lastSeq ?? 0) };
     }
-    return { data: '', lastSeq: 0 };
+    const [snapshot, ok] = await Binding.SessionReplay(sessionId);
+    if (!ok || !snapshot) return { data: '', lastSeq: 0 };
+    return { data: snapshot.data ?? '', lastSeq: Number(snapshot.lastSeq ?? 0) };
   },
 
   // 订阅指定会话的状态变更（active / idle / waiting_input / exited）。
