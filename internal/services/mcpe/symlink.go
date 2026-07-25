@@ -22,7 +22,14 @@ type symlinkPair struct {
 	link   string
 }
 
-// removeSymlinksIn 清理目录下所有 symlink（保留实体子目录）。
+// removeSymlinksIn 清理目录下所有链接型条目（保留实体子目录）。
+//
+// 判据走 isLinkEntry 而非直接看 os.ModeSymlink：Windows 上 MCStudio 会用目录联接
+// （junction，mklink /J）把项目包接进 behavior_packs，而 junction 在 Go 里 Lstat 得到的是
+// ModeIrregular，**不带 ModeSymlink**。只认 ModeSymlink 会漏掉它，于是残留的 junction
+// （名字形如 behavior_pack_XXXX）与本程序按 uuid 新建的 symlink 同时指向同一个包目录，
+// 引擎就见到同一 pack_id 的两个入口 —— 重复 pack_id 会让该包整包异常，连带
+// 桥模组的 python 不被加载（表现为调试桥永远停在“等待中”）。
 func removeSymlinksIn(dir string) error {
 	if !isDir(dir) {
 		return nil
@@ -37,8 +44,8 @@ func removeSymlinksIn(dir string) error {
 		if err != nil {
 			continue
 		}
-		if fi.Mode()&os.ModeSymlink != 0 {
-			if err := os.Remove(path); err != nil { // os.Remove 处理目录 symlink（reparse point）
+		if isLinkEntry(fi) {
+			if err := os.Remove(path); err != nil { // os.Remove 处理目录 symlink / junction（reparse point）
 				logx.For("mcpe").Warn("删除 symlink 失败", "path", path, "err", err)
 			}
 		}
@@ -54,11 +61,14 @@ func removeSymlinksIn(dir string) error {
 //	(false, err) = 其他错误（路径冲突 / I/O）。
 func createSymlink(target, link string) (bool, error) {
 	if fi, err := os.Lstat(link); err == nil {
-		if fi.Mode()&os.ModeSymlink != 0 {
-			if resolved, err := os.Readlink(link); err == nil && resolved == target {
+		if isLinkEntry(fi) {
+			// junction 也算链接（见 isLinkEntry）：Readlink 对它可能失败或读出不同写法，
+			// 一律走删除重建，保证最终只留一条我们自己建的 symlink。
+			if resolved, err := os.Readlink(link); err == nil && resolved == target &&
+				fi.Mode()&os.ModeSymlink != 0 {
 				return true, nil // 已是指向同目标的 symlink
 			}
-			_ = os.Remove(link) // symlink 但指向不对 → 删除重建
+			_ = os.Remove(link) // 指向不对 / 是 junction → 删除重建
 		} else {
 			return false, fmt.Errorf("%s 已存在但不是 symlink，拒绝覆盖", link)
 		}

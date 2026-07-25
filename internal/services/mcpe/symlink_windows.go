@@ -20,6 +20,21 @@ import (
 // errorPrivilegeNotHeld = Windows ERROR_PRIVILEGE_NOT_HELD（创建 symlink 缺权限）。
 const errorPrivilegeNotHeld syscall.Errno = 1314
 
+// isLinkEntry 判断一个条目是否为链接（symlink 或目录联接 junction），实体目录/文件返回 false。
+//
+// 只看 os.ModeSymlink 不够：junction（mklink /J，MCStudio 接项目包用的就是它）在 Go 里
+// Lstat 得到 ModeIrregular 而不带 ModeSymlink。改判 FILE_ATTRIBUTE_REPARSE_POINT 可同时
+// 覆盖 symlink / junction / mount point，且实体目录不带该属性（不会被误删）。
+func isLinkEntry(fi os.FileInfo) bool {
+	if fi.Mode()&os.ModeSymlink != 0 {
+		return true
+	}
+	if d, ok := fi.Sys().(*syscall.Win32FileAttributeData); ok {
+		return d.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0
+	}
+	return false
+}
+
 // isPrivilegeError 判断 os.Symlink 的错误是否是“缺 SeCreateSymbolicLinkPrivilege”。
 func isPrivilegeError(err error) bool {
 	var le *os.LinkError
