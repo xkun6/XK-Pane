@@ -55,16 +55,6 @@ func (s *Service) ServiceStartup(ctx context.Context, options application.Servic
 		}
 	}
 
-	var reclaudeCount int64
-	if err := s.db().WithContext(ctx).Model(&storage.AgentProvider{}).
-		Where("app_type = ?", appTypeReclaude).Count(&reclaudeCount).Error; err != nil {
-		s.log.Warn("count reclaude providers failed", "err", err)
-	} else if reclaudeCount == 0 {
-		if _, err := s.importReclaudeDefault(ctx, false); err != nil {
-			s.log.Warn("import default reclaude provider failed", "err", err)
-		}
-	}
-
 	var mcpCount int64
 	if err := s.db().WithContext(ctx).Model(&storage.AgentMcpServer{}).Count(&mcpCount).Error; err != nil {
 		s.log.Warn("count agent mcp servers failed", "err", err)
@@ -92,6 +82,11 @@ func (s *Service) ServiceStartup(ctx context.Context, options application.Servic
 	// 两层模型一次性迁移:老用户「每 Provider 存整份」→ 拆成系统配置基底 + 凭据补丁(幂等)。
 	if err := s.migrateClaudeTwoLayer(ctx); err != nil {
 		s.log.Warn("migrate claude two-layer failed", "err", err)
+	}
+
+	// 一次性修复：把早期被当成凭据、误塞进供应商补丁的 model 挪回公共基底（幂等）。
+	if err := s.migrateClaudeModelToBase(ctx); err != nil {
+		s.log.Warn("migrate claude model to base failed", "err", err)
 	}
 
 	// 运行期监听全局配置目录；外部改动（含 CLAUDE.md / AGENTS.md）→ 同步 DB + 广播事件。

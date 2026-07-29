@@ -5,7 +5,6 @@ export const providerSettingsEnUS: Messages = {
     provider: {
       tabs: {
         claude: 'Claude Code',
-        reclaude: 'Reclaude',
         codex: 'Codex',
         grok: 'Grok Build',
         other: 'Other CLIs',
@@ -14,7 +13,6 @@ export const providerSettingsEnUS: Messages = {
       cliUpdate: {
         name: {
           claude: 'Claude Code CLI',
-          reclaude: 'Reclaude CLI',
           codex: 'Codex CLI',
           grok: 'Grok Build CLI',
         },
@@ -90,7 +88,7 @@ export const providerSettingsEnUS: Messages = {
           save: 'Save',
           cancel: 'Cancel',
         },
-        // System config base layer (shared layer of the claude/reclaude two-layer model, shared across providers).
+        // System config base layer (shared layer of the claude two-layer model, shared across providers).
         baseConfig: {
           title: 'System config (shared)',
           desc: 'Settings shared across providers — hooks, status line, theme, permissions, etc. Switching providers below only swaps credentials and does not affect this.',
@@ -99,10 +97,6 @@ export const providerSettingsEnUS: Messages = {
           dialogHint: 'This is the shared base config for {{app}}. On save it is deep-merged with the current provider\'s credential patch and written to the global config file.',
           jsonLabel: 'System config JSON',
         },
-      },
-      // Reclaude tab (dedicated hint — shares ~/.claude/settings.json with Claude Code).
-      reclaude: {
-        hint: 'This config is only written to ~/.claude/settings.json right before XK-Pane launches a reclaude session (it shares that file with Claude Code, switching automatically based on which tool you launch). Running Claude and Reclaude sessions at the same time is not recommended — the shared file is hot-reloaded while running and the two would overwrite each other.',
       },
       // "Other CLIs" tab (session-injection types: gemini / kimi / glm / cursor / opencode).
       hint: 'Manage the access credentials used to launch CLIs (API key / endpoint). Keys are AES-GCM encrypted in the local database and never echoed back in plaintext — leave the key field blank when editing to keep the existing one.',

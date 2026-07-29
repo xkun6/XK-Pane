@@ -71,18 +71,18 @@ type AgentSkill struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-// AgentCfgKV 是 agentcfg 域的内部小状态 KV（当前仅存 claude/reclaude 共用的
-// ~/.claude/settings.json 的「文件归属」标记，键 claude_settings_owner）。
+// AgentCfgKV 是 agentcfg 域的内部小状态 KV（当前存 ~/.claude/settings.json 的
+// 「文件归属」标记，键 claude_settings_owner；以及两层迁移幂等标记等）。
 type AgentCfgKV struct {
 	Key   string `gorm:"primaryKey;size:64" json:"key"`
 	Value string `gorm:"type:text" json:"value"`
 }
 
-// AgentBaseConfig 是 claude/reclaude 两层合并模型的「系统配置基底」(公共基底)。
-// 按 appType 各一行(claude | reclaude 独立)。SettingsEnc 是基底 JSON 对象的 cryptox 密文
+// AgentBaseConfig 是 claude 两层合并模型的「系统配置基底」(公共基底)。
+// 按 appType 主键(当前仅 claude 使用)。SettingsEnc 是基底 JSON 对象的 cryptox 密文
 // (hooks 的 command 可能内嵌敏感串,按铁律加密;不复用明文的 AgentCfgKV)。codex/grok 无基底行。
 type AgentBaseConfig struct {
-	AppType     string    `gorm:"primaryKey;size:16" json:"appType"` // claude | reclaude
+	AppType     string    `gorm:"primaryKey;size:16" json:"appType"` // claude
 	SettingsEnc string    `gorm:"type:text;column:settings_enc" json:"-"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`

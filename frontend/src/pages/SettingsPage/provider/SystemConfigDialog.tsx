@@ -15,7 +15,7 @@ export interface SystemConfigDialogProps {
   onSave: () => void;
 }
 
-// 系统配置基底编辑对话框（View，无业务）：claude/reclaude 两层模型的公共层，
+// 系统配置基底编辑对话框（View，无业务）：claude 两层模型的公共层，
 // 与 GlobalProviderFormDialog 编辑的「供应商凭据补丁」相对——保存后由后端与当前
 // 供应商补丁深合并写入 live 配置文件。
 export const SystemConfigDialog = ({ appType, open, value, error, onChange, onCancel, onSave }: SystemConfigDialogProps) => {

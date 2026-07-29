@@ -2,16 +2,17 @@ package agentcfg
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// TestListSyncsCurrentFromLive 验证：打开设置（List）时会把 live 改动灌回 current，
-// 启动本身不再做全量同步。
-func TestListSyncsCurrentFromLive(t *testing.T) {
+// TestListSyncsCurrentFromLiveIgnoresCredEdit 验证：打开设置（List）触发的反向同步里，
+// 若 live 被软件外改了「凭据形状」的路径（如 env.ANTHROPIC_BASE_URL），按「供应商配置
+// 只能由设置面板改，外部编辑绝不能进补丁」的约定被忽略——不写补丁，也不用新值覆盖/清空
+// 基底里该路径下原有的值，且不新建行。
+func TestListSyncsCurrentFromLiveIgnoresCredEdit(t *testing.T) {
 	svc := newTestService(t)
 	settingsPath := svc.claudeSettingsPath()
 	writeJSONFile(t, settingsPath, map[string]any{
@@ -19,12 +20,12 @@ func TestListSyncsCurrentFromLive(t *testing.T) {
 	})
 	mustStartup(t, svc)
 
-	// 模拟用户在软件外（或关闭期间）改了 live——此时 DB 仍是旧值
+	// 模拟用户在软件外（或关闭期间）改了 live 的凭据形状路径——此时 DB 仍是旧值
 	writeJSONFile(t, settingsPath, map[string]any{
 		"env": map[string]any{"ANTHROPIC_BASE_URL": "https://new.example.com"},
 	})
 
-	// 打开设置 = List：应同步 current，且不新建行
+	// 打开设置 = List：应忽略这次外部编辑，不新建行
 	list, err := svc.ListAgentProviders(context.Background(), appTypeClaude)
 	if err != nil {
 		t.Fatalf("ListAgentProviders: %v", err)
@@ -32,13 +33,17 @@ func TestListSyncsCurrentFromLive(t *testing.T) {
 	if len(list) != 1 {
 		t.Fatalf("len = %d, want 1", len(list))
 	}
-	var got map[string]any
-	if err := json.Unmarshal([]byte(list[0].SettingsJSON), &got); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+	if strings.TrimSpace(list[0].SettingsJSON) != "{}" {
+		t.Fatalf("外部对凭据路径的编辑不应写入供应商补丁: %q", list[0].SettingsJSON)
 	}
-	env, _ := got["env"].(map[string]any)
-	if env["ANTHROPIC_BASE_URL"] != "https://new.example.com" {
-		t.Fatalf("List 未把 live 同步进 current: %+v", got)
+
+	base, err := svc.readBaseConfig(svc.db(), appTypeClaude)
+	if err != nil {
+		t.Fatalf("readBaseConfig: %v", err)
+	}
+	env, _ := base["env"].(map[string]any)
+	if env["ANTHROPIC_BASE_URL"] != "https://old.example.com" {
+		t.Fatalf("基底里的凭据形状路径不应被外部编辑覆盖: %+v", base)
 	}
 }
 

@@ -24,7 +24,7 @@ import type {
 import { AppEvents } from '@/shared/events';
 import { eventTransport, isDesktop } from '@/services/transport';
 
-export type AgentAppType = 'claude' | 'reclaude' | 'codex' | 'grok';
+export type AgentAppType = 'claude' | 'codex' | 'grok';
 
 export interface AgentProvider {
   id: string;
@@ -183,7 +183,7 @@ export const AgentCfgService = {
     return toProvider(dto);
   },
 
-  // —— 系统配置基底(claude/reclaude 两层模型的公共层;codex/grok 不适用) ——
+  // —— 系统配置基底(claude 两层模型的公共层;codex/grok 不适用) ——
   async getBaseConfig(appType: AgentAppType): Promise<string> {
     return (await Binding.GetBaseConfig(appType)) ?? '{}';
   },

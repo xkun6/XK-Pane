@@ -289,8 +289,8 @@ func Run(assets embed.FS, trayIcon []byte) error {
 	termSvc.SetProviderResolver(func(ctx context.Context, providerID string) (map[string]string, *cliadapters.Provider, error) {
 		return provider.ResolveLaunchEnv(ctx, holder.Current().GORM, providerID)
 	})
-	// 注入「启动 claude/reclaude 会话前把对应 appType 的当前 Provider 配置写入共享的
-	// ~/.claude/settings.json」钩子（agentcfg.ApplyForLaunch，见 owner 归属标记机制）。
+	// 注入「启动 claude 会话前将供应商配置 + 系统公共配置合并写入
+	// ~/.claude/settings.json」钩子（agentcfg.ApplyForLaunch）。reclaude 不经此路径处理。
 	termSvc.SetClaudeSettingsApplier(func(ctx context.Context, appType string) error {
 		return agentcfgSvc.ApplyForLaunch(ctx, appType)
 	})

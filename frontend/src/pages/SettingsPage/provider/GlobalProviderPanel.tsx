@@ -172,9 +172,7 @@ export const GlobalProviderPanel = ({ appType }: GlobalProviderPanelProps) => {
         })}
       </Box>
 
-      <Typography sx={styles.bottomHint}>
-        {t(appType === 'reclaude' ? 'settings.provider.reclaude.hint' : 'settings.provider.global.hint')}
-      </Typography>
+      <Typography sx={styles.bottomHint}>{t('settings.provider.global.hint')}</Typography>
 
       <GlobalProviderFormDialog
         appType={appType}

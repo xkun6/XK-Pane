@@ -125,8 +125,7 @@ func settingsSemanticallyEqual(appType, stored, live string) (bool, error) {
 // claude 走两层拆分（syncClaudeCurrentFromLive）；codex/grok 保持整份回灌。
 // 无 current / live 不可读 / 已一致 → changed=false 且 err=nil。
 func (s *Service) syncCurrentFromLive(ctx context.Context, appType string) (changed bool, err error) {
-	// settings.json 是 claude/reclaude 共享文件：owner!=claude 时它此刻是 reclaude 占用期
-	// 的内容（或 reclaude 运行时自改的结果），不能回灌进 claude 的 Provider。
+	// 历史兼容：仅当 owner 明确为 claude（或缺省）时才回灌；非 claude 归属不写回 DB。
 	if appType == appTypeClaude && s.getClaudeSettingsOwner(ctx) != appTypeClaude {
 		return false, nil
 	}
@@ -178,9 +177,11 @@ func (s *Service) syncCurrentFromLive(ctx context.Context, appType string) (chan
 }
 
 // syncClaudeCurrentFromLive 是 claude 反向同步：live 是 deepMerge(基底,当前补丁) 的产物，
-// 外部编辑器改了它之后，按叶子路径把改动拆回「基底」与「当前供应商补丁」——凭据路径
-// （当前补丁已声明的 ∪ 凭据兜底集∩live）→ 回灌补丁；其余 → 回灌基底。storedMerged 与
-// live 语义相等则无变化。事务内一起更新补丁与基底，保证 deepMerge(基底',补丁') 重建 live。
+// 软件外改了它之后，改动一律沉淀到「系统配置基底」——供应商补丁只由设置面板改写，
+// 绝不被外部编辑污染。新基底 = 旧基底里「当前补丁已声明的路径 ∪ 凭据兜底集」下的既有值
+// (原样保留,见 reconcileBaseAgainstLive)∪ live 里其余路径的最新值；落在凭据路径上的
+// 外部改动被忽略(既不进补丁,也不覆盖/清空基底里该路径下原有的值)，会在下次切换/启动
+// 投影时按补丁自身存的值还原。只写一张表，无需事务。
 func (s *Service) syncClaudeCurrentFromLive(ctx context.Context, current storage.AgentProvider) (bool, error) {
 	liveMap, _, err := s.readClaudeLive()
 	if err != nil {
@@ -202,34 +203,14 @@ func (s *Service) syncClaudeCurrentFromLive(ctx context.Context, current storage
 	if err != nil {
 		return false, err
 	}
-	sm, err := json.Marshal(deepMergeJSON(base, patch))
-	if err != nil {
-		return false, err
-	}
-	lm, err := json.Marshal(liveMap)
-	if err != nil {
-		return false, err
-	}
-	if string(sm) == string(lm) {
+
+	newBase := reconcileBaseAgainstLive(base, liveMap, credPathSet(liveMap, patch))
+	if jsonEqual(base, newBase) {
+		// 基底无变化：live 与 DB 的差异只落在凭据路径上（外部改了凭据等），按
+		// 「供应商配置只由设置面板改」的约定忽略，不写库、不广播。
 		return false, nil
 	}
-
-	patchPart, basePart := splitByPaths(liveMap, credPathSet(liveMap, patch))
-	if err := s.db().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		patchData, mErr := json.Marshal(patchPart)
-		if mErr != nil {
-			return mErr
-		}
-		enc, encErr := cryptox.EncryptString(string(patchData))
-		if encErr != nil {
-			return encErr
-		}
-		if err := tx.Model(&storage.AgentProvider{}).Where("id = ?", current.ID).
-			Update("settings_enc", enc).Error; err != nil {
-			return err
-		}
-		return s.writeBaseConfig(tx, appTypeClaude, basePart)
-	}); err != nil {
+	if err := s.writeBaseConfig(s.db().WithContext(ctx), appTypeClaude, newBase); err != nil {
 		return false, err
 	}
 	return true, nil

@@ -5,7 +5,6 @@ export const providerSettingsZhCN: Messages = {
     provider: {
       tabs: {
         claude: 'Claude Code',
-        reclaude: 'Reclaude',
         codex: 'Codex',
         grok: 'Grok Build',
         other: '其它 CLI',
@@ -14,7 +13,6 @@ export const providerSettingsZhCN: Messages = {
       cliUpdate: {
         name: {
           claude: 'Claude Code CLI',
-          reclaude: 'Reclaude CLI',
           codex: 'Codex CLI',
           grok: 'Grok Build CLI',
         },
@@ -90,7 +88,7 @@ export const providerSettingsZhCN: Messages = {
           save: '保存',
           cancel: '取消',
         },
-        // 系统配置基底（claude/reclaude 两层模型的公共层，跨供应商共享）。
+        // 系统配置基底（claude 两层模型的公共层，跨供应商共享）。
         baseConfig: {
           title: '系统配置(公共)',
           desc: 'hooks、状态栏、主题、权限等跨供应商共享的设置。切换下方供应商只替换凭据,不影响这里。',
@@ -99,10 +97,6 @@ export const providerSettingsZhCN: Messages = {
           dialogHint: '这里是 {{app}} 的公共基底。保存后会与当前供应商的凭据补丁深合并,写入全局配置文件。',
           jsonLabel: '系统配置 JSON',
         },
-      },
-      // Reclaude 标签页（与 Claude Code 共用 ~/.claude/settings.json 的专属提示）。
-      reclaude: {
-        hint: '此配置仅在 XK-Pane 启动 reclaude 会话前写入 ~/.claude/settings.json（与 Claude Code 共用同一文件，启动时按所选工具自动切换）。不建议同时运行 Claude 与 Reclaude 会话——共用文件会在运行中被热重载，导致相互串扰。',
       },
       // 「其它 CLI」标签页（按会话注入类型：gemini / kimi / glm / cursor / opencode）。
       hint: '管理用于启动 CLI 的接入凭据（API Key / 端点）。密钥经 AES-GCM 加密存于本地数据库，绝不明文回显——编辑时密钥框留空即保留原值。',

@@ -34,8 +34,7 @@ type Service struct {
 	suppressMu    sync.Mutex
 	suppressUntil time.Time
 
-	// applyMu 串行化 ApplyForLaunch，避免 claude/reclaude 两次启动交叉写共享的
-	// ~/.claude/settings.json。
+	// applyMu 串行化 ApplyForLaunch，避免 claude 多次启动交叉写 ~/.claude/settings.json。
 	applyMu sync.Mutex
 }
 

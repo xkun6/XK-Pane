@@ -6,7 +6,7 @@ const CODEX_BASE_URL_RE = /base_url\s*=\s*"([^"]+)"/;
 
 export function extractBaseUrlHint(appType: AgentAppType, settingsJson: string): string {
   try {
-    if (appType === 'claude' || appType === 'reclaude') {
+    if (appType === 'claude') {
       const parsed = JSON.parse(settingsJson) as { env?: Record<string, unknown> };
       const v = parsed.env?.ANTHROPIC_BASE_URL;
       return typeof v === 'string' ? v : '';

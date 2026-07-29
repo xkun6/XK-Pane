@@ -7,8 +7,7 @@ import (
 )
 
 // 本文件覆盖 claude 反向同步（syncClaudeCurrentFromLive）按叶子路径把 live 改动拆回
-// 「系统配置基底」与「当前供应商补丁」的行为。owner!=claude 时跳过同步的用例已在
-// reclaude_test.go 的 TestSyncCurrentFromLiveSkipsClaudeWhenOwnerIsReclaude 覆盖，此处不重复。
+// 「系统配置基底」与「当前供应商补丁」的行为。
 
 // syncTwoLayerFixture 搭建反向同步测试共用的初态：claude 默认 current provider，
 // 基底 hooks.k=v1，当前补丁 env.ANTHROPIC_BASE_URL=https://a（经 UpdateAgentProvider
@@ -84,9 +83,10 @@ func TestSyncClaudeCurrentFromLiveRoutesBaseKeyToBase(t *testing.T) {
 	}
 }
 
-// TestSyncClaudeCurrentFromLiveRoutesCredKeyToPatch 改凭据键：live 里 env.ANTHROPIC_BASE_URL
-// 变化应回灌当前补丁，基底 hooks.k 不受影响。
-func TestSyncClaudeCurrentFromLiveRoutesCredKeyToPatch(t *testing.T) {
+// TestSyncClaudeCurrentFromLiveKeepsPatchIntact 改凭据键：live 里 env.ANTHROPIC_BASE_URL
+// 变化落在当前补丁已声明的路径上，按「供应商补丁只由设置面板改写」的约定被忽略——
+// changed=false、当前补丁仍是原值、基底不含该路径，外部改动不会污染供应商配置。
+func TestSyncClaudeCurrentFromLiveKeepsPatchIntact(t *testing.T) {
 	svc := syncTwoLayerFixture(t)
 	ctx := context.Background()
 
@@ -99,8 +99,8 @@ func TestSyncClaudeCurrentFromLiveRoutesCredKeyToPatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("syncCurrentFromLive: %v", err)
 	}
-	if !changed {
-		t.Fatal("凭据键变化应 changed=true")
+	if changed {
+		t.Fatal("凭据键变化应被忽略,changed 应为 false")
 	}
 
 	list, err := svc.ListAgentProviders(ctx, appTypeClaude)
@@ -112,8 +112,8 @@ func TestSyncClaudeCurrentFromLiveRoutesCredKeyToPatch(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	env, _ := got["env"].(map[string]any)
-	if env["ANTHROPIC_BASE_URL"] != "https://b" {
-		t.Fatalf("当前补丁应回灌为 https://b: %+v", got)
+	if env["ANTHROPIC_BASE_URL"] != "https://a" {
+		t.Fatalf("当前补丁不应被外部改动污染,应仍是 https://a: %+v", got)
 	}
 
 	base, err := svc.readBaseConfig(svc.db(), appTypeClaude)
@@ -123,6 +123,51 @@ func TestSyncClaudeCurrentFromLiveRoutesCredKeyToPatch(t *testing.T) {
 	hooks, _ := base["hooks"].(map[string]any)
 	if hooks["k"] != "v1" {
 		t.Fatalf("基底 hooks.k 不应被污染: %+v", base)
+	}
+	if _, ok := base["env"]; ok {
+		t.Fatalf("基底不应含凭据路径 env: %+v", base)
+	}
+}
+
+// TestSyncClaudeCurrentFromLiveRoutesModelToBase 回归测试：claude CLI 自己改写 live 的
+// model(如 /model 切模型)必须沉淀进系统配置基底,而不是被反向同步塞进当前供应商补丁
+// (历史 bug:model 曾被当凭据,导致供应商配置被替换成 {"model":"opus[1m]"})。
+func TestSyncClaudeCurrentFromLiveRoutesModelToBase(t *testing.T) {
+	svc := syncTwoLayerFixture(t)
+	ctx := context.Background()
+
+	writeJSONFile(t, svc.claudeSettingsPath(), map[string]any{
+		"hooks": map[string]any{"k": "v1"},
+		"env":   map[string]any{"ANTHROPIC_BASE_URL": "https://a"},
+		"model": "opus[1m]",
+	})
+
+	changed, err := svc.syncCurrentFromLive(ctx, appTypeClaude)
+	if err != nil {
+		t.Fatalf("syncCurrentFromLive: %v", err)
+	}
+	if !changed {
+		t.Fatal("新增 model 应 changed=true")
+	}
+
+	base, err := svc.readBaseConfig(svc.db(), appTypeClaude)
+	if err != nil {
+		t.Fatalf("readBaseConfig: %v", err)
+	}
+	if base["model"] != "opus[1m]" {
+		t.Fatalf("model 应沉淀进系统配置基底: %+v", base)
+	}
+
+	list, err := svc.ListAgentProviders(ctx, appTypeClaude)
+	if err != nil {
+		t.Fatalf("ListAgentProviders: %v", err)
+	}
+	var patch map[string]any
+	if err := json.Unmarshal([]byte(list[0].SettingsJSON), &patch); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, dup := patch["model"]; dup {
+		t.Fatalf("当前供应商补丁不应含 model: %+v", patch)
 	}
 }
 

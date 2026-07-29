@@ -62,7 +62,7 @@ function messageOf(e: unknown): string {
 // 方便编辑；codex 侧拆 auth/config 两块。任一侧解析失败都退回空白草稿而不是抛错——脏数据
 // 不该拦住用户打开编辑框。
 function draftFromProvider(appType: AgentAppType, p: AgentProvider): GlobalProviderDraft {
-  if (appType === 'claude' || appType === 'reclaude') {
+  if (appType === 'claude') {
     let pretty = p.settingsJson;
     try {
       pretty = JSON.stringify(JSON.parse(p.settingsJson), null, 2);
@@ -111,7 +111,7 @@ export interface UseGlobalProviderPanelResult {
   remove: (p: AgentProvider, strings: RemoveStrings) => Promise<void>;
   switchTo: (p: AgentProvider, strings: ErrorStrings) => Promise<void>;
   importCurrent: (strings: ErrorStrings) => Promise<void>;
-  // —— 系统配置基底(仅 claude/reclaude 适用) ——
+  // —— 系统配置基底(仅 claude 适用) ——
   baseJson: string;
   baseDialogOpen: boolean;
   baseJsonError: JsonFieldError;
@@ -132,8 +132,8 @@ export const useGlobalProviderPanel = (appType: AgentAppType): UseGlobalProvider
   const [baseJson, setBaseJson] = useState('{}');
   const [baseDialogOpen, setBaseDialogOpen] = useState(false);
 
-  // claude/reclaude 共享同一套两层模型（系统配置基底 + 供应商凭据补丁）；codex/grok 仍是整份。
-  const isTwoLayer = appType === 'claude' || appType === 'reclaude';
+  // claude 使用两层模型（系统配置基底 + 供应商凭据补丁）；codex/grok 仍是整份。
+  const isTwoLayer = appType === 'claude';
 
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -209,7 +209,7 @@ export const useGlobalProviderPanel = (appType: AgentAppType): UseGlobalProvider
   const submit = useCallback(
     async (strings: ErrorStrings): Promise<void> => {
       const settingsJson =
-        appType === 'claude' || appType === 'reclaude'
+        appType === 'claude'
           ? draft.claudeJson.trim()
           : JSON.stringify({
               auth: draft.codexAuthJson.trim() === '' ? null : (JSON.parse(draft.codexAuthJson) as unknown),

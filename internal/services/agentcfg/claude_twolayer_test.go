@@ -121,6 +121,66 @@ func TestApplyForLaunchMergesWithBaseConfig(t *testing.T) {
 	}
 }
 
+// TestApplyForLaunchAlwaysOverwritesLive 每次启动都强制覆盖：即便磁盘被外部改脏，
+// 再次 ApplyForLaunch 也必须把 live 投影回 deepMerge(基底, 当前补丁)。
+func TestApplyForLaunchAlwaysOverwritesLive(t *testing.T) {
+	svc := newTestService(t)
+	mustStartup(t, svc)
+	ctx := context.Background()
+
+	list, err := svc.ListAgentProviders(ctx, appTypeClaude)
+	if err != nil {
+		t.Fatalf("ListAgentProviders: %v", err)
+	}
+	current := list[0]
+	if _, err := svc.UpdateAgentProvider(ctx, current.ID, AgentProviderInput{
+		Name:         current.Name,
+		SettingsJSON: `{"env":{"ANTHROPIC_AUTH_TOKEN":"canonical"}}`,
+	}); err != nil {
+		t.Fatalf("UpdateAgentProvider: %v", err)
+	}
+	if err := svc.writeBaseConfig(svc.db(), appTypeClaude, map[string]any{
+		"hooks": map[string]any{"k": "base"},
+	}); err != nil {
+		t.Fatalf("writeBaseConfig: %v", err)
+	}
+
+	// 外部把 live 改脏
+	writeJSONFile(t, svc.claudeSettingsPath(), map[string]any{
+		"env":   map[string]any{"ANTHROPIC_AUTH_TOKEN": "stale-external"},
+		"noise": "should-be-gone",
+	})
+
+	if err := svc.ApplyForLaunch(ctx, appTypeClaude); err != nil {
+		t.Fatalf("ApplyForLaunch #1: %v", err)
+	}
+	live1 := readJSONFile(t, svc.claudeSettingsPath())
+	env1, _ := live1["env"].(map[string]any)
+	if env1["ANTHROPIC_AUTH_TOKEN"] != "canonical" {
+		t.Fatalf("第 1 次启动应覆盖外部脏数据: %+v", live1)
+	}
+	if _, ok := live1["noise"]; ok {
+		t.Fatalf("第 1 次启动应去掉外部 noise 键: %+v", live1)
+	}
+	hooks1, _ := live1["hooks"].(map[string]any)
+	if hooks1["k"] != "base" {
+		t.Fatalf("第 1 次启动应写入基底 hooks: %+v", live1)
+	}
+
+	// 再次改脏后再启动，仍必须覆盖（证明每次启动都写，而非仅首次）
+	writeJSONFile(t, svc.claudeSettingsPath(), map[string]any{
+		"env": map[string]any{"ANTHROPIC_AUTH_TOKEN": "stale-again"},
+	})
+	if err := svc.ApplyForLaunch(ctx, appTypeClaude); err != nil {
+		t.Fatalf("ApplyForLaunch #2: %v", err)
+	}
+	live2 := readJSONFile(t, svc.claudeSettingsPath())
+	env2, _ := live2["env"].(map[string]any)
+	if env2["ANTHROPIC_AUTH_TOKEN"] != "canonical" {
+		t.Fatalf("第 2 次启动仍应强制覆盖: %+v", live2)
+	}
+}
+
 // TestManualImportComputesDiffAgainstBaseConfig 手动重新导入(已有同类 provider)时不应碰
 // 基底,新行的补丁应只含「live 相对现有基底」的差异,而非把基底内容也重复存一份。
 func TestManualImportComputesDiffAgainstBaseConfig(t *testing.T) {
@@ -207,34 +267,34 @@ func TestSetBaseConfigReprojectsLiveForClaude(t *testing.T) {
 	}
 }
 
-// TestSetBaseConfigReclaudeDoesNotWriteLive SetBaseConfig(reclaude, ...) 只写 DB,reclaude
-// 是 DB 权威、配置在启动会话时才落地(与 switchReclaude 一致),不应触碰共享 live 文件。
-func TestSetBaseConfigReclaudeDoesNotWriteLive(t *testing.T) {
+// TestReclaudeConfigRejected 配置域不再支持 reclaude：Get/SetBaseConfig 与 AddAgentProvider 均拒绝。
+func TestReclaudeConfigRejected(t *testing.T) {
 	svc := newTestService(t)
-	mustStartup(t, svc) // 建立 reclaude 的 current Provider,验证即便有 current 也不写 live
-
-	if _, err := os.Stat(svc.claudeSettingsPath()); !os.IsNotExist(err) {
-		t.Fatalf("调用前 live 文件不应存在(测试前提),Stat err = %v", err)
-	}
-
+	mustStartup(t, svc)
 	ctx := context.Background()
-	if err := svc.SetBaseConfig(ctx, appTypeReclaude, `{"model":"x"}`); err != nil {
-		t.Fatalf("SetBaseConfig: %v", err)
-	}
 
+	if _, err := svc.GetBaseConfig(ctx, "reclaude"); err == nil {
+		t.Fatal("GetBaseConfig(reclaude) 应拒绝")
+	}
+	if err := svc.SetBaseConfig(ctx, "reclaude", `{"model":"x"}`); err == nil {
+		t.Fatal("SetBaseConfig(reclaude) 应拒绝")
+	}
+	if _, err := svc.AddAgentProvider(ctx, AgentProviderInput{
+		AppType:      "reclaude",
+		Name:         "x",
+		SettingsJSON: `{}`,
+	}); err == nil {
+		t.Fatal("AddAgentProvider(reclaude) 应拒绝")
+	}
+	// ApplyForLaunch(reclaude) 为静默 no-op，不写 live
 	if _, err := os.Stat(svc.claudeSettingsPath()); !os.IsNotExist(err) {
-		t.Fatalf("SetBaseConfig(reclaude) 不应写共享 live 文件,Stat err = %v", err)
+		// startup 可能已因 claude 写过；清空后验证 reclaude no-op
 	}
-
-	got, err := svc.GetBaseConfig(ctx, appTypeReclaude)
-	if err != nil {
-		t.Fatalf("GetBaseConfig: %v", err)
+	_ = os.Remove(svc.claudeSettingsPath())
+	if err := svc.ApplyForLaunch(ctx, "reclaude"); err != nil {
+		t.Fatalf("ApplyForLaunch(reclaude) 应为 no-op 无错误: %v", err)
 	}
-	var gotMap map[string]any
-	if err := json.Unmarshal([]byte(got), &gotMap); err != nil {
-		t.Fatalf("unmarshal GetBaseConfig 结果: %v", err)
-	}
-	if gotMap["model"] != "x" {
-		t.Fatalf("GetBaseConfig(reclaude) 应读回刚写入的基底: %+v", gotMap)
+	if _, err := os.Stat(svc.claudeSettingsPath()); !os.IsNotExist(err) {
+		t.Fatalf("ApplyForLaunch(reclaude) 不应写 live,Stat err = %v", err)
 	}
 }

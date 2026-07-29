@@ -77,9 +77,9 @@ type Service struct {
 	// 供 lhwatcher 在「启动项目」时补启自动捕获（决策 D4-4）；nil = 无（裸单测 / app 未接线）。
 	sessionStartHook func(projectPath string)
 
-	// applyClaudeSettings 在启动 claude/reclaude 会话前，把该 appType 的当前 Provider 配置
-	// 写入共享的 ~/.claude/settings.json（reclaude 运行时会自改此文件，故只能启动前直写，
-	// 不能走会话级注入）。由 SetClaudeSettingsApplier 注入；nil = 不武装（裸单测 / app 未接线）。
+	// applyClaudeSettings 在启动 claude 会话前，把当前供应商凭据补丁与系统公共配置合并写入
+	// ~/.claude/settings.json。由 SetClaudeSettingsApplier 注入；nil = 不武装（裸单测 / app 未接线）。
+	// reclaude 等其它工具不经此钩子处理配置。
 	applyClaudeSettings func(ctx context.Context, appType string) error
 
 	// emit 把事件推给前端；nil 时丢弃（unit test 或 app 未就绪）。
@@ -125,7 +125,7 @@ func (s *Service) SetSessionStartHook(h func(projectPath string)) {
 	s.sessionStartHook = h
 }
 
-// SetClaudeSettingsApplier 注入「启动 claude/reclaude 会话前应用对应 Provider 配置到
+// SetClaudeSettingsApplier 注入「启动 claude 会话前将供应商配置与系统公共配置合并写入
 // ~/.claude/settings.json」的钩子（app 装配阶段调，agentcfg.ApplyForLaunch）。
 // 绝不暴露给前端。
 func (s *Service) SetClaudeSettingsApplier(fn func(ctx context.Context, appType string) error) {
@@ -614,10 +614,11 @@ func (s *Service) resolveLaunch(ctx context.Context, id string, spec CreateSpec)
 		return c, a, providerEnv, nil, nil, nil
 	}
 
-	// 启动 claude/reclaude 会话前，把该 appType 的当前 Provider 配置写入共享的
-	// ~/.claude/settings.json（见 agentcfg.ApplyForLaunch）；写失败视为启动失败（宁可
-	// 报错也不让会话跑在错误 provider 上）。无当前 Provider 时 ApplyForLaunch 内部 no-op。
-	if (toolID == "claude" || toolID == "reclaude") && s.applyClaudeSettings != nil {
+	// 每次启动 claude 会话前，强制将「供应商凭据补丁 + 系统公共配置」深合并后覆盖写入
+	// ~/.claude/settings.json（见 agentcfg.ApplyForLaunch；无条件投影，不做跳过优化）。
+	// 写失败视为启动失败（宁可报错也不让会话跑在过期/错误配置上）。
+	// reclaude 及其它工具不经此钩子，绝不碰该文件。
+	if toolID == "claude" && s.applyClaudeSettings != nil {
 		if aerr := s.applyClaudeSettings(ctx, toolID); aerr != nil {
 			return "", nil, nil, nil, nil, fmt.Errorf("terminal: apply %s settings: %w", toolID, aerr)
 		}

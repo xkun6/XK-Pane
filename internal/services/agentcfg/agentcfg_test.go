@@ -150,7 +150,8 @@ func TestAddAndSwitchWritesLiveAndBackfillsOld(t *testing.T) {
 		t.Fatalf("live 未切到新配置: %+v", liveMap)
 	}
 
-	// 旧行被回填为切换前的 live 内容，且不再是 current
+	// 旧行不再是 current；供应商补丁一律不被 backfill 触碰(只由设置面板改写)，
+	// 切换前 live 的内容改沉淀进系统配置基底——不管走哪条路径，数据都不能丢。
 	after, err := svc.ListAgentProviders(context.Background(), appTypeClaude)
 	if err != nil {
 		t.Fatalf("ListAgentProviders: %v", err)
@@ -167,12 +168,19 @@ func TestAddAndSwitchWritesLiveAndBackfillsOld(t *testing.T) {
 	if oldRow.IsCurrent {
 		t.Fatal("旧行应不再是 current")
 	}
-	var oldMap map[string]any
-	if err := json.Unmarshal([]byte(oldRow.SettingsJSON), &oldMap); err != nil {
-		t.Fatalf("unmarshal 回填内容: %v", err)
+	if strings.TrimSpace(oldRow.SettingsJSON) != "{}" {
+		t.Fatalf("旧行补丁不应被 backfill 改写(补丁只由设置面板改写): %q", oldRow.SettingsJSON)
 	}
-	if oldEnv, _ := oldMap["env"].(map[string]any); oldEnv["ANTHROPIC_BASE_URL"] != "https://original.example.com" {
-		t.Fatalf("旧行未回填切换前 live 内容: %+v", oldMap)
+
+	// 切换前 live 的内容(https://original.example.com)应沉淀进系统配置基底：
+	// 若日后切回旧行，deepMerge(基底, 旧行补丁 "{}") 仍能还原出它，证明没有丢数据。
+	base, err := svc.readBaseConfig(svc.db(), appTypeClaude)
+	if err != nil {
+		t.Fatalf("readBaseConfig: %v", err)
+	}
+	baseEnv, _ := base["env"].(map[string]any)
+	if baseEnv["ANTHROPIC_BASE_URL"] != "https://original.example.com" {
+		t.Fatalf("切换前 live 内容应沉淀进系统配置基底: %+v", base)
 	}
 
 	// 备份文件已生成且等于最初内容
