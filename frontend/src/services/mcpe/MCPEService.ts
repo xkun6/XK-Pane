@@ -58,6 +58,10 @@ export const MCPEService = {
     if (!isDesktop) return desktopOnly();
     await Binding.DeletePackage(id);
   },
+  async reorder(ids: string[]): Promise<void> {
+    if (!isDesktop) return desktopOnly();
+    await Binding.ReorderPackages(ids);
+  },
   async scanLaunchers(): Promise<string[]> {
     if (!isDesktop) return desktopOnly();
     return Binding.ScanLaunchers();

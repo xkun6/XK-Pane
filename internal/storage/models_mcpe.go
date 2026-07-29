@@ -95,8 +95,10 @@ type MCPackage struct {
 	IncludedModDirs    []string       `gorm:"type:text;serializer:json" json:"includedModDirs"`
 	World              MCWorldConfig  `gorm:"type:text;serializer:json" json:"world"`
 	DebugOptions       MCDebugOptions `gorm:"type:text;serializer:json" json:"debugOptions"`
-	CreatedAt          time.Time      `json:"createdAt"`
-	UpdatedAt          time.Time      `json:"updatedAt"`
+	// SortOrder 列表显示顺序（@dnd-kit 拖拽写入，0 为默认；存量包全为 0 时按 CreatedAt 兜底排序）。
+	SortOrder int       `gorm:"not null;default:0" json:"sortOrder"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 func (MCPackage) TableName() string { return "mc_packages" }

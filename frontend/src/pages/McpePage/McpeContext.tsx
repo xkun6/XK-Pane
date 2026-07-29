@@ -49,6 +49,7 @@ export interface McpeContextValue {
   createPackage: (projectPath: string, name?: string) => Promise<MCPackage>;
   updatePackage: (pkg: MCPackage) => Promise<void>;
   deletePackage: (id: string) => Promise<void>;
+  reorderPackages: (ids: string[]) => Promise<void>;
   launch: (packageId: string) => Promise<void>;
   stop: (packageId: string) => Promise<void>;
   restart: (packageId: string) => Promise<void>;
@@ -106,6 +107,26 @@ export function McpeProvider({ children }: { children: ReactNode }) {
     setPackages((prev) => prev.filter((p) => p.id !== id));
     setActivePackageId((cur) => (cur === id ? null : cur));
   }, []);
+
+  // 拖拽排序：先本地乐观重排（避免视觉回跳），再写后端；失败则重载纠偏。
+  const reorderPackages = useCallback(
+    async (ids: string[]) => {
+      if (aliveRef.current) {
+        setPackages((prev) => {
+          const byId = new Map(prev.map((p) => [p.id, p]));
+          const ordered = ids.map((id) => byId.get(id)).filter((p): p is MCPackage => p != null);
+          return ordered.length === prev.length ? ordered : prev;
+        });
+      }
+      try {
+        await MCPEService.reorder(ids);
+      } catch (e) {
+        await loadPackages();
+        throw e;
+      }
+    },
+    [loadPackages],
+  );
 
   const launch = useCallback(async (packageId: string) => {
     const info = await MCPEService.launch(packageId);
@@ -225,6 +246,7 @@ export function McpeProvider({ children }: { children: ReactNode }) {
       createPackage,
       updatePackage,
       deletePackage,
+      reorderPackages,
       launch,
       stop,
       restart,
@@ -240,6 +262,7 @@ export function McpeProvider({ children }: { children: ReactNode }) {
       createPackage,
       updatePackage,
       deletePackage,
+      reorderPackages,
       launch,
       stop,
       restart,

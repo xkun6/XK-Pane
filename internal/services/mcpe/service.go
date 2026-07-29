@@ -24,6 +24,7 @@ import (
 	"xkpane/internal/utils/logx"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // mcLogBufferCap 每个 run 保留的最近日志行数（启动头 30s 约 1500~2500 行，cap=2000 覆盖一次启动 + 一段稳定运行）。
@@ -209,10 +210,10 @@ func (s *Service) removeRun(runID string) {
 
 // ─────────────────────── CRUD（Wails 方法） ───────────────────────
 
-// ListPackages 列出所有 MC 包。
+// ListPackages 列出所有 MC 包（sort_order 升序 → created_at 兜底）。
 func (s *Service) ListPackages() ([]storage.MCPackage, error) {
 	var pkgs []storage.MCPackage
-	if err := s.holder.Current().GORM.Order("created_at").Find(&pkgs).Error; err != nil {
+	if err := s.holder.Current().GORM.Order("sort_order, created_at").Find(&pkgs).Error; err != nil {
 		return nil, err
 	}
 	return pkgs, nil
@@ -227,6 +228,15 @@ func (s *Service) CreatePackage(projectPath, name string) (storage.MCPackage, er
 		return storage.MCPackage{}, fmt.Errorf("项目目录不存在：%s", projectPath)
 	}
 	pkg := storage.NewMCPackage(projectPath, name)
+	// 新包置顶（与前端 createPackage 的乐观置顶一致）：取当前最小 sort_order - 1。
+	var minOrder *int
+	if err := s.holder.Current().GORM.Model(&storage.MCPackage{}).
+		Select("MIN(sort_order)").Scan(&minOrder).Error; err != nil {
+		return storage.MCPackage{}, err
+	}
+	if minOrder != nil {
+		pkg.SortOrder = *minOrder - 1
+	}
 	if err := s.holder.Current().GORM.Create(&pkg).Error; err != nil {
 		return storage.MCPackage{}, err
 	}
@@ -273,6 +283,37 @@ func (s *Service) DeletePackage(id string) error {
 		return fmt.Errorf("MCPackage 不存在")
 	}
 	return nil
+}
+
+// ReorderPackages 按给定顺序重写包的 sort_order（@dnd-kit 拖拽消费）。
+// 校验：ids 无重复、全部存在；逐个写 sort_order = 位置下标。前端传完整有序列表。
+func (s *Service) ReorderPackages(ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if _, dup := seen[id]; dup {
+			return fmt.Errorf("Reorder ids 有重复")
+		}
+		seen[id] = struct{}{}
+	}
+	return s.holder.Current().GORM.Transaction(func(tx *gorm.DB) error {
+		var n int64
+		if err := tx.Model(&storage.MCPackage{}).Where("id IN ?", ids).Count(&n).Error; err != nil {
+			return err
+		}
+		if int(n) != len(ids) {
+			return fmt.Errorf("Reorder ids 与现存记录不匹配")
+		}
+		for i, id := range ids {
+			if err := tx.Model(&storage.MCPackage{}).Where("id = ?", id).
+				Update("sort_order", i).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // ScanLaunchers 扫盘找网易 MC 开发启动器。
